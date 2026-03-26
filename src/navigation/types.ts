@@ -1,0 +1,52 @@
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
+export type AuthStackParamList = {
+  LoginScreen: undefined;
+  SignupScreen: undefined;
+  PhoneVerificationScreen: undefined;
+  EmailVerificationScreen: undefined;
+};
+
+export type OnboardingStackParamList = {
+  CommunityScreen: undefined;
+  CountryScreen: undefined;
+  CityScreen: undefined;
+  LocationPermissionScreen: undefined;
+};
+
+export type ExploreStackParamList = {
+  ExploreFeedScreen: undefined;
+};
+
+export type HelpStackParamList = {
+  HelpListScreen: undefined;
+  CreateHelpRequestScreen: undefined;
+  HelpDetailScreen: { helpId?: string } | undefined;
+};
+
+export type MessagesStackParamList = {
+  MessagesInboxScreen: undefined;
+  MessageThreadScreen: { threadId?: string } | undefined;
+};
+
+export type EventsStackParamList = {
+  EventsListScreen: undefined;
+  EventDetailScreen: { eventId?: string } | undefined;
+  CreateEventScreen: undefined;
+  OrganizerApplicationScreen: undefined;
+};
+
+export type ProfileStackParamList = {
+  ProfileScreen: undefined;
+  SettingsScreen: undefined;
+  BlockedUsersScreen: undefined;
+  ReportProblemScreen: undefined;
+};
+
+export type MainTabParamList = {
+  ExploreTab: NavigatorScreenParams<ExploreStackParamList>;
+  HelpTab: NavigatorScreenParams<HelpStackParamList>;
+  MessagesTab: NavigatorScreenParams<MessagesStackParamList>;
+  EventsTab: NavigatorScreenParams<EventsStackParamList>;
+  ProfileTab: NavigatorScreenParams<ProfileStackParamList>;
+};
