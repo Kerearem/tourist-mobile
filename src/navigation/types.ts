@@ -19,9 +19,9 @@ export type ExploreStackParamList = {
 };
 
 export type HelpStackParamList = {
-  HelpListScreen: undefined;
+  HelpListScreen: { refreshToken?: string } | undefined;
   CreateHelpRequestScreen: undefined;
-  HelpDetailScreen: { helpId?: string } | undefined;
+  HelpDetailScreen: { helpId: string };
 };
 
 export type MessagesStackParamList = {
