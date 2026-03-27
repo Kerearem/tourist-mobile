@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import type { NavigationProp } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppButton } from "../../../components/ui/AppButton";
@@ -8,14 +9,16 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
 import { Screen } from "../../../components/ui/Screen";
+import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { useAuth } from "../../../hooks/useAuth";
-import type { HelpStackParamList } from "../../../navigation/types";
-import { getHelpRequestById, respondToHelpRequest } from "../services/help.service";
+import type { HelpStackParamList, MainTabParamList } from "../../../navigation/types";
+import { getOrCreateHelpConversation } from "../../messages/services/messages.service";
+import { getHelpRequestById } from "../services/help.service";
 import type { HelpRequest } from "../types";
 
 type Props = NativeStackScreenProps<HelpStackParamList, "HelpDetailScreen">;
 
-export function HelpDetailScreen({ route }: Props) {
+export function HelpDetailScreen({ route, navigation }: Props) {
   const { user } = useAuth();
   const [request, setRequest] = useState<HelpRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,12 +53,24 @@ export function HelpDetailScreen({ route }: Props) {
       return;
     }
 
-    const updated = await respondToHelpRequest({
-      requestId: request.id,
-      viewerId: user.id,
+    const conversation = await getOrCreateHelpConversation({
+      helpRequestId: request.id,
+      helper: {
+        id: user.id,
+        displayName: user.displayName,
+      },
+      requester: {
+        id: request.author.id,
+        displayName: request.author.displayName,
+        avatarUrl: request.author.avatarUrl,
+      },
     });
-    setRequest(updated);
-    setMessage("Conversation will start (placeholder).");
+    setMessage("Opening conversation...");
+    const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
+    tabNavigation?.navigate(TabRoutes.MessagesTab, {
+      screen: MessagesRoutes.MessageThreadScreen,
+      params: { threadId: conversation.id },
+    });
   };
 
   if (isLoading) {

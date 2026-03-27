@@ -26,7 +26,7 @@ export type HelpStackParamList = {
 
 export type MessagesStackParamList = {
   MessagesInboxScreen: undefined;
-  MessageThreadScreen: { threadId?: string } | undefined;
+  MessageThreadScreen: { threadId: string };
 };
 
 export type EventsStackParamList = {
