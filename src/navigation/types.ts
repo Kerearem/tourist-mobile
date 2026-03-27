@@ -9,9 +9,9 @@ export type AuthStackParamList = {
 
 export type OnboardingStackParamList = {
   CommunityScreen: undefined;
-  CountryScreen: undefined;
-  CityScreen: undefined;
-  LocationPermissionScreen: undefined;
+  CountryScreen: { community: string };
+  CityScreen: { community: string; country: string };
+  LocationPermissionScreen: { community: string; country: string; city: string };
 };
 
 export type ExploreStackParamList = {
