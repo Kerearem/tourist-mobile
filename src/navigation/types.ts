@@ -31,7 +31,7 @@ export type MessagesStackParamList = {
 
 export type EventsStackParamList = {
   EventsListScreen: undefined;
-  EventDetailScreen: { eventId?: string } | undefined;
+  EventDetailScreen: { eventId: string };
   CreateEventScreen: undefined;
   OrganizerApplicationScreen: undefined;
 };
