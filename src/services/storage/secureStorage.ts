@@ -1,12 +1,13 @@
-export async function setSecureItem(_key: string, _value: string): Promise<void> {
-  // TODO: Connect to Expo SecureStore in a later phase.
+import * as SecureStore from "expo-secure-store";
+
+export async function setSecureItem(key: string, value: string): Promise<void> {
+  await SecureStore.setItemAsync(key, value);
 }
 
-export async function getSecureItem(_key: string): Promise<string | null> {
-  // TODO: Connect to Expo SecureStore in a later phase.
-  return null;
+export async function getSecureItem(key: string): Promise<string | null> {
+  return SecureStore.getItemAsync(key);
 }
 
-export async function removeSecureItem(_key: string): Promise<void> {
-  // TODO: Connect to Expo SecureStore in a later phase.
+export async function removeSecureItem(key: string): Promise<void> {
+  await SecureStore.deleteItemAsync(key);
 }

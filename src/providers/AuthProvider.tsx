@@ -1,5 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import {
+  completeEmailVerification as completeEmailVerificationService,
+  completePhoneVerification as completePhoneVerificationService,
+  hydrateAuthState,
+  signInWithEmail,
+  signOutSession,
+  signUpWithEmail,
+} from "../features/auth/services/auth.service";
+import { completeOnboarding as completeOnboardingService } from "../features/onboarding/services/onboarding.service";
 import type { AuthGateStatus, AuthSession } from "../models/auth";
 import type { AppUser } from "../models/user";
 
@@ -57,105 +66,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isBooting, setIsBooting] = useState(true);
 
-  const signIn = useCallback(async ({ email }: { email: string; password: string }) => {
-    const now = new Date().toISOString();
-    const userId = `user_${Date.now()}`;
-
-    // Mock session + user setup for Phase 2 gate flow.
-    setSession({
-      sessionId: `session_${Date.now()}`,
-      userId,
-      createdAt: now,
-    });
-    setUser({
-      id: userId,
-      displayName: email.split("@")[0] || "Tourist User",
-      community: "",
-      homeCountryCode: "",
-      currentCountryCode: "",
-      currentCity: "",
-      hasCompletedOnboarding: false,
-      hasPhoneVerification: false,
-      hasEmailVerification: false,
-      organizerStatus: "not_applied",
-    });
+  const signIn = useCallback(async ({ email, password }: { email: string; password: string }) => {
+    const authState = await signInWithEmail({ email, password });
+    setSession(authState.session);
+    setUser(authState.user);
   }, []);
 
   const signUp = useCallback(
-    async ({ displayName, email }: { displayName: string; email: string; password: string }) => {
-      const now = new Date().toISOString();
-      const userId = `user_${Date.now()}`;
-
-      setSession({
-        sessionId: `session_${Date.now()}`,
-        userId,
-        createdAt: now,
+    async ({ displayName, email, password }: { displayName: string; email: string; password: string }) => {
+      const authState = await signUpWithEmail({
+        displayName,
+        email,
+        password,
       });
-      setUser({
-        id: userId,
-        displayName: displayName.trim() || email.split("@")[0] || "Tourist User",
-        community: "",
-        homeCountryCode: "",
-        currentCountryCode: "",
-        currentCity: "",
-        hasCompletedOnboarding: false,
-        hasPhoneVerification: false,
-        hasEmailVerification: false,
-        organizerStatus: "not_applied",
-      });
+      setSession(authState.session);
+      setUser(authState.user);
     },
     [],
   );
 
   const signOut = useCallback(async () => {
+    await signOutSession();
     setSession(null);
     setUser(null);
   }, []);
 
   const completePhoneVerification = useCallback(async () => {
-    setUser((currentUser) => {
-      if (!currentUser) {
-        return null;
-      }
+    if (!user) {
+      return;
+    }
 
-      return {
-        ...currentUser,
-        hasPhoneVerification: true,
-      };
-    });
-  }, []);
+    const updatedUser = await completePhoneVerificationService(user.id);
+    setUser(updatedUser);
+  }, [user]);
 
   const completeEmailVerification = useCallback(async () => {
-    setUser((currentUser) => {
-      if (!currentUser) {
-        return null;
+    if (!user) {
+      return;
+    }
+
+    const updatedUser = await completeEmailVerificationService(user.id);
+    setUser(updatedUser);
+  }, [user]);
+
+  const completeOnboarding = useCallback(
+    async ({ community, country, city }: { community: string; country: string; city: string }) => {
+      if (!user) {
+        return;
       }
 
-      return {
-        ...currentUser,
-        hasEmailVerification: true,
-      };
-    });
-  }, []);
+      const updatedUser = await completeOnboardingService({
+        userId: user.id,
+        community,
+        country,
+        city,
+      });
 
-  const completeOnboarding = useCallback(async ({ community, country, city }: { community: string; country: string; city: string }) => {
-    setUser((currentUser) => {
-      if (!currentUser) {
-        return null;
-      }
-
-      return {
-        ...currentUser,
-        community: community.trim(),
-        currentCountryCode: country.trim(),
-        currentCity: city.trim(),
-        hasCompletedOnboarding: true,
-      };
-    });
-  }, []);
+      setUser(updatedUser);
+    },
+    [user],
+  );
 
   const refreshSession = useCallback(async () => {
-    // TODO: Hydrate session + user from secure storage/backends in later phases.
+    const authState = await hydrateAuthState();
+    if (authState) {
+      setSession(authState.session);
+      setUser(authState.user);
+    } else {
+      setSession(null);
+      setUser(null);
+    }
     setIsBooting(false);
   }, []);
 
