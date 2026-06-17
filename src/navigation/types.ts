@@ -1,4 +1,5 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
+import type { UserLanguage } from "../models/user";
 
 export type AuthStackParamList = {
   LoginScreen: undefined;
@@ -9,13 +10,27 @@ export type AuthStackParamList = {
 
 export type OnboardingStackParamList = {
   CommunityScreen: undefined;
-  CountryScreen: { community: string };
-  CityScreen: { community: string; country: string };
-  LocationPermissionScreen: { community: string; country: string; city: string };
+  CountryScreen: { nationalityCountryCode: string; homeCommunity: string };
+  CityScreen: {
+    nationalityCountryCode: string;
+    homeCommunity: string;
+    destinationCountryCode: string;
+    destinationCity: string;
+    currentCity: string;
+  };
+  LocationPermissionScreen: {
+    nationalityCountryCode: string;
+    homeCommunity: string;
+    destinationCountryCode: string;
+    destinationCity: string;
+    currentCity: string;
+    spokenLanguages: UserLanguage[];
+  };
 };
 
 export type ExploreStackParamList = {
   ExploreFeedScreen: undefined;
+  ExploreCameraScreen: undefined;
 };
 
 export type HelpStackParamList = {

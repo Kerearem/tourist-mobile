@@ -42,7 +42,7 @@ export type ExplorePost = {
 
 export type LoadExploreFeedInput = {
   scope: ExploreFeedScope;
-  community: string;
+  community?: string;
   countryCode: string;
   city: string;
 };

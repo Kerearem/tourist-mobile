@@ -21,8 +21,11 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     const payload = (await response.json()) as ApiResponseEnvelope<T> | ApiError;
 
     if (!response.ok) {
-      const errorPayload = payload as ApiError;
-      throw new Error(errorPayload.message || "API request failed.");
+      const errorPayload = payload as ApiError & { message?: string | string[] };
+      const message = Array.isArray(errorPayload.message)
+        ? errorPayload.message.join(", ")
+        : errorPayload.message || "API request failed.";
+      throw new Error(message);
     }
 
     return (payload as ApiResponseEnvelope<T>).data;

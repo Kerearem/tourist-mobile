@@ -10,7 +10,7 @@ import {
 } from "../features/auth/services/auth.service";
 import { completeOnboarding as completeOnboardingService } from "../features/onboarding/services/onboarding.service";
 import type { AuthGateStatus, AuthSession } from "../models/auth";
-import type { AppUser } from "../models/user";
+import type { AppUser, RelocationReason, UserLanguage } from "../models/user";
 
 type AuthContextValue = {
   user: AppUser | null;
@@ -20,16 +20,52 @@ type AuthContextValue = {
   hasPhoneVerification: boolean;
   hasEmailVerification: boolean;
   hasCompletedOnboarding: boolean;
-  signIn: (payload: { email: string; password: string }) => Promise<void>;
-  signUp: (payload: { displayName: string; email: string; password: string }) => Promise<void>;
+  signIn: (payload: { identifier: string; password: string }) => Promise<void>;
+  signUp: (payload: {
+    displayName: string;
+    username: string;
+    phoneCountryCode: string;
+    phoneNumber: string;
+    email: string;
+    password: string;
+    birthDate: string;
+    consentAccepted: boolean;
+  }) => Promise<void>;
   signOut: () => Promise<void>;
-  completePhoneVerification: () => Promise<void>;
-  completeEmailVerification: () => Promise<void>;
-  completeOnboarding: (payload: { community: string; country: string; city: string }) => Promise<void>;
+  completePhoneVerification: (code: string) => Promise<void>;
+  completeEmailVerification: (code: string) => Promise<void>;
+  completeOnboarding: (payload: {
+    nationalityCountryCode: string;
+    homeCommunity: string;
+    destinationCountryCode: string;
+    destinationCity: string;
+    currentCity: string;
+    spokenLanguages: UserLanguage[];
+    relocationReason: RelocationReason;
+    interests: string[];
+  }) => Promise<void>;
   refreshSession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+const isOnboardingComplete = (user: AppUser | null) => {
+  if (!user) {
+    return false;
+  }
+
+  return Boolean(
+    user.privateProfile.nationalityCountryCode &&
+      user.publicProfile.homeCommunity &&
+      user.privateProfile.destinationCountryCode &&
+      user.privateProfile.destinationCity &&
+      user.publicProfile.currentCity &&
+      user.privateProfile.spokenLanguages.length > 0 &&
+      user.privateProfile.spokenLanguages.every((language) => language.code && language.level) &&
+      user.privateProfile.relocationReason !== null &&
+      user.publicProfile.interests.length > 0,
+  );
+};
 
 const buildGateStatus = ({
   isBooting,
@@ -54,7 +90,7 @@ const buildGateStatus = ({
     return "needs_email_verification";
   }
 
-  if (!user.hasCompletedOnboarding) {
+  if (!isOnboardingComplete(user)) {
     return "needs_onboarding";
   }
 
@@ -66,21 +102,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isBooting, setIsBooting] = useState(true);
 
-  const signIn = useCallback(async ({ email, password }: { email: string; password: string }) => {
-    const authState = await signInWithEmail({ email, password });
+  const signIn = useCallback(async ({ identifier, password }: { identifier: string; password: string }) => {
+    const authState = await signInWithEmail({ identifier, password });
     setSession(authState.session);
     setUser(authState.user);
   }, []);
 
   const signUp = useCallback(
-    async ({ displayName, email, password }: { displayName: string; email: string; password: string }) => {
+    async ({
+      displayName,
+      username,
+      phoneCountryCode,
+      phoneNumber,
+      email,
+      password,
+      birthDate,
+      consentAccepted,
+    }: {
+      displayName: string;
+      username: string;
+      phoneCountryCode: string;
+      phoneNumber: string;
+      email: string;
+      password: string;
+      birthDate: string;
+      consentAccepted: boolean;
+    }) => {
       const authState = await signUpWithEmail({
         displayName,
+        username,
+        phoneCountryCode,
+        phoneNumber,
         email,
         password,
+        birthDate,
+        consentAccepted,
       });
+      if (!authState?.user || !authState?.session) {
+        throw new Error("Sign up succeeded but auth state is missing.");
+      }
       setSession(authState.session);
       setUser(authState.user);
+      console.log("[AuthProvider] signUp set state", {
+        userId: authState.user.id,
+        hasPhoneVerification: authState.user.hasPhoneVerification,
+        hasEmailVerification: authState.user.hasEmailVerification,
+      });
     },
     [],
   );
@@ -91,35 +158,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const completePhoneVerification = useCallback(async () => {
-    if (!user) {
-      return;
-    }
+  const completePhoneVerification = useCallback(
+    async (code: string) => {
+      if (!user) {
+        return;
+      }
 
-    const updatedUser = await completePhoneVerificationService(user.id);
-    setUser(updatedUser);
-  }, [user]);
+      const updatedUser = await completePhoneVerificationService(user.id, code);
+      setUser(updatedUser);
+    },
+    [user],
+  );
 
-  const completeEmailVerification = useCallback(async () => {
-    if (!user) {
-      return;
-    }
+  const completeEmailVerification = useCallback(
+    async (code: string) => {
+      if (!user) {
+        return;
+      }
 
-    const updatedUser = await completeEmailVerificationService(user.id);
-    setUser(updatedUser);
-  }, [user]);
+      const updatedUser = await completeEmailVerificationService(user.id, code);
+      setUser(updatedUser);
+    },
+    [user],
+  );
 
   const completeOnboarding = useCallback(
-    async ({ community, country, city }: { community: string; country: string; city: string }) => {
+    async ({
+      nationalityCountryCode,
+      homeCommunity,
+      destinationCountryCode,
+      destinationCity,
+      currentCity,
+      spokenLanguages,
+      relocationReason,
+      interests,
+    }: {
+      nationalityCountryCode: string;
+      homeCommunity: string;
+      destinationCountryCode: string;
+      destinationCity: string;
+      currentCity: string;
+      spokenLanguages: UserLanguage[];
+      relocationReason: RelocationReason;
+      interests: string[];
+    }) => {
       if (!user) {
         return;
       }
 
       const updatedUser = await completeOnboardingService({
         userId: user.id,
-        community,
-        country,
-        city,
+        nationalityCountryCode,
+        homeCommunity,
+        destinationCountryCode,
+        destinationCity,
+        currentCity,
+        spokenLanguages,
+        relocationReason,
+        interests,
       });
 
       setUser(updatedUser);
@@ -128,15 +224,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refreshSession = useCallback(async () => {
-    const authState = await hydrateAuthState();
-    if (authState) {
-      setSession(authState.session);
-      setUser(authState.user);
-    } else {
+    try {
+      const authState = await hydrateAuthState();
+      if (authState) {
+        setSession(authState.session);
+        setUser(authState.user);
+      } else {
+        setSession(null);
+        setUser(null);
+      }
+    } catch (error) {
+      console.warn("[AuthProvider] refreshSession failed", error);
       setSession(null);
       setUser(null);
+    } finally {
+      setIsBooting(false);
     }
-    setIsBooting(false);
   }, []);
 
   useEffect(() => {
@@ -152,6 +255,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [isBooting, user],
   );
 
+  useEffect(() => {
+    console.log("[AuthProvider] gate state recalculated", {
+      gateStatus,
+      userId: user?.id ?? null,
+      hasPhoneVerification: user?.hasPhoneVerification ?? null,
+      hasEmailVerification: user?.hasEmailVerification ?? null,
+    });
+  }, [gateStatus, user]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -160,7 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       gateStatus,
       hasPhoneVerification: user?.hasPhoneVerification ?? false,
       hasEmailVerification: user?.hasEmailVerification ?? false,
-      hasCompletedOnboarding: user?.hasCompletedOnboarding ?? false,
+      hasCompletedOnboarding: isOnboardingComplete(user),
       signIn,
       signUp,
       signOut,

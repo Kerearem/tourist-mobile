@@ -1,14 +1,19 @@
 import { USE_MOCK_BACKEND } from "../../../constants/env";
-import type { AppUser } from "../../../models/user";
+import type { AppUser, RelocationReason, UserLanguage } from "../../../models/user";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { apiRequest } from "../../../services/api/client";
 import { loadAuthState, saveCanonicalUser } from "../../../services/api/authSession";
 
 type CompleteOnboardingInput = {
   userId: string;
-  community: string;
-  country: string;
-  city: string;
+  nationalityCountryCode: string;
+  homeCommunity: string;
+  destinationCountryCode: string;
+  destinationCity: string;
+  currentCity: string;
+  spokenLanguages: UserLanguage[];
+  relocationReason: RelocationReason;
+  interests: string[];
 };
 
 export async function completeOnboarding(input: CompleteOnboardingInput): Promise<AppUser> {
@@ -20,10 +25,21 @@ export async function completeOnboarding(input: CompleteOnboardingInput): Promis
 
     const user: AppUser = {
       ...state.user,
-      community: input.community.trim(),
-      currentCountryCode: input.country.trim(),
-      currentCity: input.city.trim(),
-      hasCompletedOnboarding: true,
+      updatedAt: new Date().toISOString(),
+      publicProfile: {
+        ...state.user.publicProfile,
+        homeCommunity: input.homeCommunity.trim(),
+        currentCity: input.currentCity.trim(),
+        interests: input.interests,
+      },
+      privateProfile: {
+        ...state.user.privateProfile,
+        nationalityCountryCode: input.nationalityCountryCode.trim(),
+        destinationCountryCode: input.destinationCountryCode.trim(),
+        destinationCity: input.destinationCity.trim(),
+        spokenLanguages: input.spokenLanguages,
+        relocationReason: input.relocationReason,
+      },
     };
 
     await saveCanonicalUser(user);
@@ -39,9 +55,14 @@ export async function completeOnboarding(input: CompleteOnboardingInput): Promis
     method: "POST",
     token: state.tokens.accessToken,
     body: {
-      community: input.community,
-      countryCode: input.country,
-      city: input.city,
+      nationalityCountryCode: input.nationalityCountryCode,
+      homeCommunity: input.homeCommunity,
+      destinationCountryCode: input.destinationCountryCode,
+      destinationCity: input.destinationCity,
+      currentCity: input.currentCity,
+      spokenLanguages: input.spokenLanguages,
+      relocationReason: input.relocationReason,
+      interests: input.interests,
     },
   });
 

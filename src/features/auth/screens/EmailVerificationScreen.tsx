@@ -1,31 +1,112 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppButton } from "../../../components/ui/AppButton";
+import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
+import { FlowProgressBar } from "../../../components/ui/FlowProgressBar";
 import { Screen } from "../../../components/ui/Screen";
 import { useAuth } from "../../../hooks/useAuth";
 
 export function EmailVerificationScreen() {
   const { completeEmailVerification, signOut } = useAuth();
-  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState("A 6-digit code was sent to your email.");
+  const [expiresInSec, setExpiresInSec] = useState(300);
+  const [resendInSec, setResendInSec] = useState(30);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setExpiresInSec((prev) => Math.max(0, prev - 1));
+      setResendInSec((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const expireLabel = useMemo(() => {
+    const min = Math.floor(expiresInSec / 60);
+    const sec = expiresInSec % 60;
+    return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }, [expiresInSec]);
 
   const onConfirm = async () => {
-    setIsConfirmed(true);
-    await completeEmailVerification();
+    const cleanCode = code.replace(/\D+/g, "").slice(0, 6);
+    if (cleanCode.length !== 6) {
+      setError("Enter the 6-digit verification code.");
+      return;
+    }
+
+    if (expiresInSec === 0) {
+      setError("Code expired. Please request a new one.");
+      return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await completeEmailVerification(cleanCode);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Email verification failed.";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const onResend = () => {
+    if (resendInSec > 0) {
+      return;
+    }
+    setCode("");
+    setError(null);
+    setInfo("New code sent. Check your email inbox.");
+    setExpiresInSec(300);
+    setResendInSec(30);
   };
 
   return (
     <Screen>
       <View style={styles.container}>
-        <AppText style={styles.title}>Email Verification</AppText>
-        <AppText muted style={styles.subtitle}>
-          Confirm your email to continue.
-        </AppText>
-        {isConfirmed ? <AppText muted>Email marked as verified.</AppText> : null}
+        <FlowProgressBar currentStep={3} totalSteps={7} />
+        <View style={styles.content}>
+          <AppText style={styles.title}>Email Verification</AppText>
+          <AppText muted style={styles.subtitle}>
+            {info}
+          </AppText>
 
-        <AppButton label="I Verified My Email" onPress={onConfirm} />
-        <AppButton containerStyle={styles.secondaryButton} label="Sign Out" onPress={signOut} />
+          <AppInput
+            keyboardType="number-pad"
+            maxLength={6}
+            onChangeText={(value) => {
+              setCode(value.replace(/\D+/g, "").slice(0, 6));
+              if (error) {
+                setError(null);
+              }
+            }}
+            placeholder="Enter 6-digit code"
+            value={code}
+          />
+
+          <View style={styles.metaRow}>
+            <AppText muted variant="caption">
+              Expires in {expireLabel}
+            </AppText>
+            <AppButton
+              containerStyle={[styles.resendButton, resendInSec > 0 && styles.resendButtonDisabled]}
+              disabled={resendInSec > 0}
+              label={resendInSec > 0 ? `Resend in ${resendInSec}s` : "Resend code"}
+              onPress={onResend}
+              variant="secondary"
+            />
+          </View>
+
+          {error ? <AppText style={styles.error}>{error}</AppText> : null}
+
+          <AppButton label={isSubmitting ? "Verifying..." : "Confirm Email"} loading={isSubmitting} onPress={onConfirm} />
+          <AppButton containerStyle={styles.secondaryButton} label="Sign Out" onPress={signOut} />
+        </View>
       </View>
     </Screen>
   );
@@ -33,6 +114,9 @@ export function EmailVerificationScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  content: {
     flex: 1,
     gap: 12,
     justifyContent: "center",
@@ -43,6 +127,22 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     marginBottom: 8,
+  },
+  metaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  resendButton: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  resendButtonDisabled: {
+    opacity: 0.7,
+  },
+  error: {
+    color: "#DC2626",
   },
   secondaryButton: {
     backgroundColor: "#6B7280",

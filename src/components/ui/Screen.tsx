@@ -13,7 +13,13 @@ export function Screen({ children, scroll = false, contentContainerStyle }: Scre
   if (scroll) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={[styles.content, contentContainerStyle]}>{children}</ScrollView>
+        <ScrollView
+          contentContainerStyle={[styles.content, contentContainerStyle]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -32,6 +38,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
   },
 });

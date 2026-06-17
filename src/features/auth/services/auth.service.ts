@@ -3,24 +3,43 @@ import type { AuthSession } from "../../../models/auth";
 import type { AppUser } from "../../../models/user";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { apiRequest } from "../../../services/api/client";
-import { clearAuthState, loadAuthState, saveAuthState, saveCanonicalUser } from "../../../services/api/authSession";
+import {
+  clearAuthState,
+  getMockUserRegistryUser,
+  loadAuthState,
+  saveAuthState,
+  saveCanonicalUser,
+} from "../../../services/api/authSession";
+import { getSecureItem, setSecureItem } from "../../../services/storage/secureStorage";
 import type { SessionTokens } from "../../../services/api/types";
 
-type AuthPayload = {
+export type AuthPayload = {
   session: AuthSession;
   user: AppUser;
   tokens: SessionTokens;
 };
 
+const parseAuthPayload = (payload: AuthPayload): AuthPayload => {
+  if (!payload?.user?.id || !payload?.session?.sessionId || !payload?.tokens?.accessToken) {
+    throw new Error("Invalid auth response from server.");
+  }
+  return payload;
+};
+
 type SignInInput = {
-  email: string;
+  identifier: string;
   password: string;
 };
 
 type SignUpInput = {
   displayName: string;
+  username: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
   email: string;
   password: string;
+  birthDate: string;
+  consentAccepted: boolean;
 };
 
 type HydratedAuthState = {
@@ -28,18 +47,77 @@ type HydratedAuthState = {
   user: AppUser;
 };
 
-const buildMockUser = (input: { id: string; displayName: string }): AppUser => ({
-  id: input.id,
-  displayName: input.displayName,
-  community: "",
-  homeCountryCode: "",
-  currentCountryCode: "",
-  currentCity: "",
-  hasCompletedOnboarding: false,
-  hasPhoneVerification: false,
-  hasEmailVerification: false,
-  organizerStatus: "not_applied",
-});
+type MockCredentialRecord = {
+  email: string;
+  password: string;
+  userId: string;
+};
+
+const MOCK_TEST_USERS = [
+  {
+    id: "user_test_tourist",
+    displayName: "Test Tourist",
+    username: "testtourist",
+    login: "test@tourist.com",
+    phoneCountryCode: "+90",
+    phoneNumber: "5555555555",
+    password: "123456",
+  },
+] as const;
+const MOCK_CREDENTIALS_KEY = "tourist.mock.auth.credentials";
+
+const buildMockUser = (input: {
+  id: string;
+  displayName: string;
+  username: string;
+  email: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
+  birthDate: string;
+  consentAccepted: boolean;
+  hasPhoneVerification?: boolean;
+  hasEmailVerification?: boolean;
+  onboardingComplete?: boolean;
+}): AppUser => {
+  const now = new Date().toISOString();
+  const user: AppUser = {
+    id: input.id,
+    roles: ["user"],
+    organizerStatus: "not_applied",
+    hasPhoneVerification: input.hasPhoneVerification ?? false,
+    hasEmailVerification: input.hasEmailVerification ?? false,
+    consentAccepted: input.consentAccepted,
+    isUsernameSet: Boolean(input.username.trim()),
+    createdAt: now,
+    updatedAt: now,
+    publicProfile: {
+      displayName: input.displayName,
+      username: input.username,
+      usernameLower: input.username.toLowerCase(),
+      homeCommunity: input.onboardingComplete ? "Turkish" : "",
+      currentCity: input.onboardingComplete ? "Berlin" : "",
+      interests: input.onboardingComplete ? ["Food", "Networking"] : [],
+    },
+    privateProfile: {
+      email: input.email,
+      phoneCountryCode: input.phoneCountryCode,
+      phoneNumber: input.phoneNumber,
+      birthDate: input.birthDate,
+      nationalityCountryCode: input.onboardingComplete ? "TR" : "",
+      destinationCountryCode: input.onboardingComplete ? "DE" : "",
+      destinationCity: input.onboardingComplete ? "Berlin" : "",
+      relocationReason: input.onboardingComplete ? "work" : null,
+      spokenLanguages: input.onboardingComplete
+        ? [
+            { code: "tr", level: "native" },
+            { code: "en", level: "advanced" },
+          ]
+        : [],
+    },
+  };
+
+  return user;
+};
 
 const buildMockPayload = (input: { user: AppUser }): AuthPayload => {
   const now = new Date().toISOString();
@@ -57,8 +135,60 @@ const buildMockPayload = (input: { user: AppUser }): AuthPayload => {
   };
 };
 
+const findMockTestUser = (input: SignInInput) => {
+  const normalizedIdentifier = input.identifier.trim().toLowerCase();
+  const normalizedPhone = input.identifier.trim();
+
+  return MOCK_TEST_USERS.find(
+    (user) =>
+      input.password === user.password &&
+      (normalizedIdentifier === user.login.toLowerCase() ||
+        normalizedIdentifier === user.username.toLowerCase() ||
+        normalizedPhone === `${user.phoneCountryCode}${user.phoneNumber}`),
+  );
+};
+
+const loadMockCredentials = async (): Promise<MockCredentialRecord[]> => {
+  const raw = await getSecureItem(MOCK_CREDENTIALS_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as MockCredentialRecord[];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter(
+      (record) =>
+        typeof record?.email === "string" && typeof record?.password === "string" && typeof record?.userId === "string",
+    );
+  } catch {
+    return [];
+  }
+};
+
+const saveMockCredentials = async (records: MockCredentialRecord[]): Promise<void> => {
+  await setSecureItem(MOCK_CREDENTIALS_KEY, JSON.stringify(records));
+};
+
+const upsertMockCredential = async (record: MockCredentialRecord): Promise<void> => {
+  const records = await loadMockCredentials();
+  const nextRecords = records.filter((item) => item.email !== record.email);
+  nextRecords.push(record);
+  await saveMockCredentials(nextRecords);
+};
+
 const persistAuthPayload = async (payload: AuthPayload): Promise<HydratedAuthState> => {
   await saveAuthState(payload);
+  const hydrated = await loadAuthState();
+  console.log("[auth.service] Persisted auth state after signup/signin", {
+    hasSession: Boolean(hydrated?.session),
+    hasUser: Boolean(hydrated?.user),
+    userId: hydrated?.user?.id ?? null,
+    hasPhoneVerification: hydrated?.user?.hasPhoneVerification ?? null,
+    hasEmailVerification: hydrated?.user?.hasEmailVerification ?? null,
+  });
   return {
     session: payload.session,
     user: payload.user,
@@ -67,49 +197,148 @@ const persistAuthPayload = async (payload: AuthPayload): Promise<HydratedAuthSta
 
 export async function signInWithEmail(input: SignInInput): Promise<HydratedAuthState> {
   if (USE_MOCK_BACKEND) {
-    const payload = buildMockPayload({
-      user: buildMockUser({
-        id: `user_${Date.now()}`,
-        displayName: input.email.split("@")[0] || "Tourist User",
-      }),
-    });
-    return persistAuthPayload(payload);
+    const normalizedIdentifier = input.identifier.trim().toLowerCase();
+    const mockCredentials = await loadMockCredentials();
+    const matchedCredentialByEmail = mockCredentials.find(
+      (credential) => credential.email === normalizedIdentifier && credential.password === input.password,
+    );
+    let matchedCredential = matchedCredentialByEmail ?? null;
+    let matchedStoredUser: AppUser | null = null;
+
+    if (!matchedCredential) {
+      for (const credential of mockCredentials) {
+        if (credential.password !== input.password) {
+          continue;
+        }
+        const storedUser = await getMockUserRegistryUser(credential.userId);
+        const usernameLower = storedUser?.publicProfile.usernameLower?.toLowerCase() ?? "";
+        const username = storedUser?.publicProfile.username?.toLowerCase() ?? "";
+        if (storedUser && (usernameLower === normalizedIdentifier || username === normalizedIdentifier)) {
+          matchedCredential = credential;
+          matchedStoredUser = storedUser;
+          break;
+        }
+      }
+    }
+
+    if (matchedCredential) {
+      const storedUser = matchedStoredUser ?? (await getMockUserRegistryUser(matchedCredential.userId));
+      if (!storedUser) {
+        throw new Error("Saved user record is missing. Please sign up again.");
+      }
+      const payload = buildMockPayload({
+        user: storedUser,
+      });
+      return persistAuthPayload(payload);
+    }
+
+    const matchedUser = findMockTestUser(input);
+
+    if (matchedUser) {
+      const readyUser = buildMockUser({
+        id: matchedUser.id,
+        displayName: matchedUser.displayName,
+        username: matchedUser.username,
+        email: matchedUser.login,
+        phoneCountryCode: matchedUser.phoneCountryCode,
+        phoneNumber: matchedUser.phoneNumber,
+        birthDate: "1998-06-14",
+        consentAccepted: true,
+        hasPhoneVerification: true,
+        hasEmailVerification: true,
+        onboardingComplete: true,
+      });
+
+      const payload = buildMockPayload({
+        user: readyUser,
+      });
+      return persistAuthPayload(payload);
+    }
+
+    throw new Error("Invalid email/username or password.");
   }
 
-  const payload = await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signIn, {
-    method: "POST",
-    body: input,
-  });
+  const payload = parseAuthPayload(
+    await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signIn, {
+      method: "POST",
+      body: {
+        identifier: input.identifier,
+        password: input.password,
+      },
+    }),
+  );
 
   return persistAuthPayload(payload);
 }
 
 export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthState> {
   if (USE_MOCK_BACKEND) {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const mockCredentials = await loadMockCredentials();
+    const emailAlreadyTaken = mockCredentials.some((record) => record.email === normalizedEmail);
+    if (emailAlreadyTaken) {
+      throw new Error("An account with this email already exists.");
+    }
+
     const payload = buildMockPayload({
       user: buildMockUser({
         id: `user_${Date.now()}`,
         displayName: input.displayName.trim() || input.email.split("@")[0] || "Tourist User",
+        username: input.username.trim().toLowerCase(),
+        email: normalizedEmail,
+        phoneCountryCode: input.phoneCountryCode.trim(),
+        phoneNumber: input.phoneNumber.trim(),
+        birthDate: input.birthDate,
+        consentAccepted: input.consentAccepted,
       }),
     });
-    return persistAuthPayload(payload);
+    const state = await persistAuthPayload(payload);
+    await upsertMockCredential({
+      email: normalizedEmail,
+      password: input.password,
+      userId: state.user.id,
+    });
+    console.log("[auth.service] signUpWithEmail mock success", {
+      userId: state.user.id,
+      hasPhoneVerification: state.user.hasPhoneVerification,
+      hasEmailVerification: state.user.hasEmailVerification,
+    });
+    return state;
   }
 
-  const payload = await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signUp, {
-    method: "POST",
-    body: input,
-  });
+  const payload = parseAuthPayload(
+    await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signUp, {
+      method: "POST",
+      body: {
+        displayName: input.displayName,
+        username: input.username,
+        phoneCountryCode: input.phoneCountryCode,
+        phoneNumber: input.phoneNumber,
+        email: input.email,
+        password: input.password,
+        birthDate: input.birthDate,
+        consentAccepted: input.consentAccepted,
+      },
+    }),
+  );
 
-  return persistAuthPayload(payload);
+  const state = await persistAuthPayload(payload);
+  console.log("[auth.service] signUpWithEmail api success", {
+    userId: state.user.id,
+    hasPhoneVerification: state.user.hasPhoneVerification,
+    hasEmailVerification: state.user.hasEmailVerification,
+  });
+  return state;
 }
 
 export async function signOutSession(): Promise<void> {
   const state = await loadAuthState();
 
   if (!USE_MOCK_BACKEND && state?.tokens.accessToken) {
-    await apiRequest<void>(API_ENDPOINTS.auth.signOut, {
+    await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.signOut, {
       method: "POST",
       token: state.tokens.accessToken,
+      body: state.tokens.refreshToken ? { refreshToken: state.tokens.refreshToken } : undefined,
     });
   }
 
@@ -129,20 +358,43 @@ export async function hydrateAuthState(): Promise<HydratedAuthState | null> {
     };
   }
 
-  const profile = await apiRequest<AppUser>(API_ENDPOINTS.auth.me, {
-    method: "GET",
-    token: state.tokens.accessToken,
-  });
+  if (state.tokens.accessToken.startsWith("mock_access_")) {
+    await clearAuthState();
+    return null;
+  }
 
-  await saveCanonicalUser(profile);
+  try {
+    const payload = parseAuthPayload(
+      await apiRequest<AuthPayload>(API_ENDPOINTS.auth.me, {
+        method: "GET",
+        token: state.tokens.accessToken,
+      }),
+    );
 
-  return {
-    session: state.session,
-    user: profile,
-  };
+    await saveAuthState(payload);
+
+    return {
+      session: payload.session,
+      user: payload.user,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    const isAuthFailure =
+      message.includes("unauthorized") ||
+      message.includes("invalid session") ||
+      message.includes("user not found") ||
+      message.includes("session not found");
+
+    if (isAuthFailure) {
+      await clearAuthState();
+      return null;
+    }
+
+    throw error;
+  }
 }
 
-export async function completePhoneVerification(userId: string): Promise<AppUser> {
+export async function completePhoneVerification(userId: string, code: string): Promise<AppUser> {
   if (USE_MOCK_BACKEND) {
     const state = await loadAuthState();
     if (!state || state.user.id !== userId) {
@@ -151,6 +403,7 @@ export async function completePhoneVerification(userId: string): Promise<AppUser
     const user: AppUser = {
       ...state.user,
       hasPhoneVerification: true,
+      updatedAt: new Date().toISOString(),
     };
     await saveCanonicalUser(user);
     return user;
@@ -161,16 +414,23 @@ export async function completePhoneVerification(userId: string): Promise<AppUser
     throw new Error("Missing access token.");
   }
 
-  const user = await apiRequest<AppUser>(API_ENDPOINTS.auth.verifyPhone, {
-    method: "POST",
-    token: state.tokens.accessToken,
-  });
+  const payload = parseAuthPayload(
+    await apiRequest<AuthPayload>(API_ENDPOINTS.auth.verifyPhone, {
+      method: "POST",
+      token: state.tokens.accessToken,
+      body: { code },
+    }),
+  );
 
-  await saveCanonicalUser(user);
-  return user;
+  if (payload.user.id !== userId) {
+    throw new Error("Verification response user mismatch.");
+  }
+
+  await saveAuthState(payload);
+  return payload.user;
 }
 
-export async function completeEmailVerification(userId: string): Promise<AppUser> {
+export async function completeEmailVerification(userId: string, code: string): Promise<AppUser> {
   if (USE_MOCK_BACKEND) {
     const state = await loadAuthState();
     if (!state || state.user.id !== userId) {
@@ -179,6 +439,7 @@ export async function completeEmailVerification(userId: string): Promise<AppUser
     const user: AppUser = {
       ...state.user,
       hasEmailVerification: true,
+      updatedAt: new Date().toISOString(),
     };
     await saveCanonicalUser(user);
     return user;
@@ -189,11 +450,18 @@ export async function completeEmailVerification(userId: string): Promise<AppUser
     throw new Error("Missing access token.");
   }
 
-  const user = await apiRequest<AppUser>(API_ENDPOINTS.auth.verifyEmail, {
-    method: "POST",
-    token: state.tokens.accessToken,
-  });
+  const payload = parseAuthPayload(
+    await apiRequest<AuthPayload>(API_ENDPOINTS.auth.verifyEmail, {
+      method: "POST",
+      token: state.tokens.accessToken,
+      body: { code },
+    }),
+  );
 
-  await saveCanonicalUser(user);
-  return user;
+  if (payload.user.id !== userId) {
+    throw new Error("Verification response user mismatch.");
+  }
+
+  await saveAuthState(payload);
+  return payload.user;
 }

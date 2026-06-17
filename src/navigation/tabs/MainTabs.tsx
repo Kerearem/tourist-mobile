@@ -1,7 +1,10 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+import { getFocusedRouteNameFromRoute, StackActions } from "@react-navigation/native";
 
-import { TabRoutes } from "../../constants/routes";
+import { ExploreRoutes, TabRoutes } from "../../constants/routes";
+import { theme } from "../../constants/theme";
 import { EventsStack } from "../events/EventsStack";
 import { ExploreStack } from "../explore/ExploreStack";
 import { HelpStack } from "../help/HelpStack";
@@ -11,12 +14,72 @@ import type { MainTabParamList } from "../types";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+type TabIconName = keyof typeof Ionicons.glyphMap;
+
+const tabIcons: Record<keyof MainTabParamList, { active: TabIconName; inactive: TabIconName }> = {
+  ExploreTab: { active: "home", inactive: "home-outline" },
+  HelpTab: { active: "heart", inactive: "heart-outline" },
+  MessagesTab: { active: "chatbubble", inactive: "chatbubble-outline" },
+  EventsTab: { active: "calendar", inactive: "calendar-outline" },
+  ProfileTab: { active: "person", inactive: "person-outline" },
+};
+
+const baseTabBarStyle = {
+  backgroundColor: theme.colors.surfaceElevated,
+  borderTopColor: theme.colors.border,
+  height: 74,
+  paddingBottom: 10,
+  paddingTop: 8,
+};
+
 export function MainTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen component={ExploreStack} name={TabRoutes.ExploreTab} options={{ title: "Explore" }} />
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: "#5B3CF6",
+        tabBarInactiveTintColor: theme.colors.muted,
+        tabBarIcon: ({ color, focused, size }) => {
+          const icon = tabIcons[route.name];
+          return <Ionicons color={color} name={focused ? icon.active : icon.inactive} size={size} />;
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+        },
+        tabBarStyle: baseTabBarStyle,
+      })}
+    >
+      <Tab.Screen
+        component={ExploreStack}
+        name={TabRoutes.ExploreTab}
+        options={({ route }) => ({
+          title: "Explore",
+          tabBarStyle: getFocusedRouteNameFromRoute(route) === ExploreRoutes.ExploreCameraScreen ? { display: "none" } : baseTabBarStyle,
+        })}
+      />
       <Tab.Screen component={HelpStack} name={TabRoutes.HelpTab} options={{ title: "Help" }} />
-      <Tab.Screen component={MessagesStack} name={TabRoutes.MessagesTab} options={{ title: "Messages" }} />
+      <Tab.Screen
+        component={MessagesStack}
+        name={TabRoutes.MessagesTab}
+        options={{ title: "Messages" }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (event) => {
+            if (!navigation.isFocused()) {
+              return;
+            }
+            const nestedState = route.state;
+            if (!nestedState || nestedState.index === 0) {
+              return;
+            }
+            event.preventDefault();
+            navigation.dispatch({
+              ...StackActions.popToTop(),
+              target: nestedState.key,
+            });
+          },
+        })}
+      />
       <Tab.Screen component={EventsStack} name={TabRoutes.EventsTab} options={{ title: "Events" }} />
       <Tab.Screen component={ProfileStack} name={TabRoutes.ProfileTab} options={{ title: "Profile" }} />
     </Tab.Navigator>

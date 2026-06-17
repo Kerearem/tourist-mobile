@@ -1,26 +1,84 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { ImageBackground, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import { AppButton } from "../../../components/ui/AppButton";
+import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
+import { Badge } from "../../../components/ui/Badge";
+import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
-import { Screen } from "../../../components/ui/Screen";
+import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList } from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
-import { getEventById, toggleEventAttendance } from "../services/events.service";
+import { getEventById } from "../services/events.service";
 import type { EventItem } from "../types";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventDetailScreen">;
+type AttendanceUiState = "idle" | "pending" | "approved";
+
+const formatDateTime = (startsAt: string, endsAt?: string) => {
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) {
+    return "Date pending";
+  }
+
+  const startLabel = start.toLocaleString([], {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (!endsAt) {
+    return startLabel;
+  }
+
+  const end = new Date(endsAt);
+  if (Number.isNaN(end.getTime())) {
+    return startLabel;
+  }
+
+  const endLabel = end.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return `${startLabel} - ${endLabel}`;
+};
+
+const getCoverUri = (event: EventItem) => {
+  if (event.coverImageUrl) {
+    return event.coverImageUrl;
+  }
+  if (event.type === "social") {
+    return "https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1400&q=80";
+  }
+  if (event.type === "community") {
+    return "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&q=80";
+  }
+  return "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80";
+};
+
+const formatDateBadge = (startsAt: string) => {
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) {
+    return { day: "--", weekday: "DAY" };
+  }
+  return {
+    day: date.toLocaleDateString([], { day: "2-digit" }),
+    weekday: date.toLocaleDateString([], { weekday: "short" }).toUpperCase(),
+  };
+};
 
 export function EventDetailScreen({ route }: Props) {
   const { user } = useAuth();
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [attendanceState, setAttendanceState] = useState<AttendanceUiState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const loadEvent = async () => {
@@ -29,15 +87,18 @@ export function EventDetailScreen({ route }: Props) {
       const result = await getEventById(route.params.eventId);
       if (!result) {
         setEvent(null);
+        setAttendanceState("idle");
       } else {
         setEvent({
           ...result,
           isUserAttending: user ? result.isUserAttending : false,
         });
+        setAttendanceState(user && result.isUserAttending ? "approved" : "idle");
       }
       setError(null);
     } catch {
       setEvent(null);
+      setAttendanceState("idle");
       setError("Failed to load event.");
     } finally {
       setIsLoading(false);
@@ -49,84 +110,238 @@ export function EventDetailScreen({ route }: Props) {
   }, [route.params.eventId, user?.id]);
 
   const onToggleAttend = async () => {
-    if (!user?.id || !event) {
+    if (!event) {
       return;
     }
-    setIsUpdating(true);
-    const updated = await toggleEventAttendance({
-      eventId: event.id,
-      userId: user.id,
-    });
-    setIsUpdating(false);
-    if (updated) {
-      setEvent(updated);
+
+    if (attendanceState === "approved") {
+      return;
     }
+
+    setAttendanceState((prev) => (prev === "idle" ? "pending" : "idle"));
   };
 
   if (isLoading) {
     return (
-      <Screen>
-        <Loader label="Loading event..." />
-      </Screen>
+      <SafeAreaView style={styles.safeArea}>
+        <Card style={styles.stateCard}>
+          <Loader label="Loading event..." />
+        </Card>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <Screen>
-        <ErrorState title="Could not load event" subtitle={error} />
-      </Screen>
+      <SafeAreaView style={styles.safeArea}>
+        <Card style={styles.stateCard}>
+          <ErrorState onRetry={() => void loadEvent()} title="Could not load event" subtitle={error} />
+        </Card>
+      </SafeAreaView>
     );
   }
 
   if (!event) {
     return (
-      <Screen>
-        <EmptyState title="Event not found" subtitle="This event may have been removed." />
-      </Screen>
+      <SafeAreaView style={styles.safeArea}>
+        <Card style={styles.stateCard}>
+          <EmptyState title="Event not found" subtitle="This event may have been removed." />
+        </Card>
+      </SafeAreaView>
     );
   }
 
+  const hostInitials = event.host.displayName.slice(0, 2).toUpperCase();
+  const dateTimeLabel = formatDateTime(event.startsAt, event.endsAt);
+  const dateBadge = formatDateBadge(event.startsAt);
+  const locationLabel = event.venueName
+    ? `${event.venueName} - ${event.city}, ${event.countryCode}`
+    : `${event.city}, ${event.countryCode}`;
+  const attendanceLabel = attendanceState === "approved" ? "Katıldın" : attendanceState === "pending" ? "İptal Et" : "Başvur";
+
   return (
-    <Screen scroll>
-      <View style={styles.container}>
-        <AppText style={styles.title}>{event.title}</AppText>
-        <AppText muted style={styles.subtitle}>
-          Hosted by {event.host.displayName}
-        </AppText>
-        <AppText style={styles.description}>{event.description}</AppText>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <Card style={styles.heroCard}>
+          <ImageBackground imageStyle={styles.heroImage} source={{ uri: getCoverUri(event) }} style={styles.heroCover}>
+            <View style={styles.dateBadge}>
+              <AppText style={styles.dateWeekday} variant="caption">
+                {dateBadge.weekday}
+              </AppText>
+              <AppText style={styles.dateDay} variant="sectionTitle">
+                {dateBadge.day}
+              </AppText>
+            </View>
+            <View style={styles.locationPill}>
+              <AppText style={styles.locationPillText} variant="caption">
+                {event.city}, {event.countryCode}
+              </AppText>
+            </View>
+          </ImageBackground>
+          <View style={styles.heroContent}>
+            <View style={styles.badgeRow}>
+              <Badge label={event.type} />
+              <Badge label={event.visibility} />
+              {attendanceState === "approved" ? <Badge label="Approved" /> : attendanceState === "pending" ? <Badge label="Pending" /> : null}
+            </View>
+            <AppText style={styles.title} variant="title">
+              {event.title}
+            </AppText>
+            <AppText variant="bodyMuted">{dateTimeLabel}</AppText>
+            <AppText variant="bodyMuted">{locationLabel}</AppText>
+          </View>
+        </Card>
 
-        <EventMetaRow label="Type" value={event.type} />
-        <EventMetaRow label="Visibility" value={event.visibility} />
-        <EventMetaRow label="Location" value={`${event.city}, ${event.countryCode}`} />
-        <EventMetaRow label="Starts" value={new Date(event.startsAt).toLocaleString()} />
-        <EventMetaRow label="Attendees" value={`${event.attendeeCount}`} />
-        {event.venueName ? <EventMetaRow label="Venue" value={event.venueName} /> : null}
+        <Card>
+          <AppText style={styles.sectionTitle} variant="sectionTitle">
+            Organizer
+          </AppText>
+          <View style={styles.hostRow}>
+            <Avatar initials={hostInitials} size="md" uri={event.host.avatarUrl} />
+            <View style={styles.hostText}>
+              <AppText variant="label">{event.host.displayName}</AppText>
+              <AppText variant="caption">Community host</AppText>
+            </View>
+          </View>
+        </Card>
 
-        <AppButton
-          label={isUpdating ? "Updating..." : event.isUserAttending ? "Leave Event" : "Attend Event"}
+        <Card>
+          <AppText style={styles.sectionTitle} variant="sectionTitle">
+            Event details
+          </AppText>
+          <EventMetaRow label="When" value={dateTimeLabel} />
+          <EventMetaRow label="Location" value={locationLabel} />
+          <EventMetaRow label="Attendees" value={`${event.attendeeCount}`} />
+          {event.capacity ? <EventMetaRow label="Capacity" value={`${event.capacity}`} /> : null}
+        </Card>
+
+        <Card>
+          <AppText style={styles.sectionTitle} variant="sectionTitle">
+            About this event
+          </AppText>
+          <AppText style={styles.description} variant="body">
+            {event.description}
+          </AppText>
+        </Card>
+
+        <Pressable
+          disabled={attendanceState === "approved"}
           onPress={() => void onToggleAttend()}
-        />
-      </View>
-    </Screen>
+          style={[
+            styles.attendButton,
+            attendanceState === "pending" && styles.pendingButton,
+            attendanceState === "approved" && styles.approvedButton,
+          ]}
+        >
+          <AppText style={styles.attendButtonLabel} variant="label">
+            {attendanceLabel}
+          </AppText>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    backgroundColor: theme.colors.background,
     flex: 1,
-    gap: 10,
+  },
+  container: {
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+  },
+  stateCard: {
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+    flex: 1,
+    justifyContent: "center",
+  },
+  heroCard: {
+    overflow: "hidden",
+    padding: 0,
+  },
+  heroCover: {
+    height: 220,
+    justifyContent: "space-between",
+    padding: theme.spacing.md,
+  },
+  heroImage: {
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+  },
+  heroContent: {
+    gap: theme.spacing.xs,
+    padding: theme.spacing.lg,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.xs,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 12,
+    marginTop: theme.spacing.xs,
   },
-  subtitle: {
-    marginBottom: 6,
+  dateBadge: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    minWidth: 56,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
+  dateWeekday: {
+    color: "#EF4444",
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  dateDay: {
+    color: theme.colors.textPrimary,
+    lineHeight: 24,
+  },
+  locationPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(17, 24, 39, 0.72)",
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+  },
+  locationPillText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  sectionTitle: {
+    marginBottom: theme.spacing.sm,
+  },
+  hostRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+  },
+  hostText: {
+    gap: 2,
   },
   description: {
-    lineHeight: 22,
-    marginBottom: 8,
+    color: theme.colors.textPrimary,
+  },
+  attendButton: {
+    alignItems: "center",
+    backgroundColor: "#111827",
+    borderRadius: theme.radius.md,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  pendingButton: {
+    backgroundColor: "#DC2626",
+  },
+  approvedButton: {
+    backgroundColor: "#2563EB",
+  },
+  attendButtonLabel: {
+    color: "#FFFFFF",
+    fontSize: 16,
   },
 });

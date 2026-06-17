@@ -1,5 +1,6 @@
-import React from "react";
-import { StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -8,36 +9,139 @@ import type { ExplorePost } from "../types";
 
 type ExplorePostCardProps = {
   post: ExplorePost;
+  height?: number;
+  onCommentPress?: () => void;
+  onLikePress?: () => void;
+  onAuthorPress?: () => void;
+  isLiked?: boolean;
+  likeCount?: number;
 };
 
-export function ExplorePostCard({ post }: ExplorePostCardProps) {
+const formatCount = (value: number) => {
+  if (value >= 1000) {
+    return `${Math.round(value / 1000)}K`;
+  }
+
+  return `${value}`;
+};
+
+function ActionButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.actionButton}>
+      <Ionicons color="#FFFFFF" name={icon} size={34} />
+      <AppText style={styles.actionLabel} variant="caption">
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
+export function ExplorePostCard({
+  post,
+  height,
+  onCommentPress,
+  onLikePress,
+  onAuthorPress,
+  isLiked,
+  likeCount,
+}: ExplorePostCardProps) {
   const initials = post.author.displayName.slice(0, 2).toUpperCase();
+  const displayNumber = post.id.endsWith("_2") ? "2" : "1";
+  const [carouselWidth, setCarouselWidth] = useState(0);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const hasMedia = post.media.length > 0;
+  const liked = isLiked ?? post.viewerState.liked;
+  const visibleLikeCount = likeCount ?? post.stats.likeCount;
+  const likeScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!liked) {
+      return;
+    }
+    Animated.sequence([
+      Animated.spring(likeScale, { toValue: 1.26, useNativeDriver: true }),
+      Animated.spring(likeScale, { toValue: 1, useNativeDriver: true }),
+    ]).start();
+  }, [likeScale, liked]);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <Avatar initials={initials} size={40} uri={post.author.avatarUrl} />
-        <View style={styles.headerText}>
-          <AppText style={styles.author}>{post.author.displayName}</AppText>
-          <AppText muted style={styles.meta}>
-            {post.community} - {post.city}, {post.countryCode}
-          </AppText>
+    <View style={[styles.card, height ? { height } : undefined]}>
+      {hasMedia ? (
+        <View
+          onLayout={(event) => {
+            const width = event.nativeEvent.layout.width;
+            if (width > 0 && width !== carouselWidth) {
+              setCarouselWidth(width);
+            }
+          }}
+          style={styles.mediaLayer}
+        >
+          <ScrollView
+            horizontal
+            onMomentumScrollEnd={(event) => {
+              if (carouselWidth <= 0) {
+                return;
+              }
+              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / carouselWidth);
+              setActiveMediaIndex(nextIndex);
+            }}
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+          >
+            {post.media.map((media) => (
+              <Image key={media.id} resizeMode="cover" source={{ uri: media.url }} style={[styles.mediaImage, carouselWidth > 0 ? { width: carouselWidth } : undefined]} />
+            ))}
+          </ScrollView>
+          {post.media.length > 1 ? (
+            <View style={styles.mediaDots}>
+              {post.media.map((media, index) => (
+                <View key={`${media.id}_${index}`} style={[styles.mediaDot, activeMediaIndex === index && styles.mediaDotActive]} />
+              ))}
+            </View>
+          ) : null}
         </View>
+      ) : (
+        <View style={styles.visualCenter}>
+          <AppText style={styles.visualNumber}>{displayNumber}</AppText>
+        </View>
+      )}
+
+      <View style={styles.actionRail}>
+        <View style={styles.profileAction}>
+          <Avatar initials={initials} size="md" uri={post.author.avatarUrl} />
+          <View style={styles.followDot}>
+            <Ionicons color="#FFFFFF" name="add" size={14} />
+          </View>
+        </View>
+        <Pressable onPress={onLikePress} style={styles.actionButton}>
+          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+            <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
+          </Animated.View>
+          <AppText style={styles.actionLabel} variant="caption">
+            {formatCount(visibleLikeCount)}
+          </AppText>
+        </Pressable>
+        <ActionButton icon="chatbubble-outline" label={formatCount(post.stats.commentCount)} onPress={onCommentPress} />
+        <ActionButton icon="share-social-outline" label="Share" />
       </View>
 
-      <AppText style={styles.body}>{post.text}</AppText>
-
-      {post.media.map((media) => (
-        <View key={media.id} style={styles.mediaBox}>
-          <AppText muted>{media.type === "video" ? "Video placeholder" : "Image placeholder"}</AppText>
-        </View>
-      ))}
-
-      <View style={styles.footer}>
-        <AppText muted>
-          {post.stats.likeCount} likes - {post.stats.commentCount} comments
+      <View style={styles.captionBlock}>
+        <Pressable onPress={onAuthorPress}>
+          <AppText style={styles.username} variant="label">
+            @{post.author.displayName}
+          </AppText>
+        </Pressable>
+        <AppText style={styles.caption} variant="body">
+          {post.text}
         </AppText>
-        <AppText muted>{post.scope === "city" ? "City feed" : "Country feed"}</AppText>
       </View>
     </View>
   );
@@ -45,42 +149,91 @@ export function ExplorePostCard({ post }: ExplorePostCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
-    borderColor: theme.colors.border,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 12,
-    marginBottom: 12,
-    padding: 12,
-  },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  headerText: {
+    backgroundColor: "#151517",
     flex: 1,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
-  author: {
-    fontWeight: "700",
-  },
-  meta: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  body: {
-    lineHeight: 22,
-  },
-  mediaBox: {
+  visualCenter: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    height: 180,
     justifyContent: "center",
   },
-  footer: {
+  mediaLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mediaImage: {
+    height: "100%",
+  },
+  mediaDots: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
+    gap: 5,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 72,
+    justifyContent: "center",
+  },
+  mediaDot: {
+    backgroundColor: "rgba(255, 255, 255, 0.36)",
+    borderRadius: 4,
+    height: 6,
+    width: 6,
+  },
+  mediaDotActive: {
+    backgroundColor: "#FFFFFF",
+    width: 16,
+  },
+  visualNumber: {
+    color: "#FFFFFF",
+    fontSize: 76,
+    fontWeight: "700",
+  },
+  actionRail: {
+    alignItems: "center",
+    bottom: 104,
+    gap: theme.spacing.lg,
+    position: "absolute",
+    right: theme.spacing.lg,
+  },
+  profileAction: {
+    alignItems: "center",
+  },
+  followDot: {
+    alignItems: "center",
+    backgroundColor: "#FF365F",
+    borderColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 2,
+    bottom: -4,
+    height: 20,
+    justifyContent: "center",
+    position: "absolute",
+    right: -4,
+    width: 20,
+  },
+  actionButton: {
+    alignItems: "center",
+    gap: theme.spacing.xs,
+  },
+  actionLabel: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  captionBlock: {
+    alignItems: "flex-start",
+    paddingRight: 84,
+  },
+  username: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    marginBottom: theme.spacing.xs,
+  },
+  caption: {
+    color: "#F3F4F6",
   },
 });

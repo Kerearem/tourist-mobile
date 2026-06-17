@@ -1,94 +1,16 @@
 import type { ExplorePost, LoadExploreFeedInput } from "../types";
+import { USE_MOCK_BACKEND } from "../../../constants/env";
+import { API_ENDPOINTS } from "../../../services/api/endpoints";
+import { loadAuthState } from "../../../services/api/authSession";
+import { apiRequest } from "../../../services/api/client";
+import { buildExploreFeedQueryParams } from "./audienceMode";
 
-const MOCK_EXPLORE_POSTS: ExplorePost[] = [
-  {
-    id: "post_1",
-    author: {
-      id: "user_101",
-      displayName: "Mert K.",
-    },
-    community: "Turkish",
-    countryCode: "DE",
-    city: "Berlin",
-    scope: "city",
-    createdAt: "2026-03-27T09:30:00.000Z",
-    text: "Anyone around Kreuzberg this weekend? Looking to meet people from the community.",
-    media: [],
-    stats: {
-      likeCount: 12,
-      commentCount: 4,
-    },
-    viewerState: {
-      liked: false,
-      saved: false,
-    },
-  },
-  {
-    id: "post_2",
-    author: {
-      id: "user_202",
-      displayName: "Selin A.",
-    },
-    community: "Turkish",
-    countryCode: "DE",
-    city: "Berlin",
-    scope: "city",
-    createdAt: "2026-03-27T10:15:00.000Z",
-    text: "Shared apartment tip: this area has new listings this week.",
-    media: [
-      {
-        id: "media_1",
-        type: "image",
-        url: "https://example.com/image-1.jpg",
-      },
-    ],
-    stats: {
-      likeCount: 24,
-      commentCount: 7,
-    },
-    viewerState: {
-      liked: true,
-      saved: false,
-    },
-  },
-  {
-    id: "post_3",
-    author: {
-      id: "user_303",
-      displayName: "Can D.",
-    },
-    community: "Turkish",
-    countryCode: "DE",
-    city: "Hamburg",
-    scope: "country",
-    createdAt: "2026-03-27T11:10:00.000Z",
-    text: "Traveling from Hamburg to Berlin next week, any meetup suggestions?",
-    media: [
-      {
-        id: "media_2",
-        type: "video",
-        url: "https://example.com/video-1.mp4",
-        thumbnailUrl: "https://example.com/video-thumb-1.jpg",
-      },
-    ],
-    stats: {
-      likeCount: 8,
-      commentCount: 2,
-    },
-    viewerState: {
-      liked: false,
-      saved: true,
-    },
-  },
-];
-
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const matchesCommunity = (postCommunity: string, requestedCommunity: string) => {
-  if (!requestedCommunity.trim()) {
-    return true;
+const getAccessToken = async () => {
+  const state = await loadAuthState();
+  if (!state?.tokens.accessToken) {
+    throw new Error("Missing access token.");
   }
-  return postCommunity.toLowerCase() === requestedCommunity.trim().toLowerCase();
+  return state.tokens.accessToken;
 };
 
 export async function loadExploreFeed({
@@ -97,32 +19,108 @@ export async function loadExploreFeed({
   countryCode,
   city,
 }: LoadExploreFeedInput): Promise<ExplorePost[]> {
-  await delay(300);
-
-  // Minimal deterministic error path for Phase 3.
-  if (city.trim().toLowerCase() === "error-city") {
-    throw new Error("Failed to load explore feed.");
+  if (USE_MOCK_BACKEND) {
+    const isGlobalMode = !community;
+    const primaryCommunity = isGlobalMode ? "Spanish" : community;
+    const secondaryCommunity = isGlobalMode ? "German" : community;
+    return [
+      {
+        id: `explore_demo_${scope}_1`,
+        author: {
+          id: "creator_elif_berlin",
+          displayName: "elif.berlin",
+        },
+        community: primaryCommunity || "Turkish",
+        countryCode: countryCode || "DE",
+        city: city || "Berlin",
+        scope,
+        createdAt: new Date().toISOString(),
+        text:
+          scope === "city"
+            ? isGlobalMode
+              ? "Hidden gem from local creators in your city feed. ☕"
+              : "Hidden gem in Kreuzberg! ☕"
+            : isGlobalMode
+              ? "Top picks from different communities across your current country."
+              : "Weekend ideas from the Turkish community across Germany.",
+        media: [
+          {
+            id: "media_city_1",
+            type: "image",
+            url: "https://images.unsplash.com/photo-1526483360412-f4dbaf036963?auto=format&fit=crop&w=1400&q=80",
+          },
+          {
+            id: "media_city_2",
+            type: "image",
+            url: "https://images.unsplash.com/photo-1515169067868-5387ec356754?auto=format&fit=crop&w=1400&q=80",
+          },
+          {
+            id: "media_city_3",
+            type: "image",
+            url: "https://images.unsplash.com/photo-1528728329032-2972f65dfb3f?auto=format&fit=crop&w=1400&q=80",
+          },
+        ],
+        stats: {
+          likeCount: 12000,
+          commentCount: 450,
+        },
+        viewerState: {
+          liked: false,
+        },
+      },
+      {
+        id: `explore_demo_${scope}_2`,
+        author: {
+          id: "creator_ahmet",
+          displayName: "ahmetyilmaz",
+        },
+        community: secondaryCommunity || "Turkish",
+        countryCode: countryCode || "DE",
+        city: city || "Berlin",
+        scope,
+        createdAt: new Date().toISOString(),
+        text: isGlobalMode
+          ? "Global mode: discover nearby posts from all communities in your location."
+          : "Newcomer tip: the best conversations start at local community meetups.",
+        media: [
+          {
+            id: "media_country_1",
+            type: "image",
+            url: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=80",
+          },
+          {
+            id: "media_country_2",
+            type: "image",
+            url: "https://images.unsplash.com/photo-1505764706515-aa95265c5abc?auto=format&fit=crop&w=1400&q=80",
+          },
+        ],
+        stats: {
+          likeCount: 8200,
+          commentCount: 210,
+        },
+        viewerState: {
+          liked: true,
+        },
+      },
+    ];
   }
 
-  const normalizedCountry = countryCode.trim().toUpperCase();
-  const normalizedCity = city.trim().toLowerCase();
+  const token = await getAccessToken();
+  const params = buildExploreFeedQueryParams({
+    scope,
+    community,
+    countryCode,
+    city,
+  });
 
-  if (scope === "city") {
-    return MOCK_EXPLORE_POSTS.filter(
-      (post) =>
-        post.countryCode.toUpperCase() === normalizedCountry &&
-        post.city.toLowerCase() === normalizedCity &&
-        matchesCommunity(post.community, community),
-    ).map((post) => ({
-      ...post,
-      scope: "city",
-    }));
-  }
+  const posts = await apiRequest<ExplorePost[]>(`${API_ENDPOINTS.explore.feed}?${params.toString()}`, {
+    method: "GET",
+    token,
+  });
 
-  return MOCK_EXPLORE_POSTS.filter(
-    (post) => post.countryCode.toUpperCase() === normalizedCountry && matchesCommunity(post.community, community),
-  ).map((post) => ({
+  // Keep feed-context scope explicit in service output contract.
+  return posts.map((post) => ({
     ...post,
-    scope: "country",
+    scope,
   }));
 }

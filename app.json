@@ -4,7 +4,9 @@
     "slug": "tourist-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/tourist-logo.png",
+    "jsEngine": "hermes",
+    "newArchEnabled": false,
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -12,12 +14,18 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.tourist-mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Kamera, cevredeki yerleri ve deneyimleri cekebilmen icin kullanilir.",
+        "NSPhotoLibraryUsageDescription": "Albumden fotograf ve video secip paylasabilmen icin erisim gerekir.",
+        "NSPhotoLibraryAddUsageDescription": "Cektigin fotograf ve videolari albumune kaydedebilmek icin erisim gerekir."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
+        "foregroundImage": "./assets/tourist-logo.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },

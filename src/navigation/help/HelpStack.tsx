@@ -11,7 +11,7 @@ const Stack = createNativeStackNavigator<HelpStackParamList>();
 
 export function HelpStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={HelpListScreen} name={HelpRoutes.HelpListScreen} />
       <Stack.Screen component={CreateHelpRequestScreen} name={HelpRoutes.CreateHelpRequestScreen} />
       <Stack.Screen component={HelpDetailScreen} name={HelpRoutes.HelpDetailScreen} />

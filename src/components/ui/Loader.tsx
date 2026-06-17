@@ -11,8 +11,12 @@ type LoaderProps = {
 export function Loader({ label }: LoaderProps) {
   return (
     <View style={styles.container}>
-      <ActivityIndicator color={theme.colors.primary} />
-      {label ? <AppText muted style={styles.label}>{label}</AppText> : null}
+      <ActivityIndicator color={theme.colors.primary} size="small" />
+      {label ? (
+        <AppText style={styles.label} variant="bodyMuted">
+          {label}
+        </AppText>
+      ) : null}
     </View>
   );
 }
@@ -20,9 +24,10 @@ export function Loader({ label }: LoaderProps) {
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
+    gap: theme.spacing.sm,
     justifyContent: "center",
   },
   label: {
-    marginTop: 8,
+    textAlign: "center",
   },
 });

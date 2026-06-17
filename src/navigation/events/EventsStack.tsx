@@ -12,7 +12,7 @@ const Stack = createNativeStackNavigator<EventsStackParamList>();
 
 export function EventsStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={EventsListScreen} name={EventsRoutes.EventsListScreen} />
       <Stack.Screen component={EventDetailScreen} name={EventsRoutes.EventDetailScreen} />
       <Stack.Screen component={CreateEventScreen} name={EventsRoutes.CreateEventScreen} />

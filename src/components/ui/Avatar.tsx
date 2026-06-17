@@ -6,12 +6,19 @@ import { AppText } from "./AppText";
 
 type AvatarProps = {
   uri?: string;
-  size?: number;
+  size?: "sm" | "md" | "lg" | number;
   initials?: string;
 };
 
-export function Avatar({ uri, size = 40, initials = "TM" }: AvatarProps) {
-  const boxStyle = [styles.avatar, { height: size, width: size, borderRadius: size / 2 }];
+const avatarSizes = {
+  sm: 28,
+  md: 40,
+  lg: 56,
+} as const;
+
+export function Avatar({ uri, size = "md", initials = "TM" }: AvatarProps) {
+  const resolvedSize = typeof size === "number" ? size : avatarSizes[size];
+  const boxStyle = [styles.avatar, { height: resolvedSize, width: resolvedSize, borderRadius: resolvedSize / 2 }];
 
   if (uri) {
     return <Image source={{ uri }} style={boxStyle} />;
@@ -27,7 +34,9 @@ export function Avatar({ uri, size = 40, initials = "TM" }: AvatarProps) {
 const styles = StyleSheet.create({
   avatar: {
     alignItems: "center",
-    backgroundColor: "#DBEAFE",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
     justifyContent: "center",
   },
   initials: {

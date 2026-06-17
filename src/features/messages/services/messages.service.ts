@@ -1,92 +1,225 @@
 import type { ConversationMessage, ConversationThread, HelpConversationInput, SendMessageInput } from "../types";
+import { USE_MOCK_BACKEND } from "../../../constants/env";
+import { API_ENDPOINTS } from "../../../services/api/endpoints";
+import { loadAuthState } from "../../../services/api/authSession";
+import { apiRequest } from "../../../services/api/client";
 
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const getAccessToken = async () => {
+  const state = await loadAuthState();
+  if (!state?.tokens.accessToken) {
+    throw new Error("Missing access token.");
+  }
+  return state.tokens.accessToken;
+};
 
-const conversationsStore: ConversationThread[] = [
+const withThreadId = (template: string, threadId: string) => template.replace(":threadId", threadId);
+
+const now = new Date();
+const mockThreads: ConversationThread[] = [
   {
-    id: "thread_1",
+    id: "thread_mehmet_event",
     type: "direct",
     participants: [
-      { id: "user_1001", displayName: "Ayse K." },
-      { id: "user_1002", displayName: "Can A." },
+      { id: "user_test_tourist", displayName: "Test Tourist" },
+      { id: "user_mehmet", displayName: "Mehmet Kaya" },
     ],
-    createdAt: "2026-03-27T08:30:00.000Z",
-    updatedAt: "2026-03-27T09:10:00.000Z",
-    lastMessagePreview: "Let me check and send details.",
-    lastMessageAt: "2026-03-27T09:10:00.000Z",
-    unreadCount: 1,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    lastMessagePreview: "Hey! Are you coming to the event tonight?",
+    lastMessageAt: now.toISOString(),
+    unreadCount: 2,
+  },
+  {
+    id: "thread_help_ayse",
+    type: "help",
+    title: "Help request follow-up",
+    participants: [
+      { id: "user_test_tourist", displayName: "Test Tourist" },
+      { id: "user_ayse", displayName: "Ayse Yilmaz" },
+    ],
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    lastMessagePreview: "Thanks for the help yesterday! Really appreciate it.",
+    lastMessageAt: now.toISOString(),
+    unreadCount: 0,
+    helpRequestId: "help_demo_sofa",
+  },
+  {
+    id: "thread_support",
+    type: "direct",
+    title: "Tourist Support",
+    participants: [
+      { id: "user_test_tourist", displayName: "Test Tourist" },
+      { id: "tourist_support", displayName: "Tourist Support" },
+    ],
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    lastMessagePreview: "Welcome to Tourist! Let us know if you need anything.",
+    lastMessageAt: now.toISOString(),
+    unreadCount: 0,
   },
 ];
 
-const messagesStore: Record<string, ConversationMessage[]> = {
-  thread_1: [
+const mockMessages: Record<string, ConversationMessage[]> = {
+  thread_mehmet_event: [
     {
-      id: "msg_1",
-      conversationId: "thread_1",
-      sender: { id: "user_1001", displayName: "Ayse K." },
+      id: "message_mehmet_1",
+      conversationId: "thread_mehmet_event",
+      sender: { id: "user_mehmet", displayName: "Mehmet Kaya" },
       type: "text",
-      text: "Hi, are you available to help with registration forms?",
-      createdAt: "2026-03-27T09:00:00.000Z",
+      text: "Hey! Are you coming to the event tonight?",
+      createdAt: now.toISOString(),
+      status: "delivered",
+    },
+  ],
+  thread_help_ayse: [
+    {
+      id: "message_ayse_1",
+      conversationId: "thread_help_ayse",
+      sender: { id: "user_ayse", displayName: "Ayse Yilmaz" },
+      type: "text",
+      text: "Thanks for the help yesterday! Really appreciate it.",
+      createdAt: now.toISOString(),
       status: "read",
     },
+  ],
+  thread_support: [
     {
-      id: "msg_2",
-      conversationId: "thread_1",
-      sender: { id: "user_1002", displayName: "Can A." },
+      id: "message_support_1",
+      conversationId: "thread_support",
+      sender: { id: "tourist_support", displayName: "Tourist Support" },
       type: "text",
-      text: "Let me check and send details.",
-      createdAt: "2026-03-27T09:10:00.000Z",
-      status: "delivered",
+      text: "Welcome to Tourist! Let us know if you need anything.",
+      createdAt: now.toISOString(),
+      status: "read",
     },
   ],
 };
 
 export async function getConversations(): Promise<ConversationThread[]> {
-  await wait(220);
-  return [...conversationsStore].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  if (USE_MOCK_BACKEND) {
+    return mockThreads;
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationThread[]>(API_ENDPOINTS.messages.conversations, {
+    method: "GET",
+    token,
+  });
 }
 
 export async function getConversationById(threadId: string): Promise<ConversationThread | null> {
-  await wait(120);
-  return conversationsStore.find((item) => item.id === threadId) ?? null;
+  if (USE_MOCK_BACKEND) {
+    return mockThreads.find((thread) => thread.id === threadId) ?? null;
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationThread | null>(withThreadId(API_ENDPOINTS.messages.conversationDetail, threadId), {
+    method: "GET",
+    token,
+  });
 }
 
 export async function getMessages(threadId: string): Promise<ConversationMessage[]> {
-  await wait(180);
-  return [...(messagesStore[threadId] ?? [])].sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
+  if (USE_MOCK_BACKEND) {
+    return mockMessages[threadId] ?? [];
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationMessage[]>(withThreadId(API_ENDPOINTS.messages.messages, threadId), {
+    method: "GET",
+    token,
+  });
 }
 
 export async function sendMessage({ threadId, sender, text }: SendMessageInput): Promise<ConversationMessage | null> {
-  await wait(120);
-
-  const conversation = conversationsStore.find((item) => item.id === threadId);
-  if (!conversation) {
-    return null;
-  }
-
+  void sender;
   const cleanText = text.trim();
   if (!cleanText) {
     return null;
   }
 
-  const nextMessage: ConversationMessage = {
-    id: `msg_${Date.now()}`,
-    conversationId: threadId,
-    sender,
-    type: "text",
-    text: cleanText,
-    createdAt: new Date().toISOString(),
-    status: "sent",
-  };
+  if (USE_MOCK_BACKEND) {
+    const next: ConversationMessage = {
+      id: `message_${Date.now()}`,
+      conversationId: threadId,
+      sender,
+      type: "text",
+      text: cleanText,
+      createdAt: new Date().toISOString(),
+      status: "sent",
+    };
+    mockMessages[threadId] = [...(mockMessages[threadId] ?? []), next];
+    const thread = mockThreads.find((item) => item.id === threadId);
+    if (thread) {
+      thread.lastMessagePreview = cleanText;
+      thread.lastMessageAt = next.createdAt;
+      thread.updatedAt = next.createdAt;
+    }
+    return next;
+  }
 
-  const existing = messagesStore[threadId] ?? [];
-  messagesStore[threadId] = [...existing, nextMessage];
+  const token = await getAccessToken();
+  return apiRequest<ConversationMessage | null>(withThreadId(API_ENDPOINTS.messages.sendMessage, threadId), {
+    method: "POST",
+    token,
+    body: {
+      text: cleanText,
+    },
+  });
+}
 
-  conversation.updatedAt = nextMessage.createdAt;
-  conversation.lastMessageAt = nextMessage.createdAt;
-  conversation.lastMessagePreview = nextMessage.text;
+export async function getOrCreateDirectConversation({
+  viewer,
+  target,
+}: {
+  viewer: { id: string; displayName: string };
+  target: { id: string; displayName: string; avatarUrl?: string };
+}): Promise<ConversationThread> {
+  if (USE_MOCK_BACKEND) {
+    const existing = mockThreads.find((thread) => {
+      if (thread.type !== "direct") {
+        return false;
+      }
+      const participantIds = thread.participants.map((item) => item.id);
+      return participantIds.includes(viewer.id) && participantIds.includes(target.id);
+    });
+    if (existing) {
+      return existing;
+    }
 
-  return nextMessage;
+    const createdAt = new Date().toISOString();
+    const nextThread: ConversationThread = {
+      id: `thread_direct_${viewer.id}_${target.id}`,
+      type: "direct",
+      participants: [
+        { id: viewer.id, displayName: viewer.displayName },
+        { id: target.id, displayName: target.displayName, avatarUrl: target.avatarUrl },
+      ],
+      createdAt,
+      updatedAt: createdAt,
+      lastMessagePreview: "",
+      lastMessageAt: createdAt,
+      unreadCount: 0,
+    };
+    mockThreads.unshift(nextThread);
+    mockMessages[nextThread.id] = [];
+    return nextThread;
+  }
+
+  // Non-mock backend integration is not available yet.
+  const existing = await getConversations();
+  const matched = existing.find((thread) => {
+    if (thread.type !== "direct") {
+      return false;
+    }
+    const participantIds = thread.participants.map((item) => item.id);
+    return participantIds.includes(viewer.id) && participantIds.includes(target.id);
+  });
+  if (matched) {
+    return matched;
+  }
+  throw new Error("Direct conversation could not be created.");
 }
 
 export async function getOrCreateHelpConversation({
@@ -94,50 +227,48 @@ export async function getOrCreateHelpConversation({
   helper,
   requester,
 }: HelpConversationInput): Promise<ConversationThread> {
-  await wait(150);
+  if (USE_MOCK_BACKEND) {
+    const existing = mockThreads.find((thread) => thread.helpRequestId === helpRequestId);
+    if (existing) {
+      return existing;
+    }
 
-  const existing = conversationsStore.find(
-    (item) => item.type === "help" && item.helpRequestId === helpRequestId,
-  );
-
-  if (existing) {
-    return existing;
+    const createdAt = new Date().toISOString();
+    const nextThread: ConversationThread = {
+      id: `thread_help_${helpRequestId}`,
+      type: "help",
+      title: "Help request conversation",
+      participants: [helper, requester],
+      createdAt,
+      updatedAt: createdAt,
+      lastMessagePreview: "Help conversation started.",
+      lastMessageAt: createdAt,
+      unreadCount: 0,
+      helpRequestId,
+    };
+    mockThreads.unshift(nextThread);
+    mockMessages[nextThread.id] = [
+      {
+        id: `message_system_${helpRequestId}`,
+        conversationId: nextThread.id,
+        sender: { id: "system", displayName: "Tourist" },
+        type: "system",
+        text: "Help conversation started.",
+        createdAt,
+        systemKind: "help_conversation_started",
+      },
+    ];
+    return nextThread;
   }
 
-  const now = new Date().toISOString();
-  const threadId = `help_thread_${Date.now()}`;
-
-  const nextConversation: ConversationThread = {
-    id: threadId,
-    type: "help",
-    title: "Help Conversation",
-    participants: [requester, helper],
-    createdAt: now,
-    updatedAt: now,
-    lastMessagePreview: "Help conversation started",
-    lastMessageAt: now,
-    unreadCount: 0,
-    helpRequestId,
-    metadata: {
-      origin: "help_request",
+  void helper;
+  void requester;
+  const token = await getAccessToken();
+  return apiRequest<ConversationThread>(API_ENDPOINTS.messages.helpConversation, {
+    method: "POST",
+    token,
+    body: {
+      helpRequestId,
     },
-  };
-
-  const systemMessage: ConversationMessage = {
-    id: `sys_${Date.now()}`,
-    conversationId: threadId,
-    sender: {
-      id: "system",
-      displayName: "System",
-    },
-    type: "system",
-    text: "Help conversation started",
-    createdAt: now,
-    systemKind: "help_conversation_started",
-  };
-
-  conversationsStore.unshift(nextConversation);
-  messagesStore[threadId] = [systemMessage];
-
-  return nextConversation;
+  });
 }

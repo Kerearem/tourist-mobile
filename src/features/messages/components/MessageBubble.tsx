@@ -14,7 +14,7 @@ export function MessageBubble({ message, isMine }: MessageBubbleProps) {
   if (message.type === "system") {
     return (
       <View style={styles.systemWrap}>
-        <AppText muted style={styles.systemText}>
+        <AppText style={styles.systemText} variant="caption">
           {message.text}
         </AppText>
       </View>
@@ -24,7 +24,9 @@ export function MessageBubble({ message, isMine }: MessageBubbleProps) {
   return (
     <View style={[styles.row, isMine ? styles.rowMine : styles.rowOther]}>
       <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
-        <AppText style={isMine ? styles.textMine : undefined}>{message.text}</AppText>
+        <AppText style={isMine ? styles.textMine : undefined} variant="body">
+          {message.text}
+        </AppText>
       </View>
     </View>
   );
@@ -32,7 +34,7 @@ export function MessageBubble({ message, isMine }: MessageBubbleProps) {
 
 const styles = StyleSheet.create({
   row: {
-    marginBottom: 8,
+    marginBottom: theme.spacing.lg,
     width: "100%",
   },
   rowMine: {
@@ -42,25 +44,31 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   bubble: {
-    borderRadius: 12,
+    borderRadius: 20,
     maxWidth: "82%",
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
   },
   bubbleMine: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: "#5B3CF6",
+    borderBottomRightRadius: 6,
   },
   bubbleOther: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: 6,
+    shadowColor: "#000000",
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
   },
   textMine: {
     color: "#FFFFFF",
   },
   systemWrap: {
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: theme.spacing.lg,
   },
   systemText: {
-    fontSize: 13,
+    color: theme.colors.textSecondary,
   },
 });

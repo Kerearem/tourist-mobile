@@ -10,7 +10,7 @@ const Stack = createNativeStackNavigator<MessagesStackParamList>();
 
 export function MessagesStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={MessagesInboxScreen} name={MessagesRoutes.MessagesInboxScreen} />
       <Stack.Screen component={MessageThreadScreen} name={MessagesRoutes.MessageThreadScreen} />
     </Stack.Navigator>
