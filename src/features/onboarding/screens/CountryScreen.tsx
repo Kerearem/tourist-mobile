@@ -1,51 +1,89 @@
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppText } from "../../../components/ui/AppText";
+import { CountryPickerGrid } from "../../../components/ui/CountryPickerGrid";
 import { FlowProgressBar } from "../../../components/ui/FlowProgressBar";
+import { SearchSelectList } from "../../../components/ui/SearchSelectList";
+import { SIGNUP_FLOW_STEPS, SIGNUP_FLOW_TOTAL_STEPS } from "../../auth/constants/signupFlow";
 import { Screen } from "../../../components/ui/Screen";
+import { getCountryByCode, getCountryLabel } from "../../../constants/countries";
+import {
+  filterCityEntries,
+  filterUsStates,
+  formatUsDestinationCity,
+  getCitiesForCountry,
+  getCitiesForUsState,
+  getUsStates,
+  isUsCountry,
+  type CityEntry,
+  type UsStateEntry,
+} from "../../../constants/cities";
 import { theme } from "../../../constants/theme";
 import { OnboardingRoutes } from "../../../constants/routes";
+import { useLanguage } from "../../../hooks/useLanguage";
 import type { OnboardingStackParamList } from "../../../navigation/types";
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, "CountryScreen">;
-type SelectorMode = "country" | "city" | null;
-
-const COUNTRY_CITY_OPTIONS = [
-  { code: "DE", label: "Germany", cities: ["Berlin", "Munich", "Hamburg", "Cologne", "Frankfurt"] },
-  { code: "GB", label: "United Kingdom", cities: ["London", "Manchester", "Birmingham", "Leeds", "Bristol"] },
-  { code: "FR", label: "France", cities: ["Paris", "Lyon", "Marseille", "Toulouse", "Nice"] },
-  { code: "NL", label: "Netherlands", cities: ["Amsterdam", "Rotterdam", "Utrecht", "The Hague", "Eindhoven"] },
-  { code: "ES", label: "Spain", cities: ["Madrid", "Barcelona", "Valencia", "Seville", "Malaga"] },
-] as const;
+type SelectionPhase = "country" | "city";
+type UsSubPhase = "state" | "city";
 
 export function CountryScreen({ navigation, route }: Props) {
+  const { language } = useLanguage();
+  const locale = language === "en" ? "en" : "tr";
+  const [selectionPhase, setSelectionPhase] = useState<SelectionPhase>("country");
+  const [usSubPhase, setUsSubPhase] = useState<UsSubPhase>("state");
   const [currentCountryCode, setCurrentCountryCode] = useState("");
-  const [currentCity, setCurrentCity] = useState("");
-  const [activeSelector, setActiveSelector] = useState<SelectorMode>(null);
+  const [selectedUsStateCode, setSelectedUsStateCode] = useState("");
+  const [selectedCityName, setSelectedCityName] = useState("");
   const [errors, setErrors] = useState<{ currentCountryCode?: string; currentCity?: string }>({});
 
   const selectedCountry = useMemo(
-    () => COUNTRY_CITY_OPTIONS.find((option) => option.code === currentCountryCode) ?? null,
+    () => getCountryByCode(currentCountryCode),
     [currentCountryCode],
   );
 
-  const onContinue = () => {
-    const cleanCurrentCity = currentCity.trim();
-    const nextErrors: { currentCountryCode?: string; currentCity?: string } = {};
+  const selectedUsState = useMemo(
+    () => getUsStates().find((state) => state.code === selectedUsStateCode) ?? null,
+    [selectedUsStateCode],
+  );
 
-    if (!currentCountryCode) {
-      nextErrors.currentCountryCode = "Please select current country.";
+  const destinationCity = useMemo(() => {
+    if (!selectedCityName) {
+      return "";
     }
-    if (cleanCurrentCity.length < 2) {
-      nextErrors.currentCity = "Please select current city.";
+    if (isUsCountry(currentCountryCode) && selectedUsStateCode) {
+      return formatUsDestinationCity(selectedCityName, selectedUsStateCode);
+    }
+    return selectedCityName;
+  }, [currentCountryCode, selectedCityName, selectedUsStateCode]);
+
+  const resetCitySelection = () => {
+    setUsSubPhase("state");
+    setSelectedUsStateCode("");
+    setSelectedCityName("");
+    setErrors((prev) => ({ ...prev, currentCity: undefined }));
+  };
+
+  const onCountryContinue = () => {
+    if (!currentCountryCode || !selectedCountry) {
+      setErrors({ currentCountryCode: locale === "en" ? "Please select current country." : "Lütfen yaşadığınız ülkeyi seçin." });
+      return;
     }
 
-    if (nextErrors.currentCountryCode || nextErrors.currentCity) {
-      setErrors(nextErrors);
+    setErrors({});
+    resetCitySelection();
+    setSelectionPhase("city");
+  };
+
+  const onCityContinue = () => {
+    if (!destinationCity) {
+      setErrors({
+        currentCity:
+          locale === "en" ? "Please select your city from the list." : "Lütfen listeden şehrinizi seçin.",
+      });
       return;
     }
 
@@ -53,152 +91,181 @@ export function CountryScreen({ navigation, route }: Props) {
     navigation.navigate(OnboardingRoutes.CityScreen, {
       nationalityCountryCode: route.params.nationalityCountryCode,
       homeCommunity: route.params.homeCommunity,
-      // Keep existing contract keys for now; map from current location selections.
       destinationCountryCode: currentCountryCode,
-      destinationCity: cleanCurrentCity,
-      currentCity: cleanCurrentCity,
+      destinationCity,
+      currentCity: destinationCity,
     });
   };
 
-  const handleSelectCountry = (code: string) => {
+  const handleCountrySelect = (code: string) => {
     setCurrentCountryCode(code);
-    setCurrentCity("");
-    setErrors((prev) => ({ ...prev, currentCountryCode: undefined, currentCity: undefined }));
-    setActiveSelector(null);
+    setErrors((prev) => ({ ...prev, currentCountryCode: undefined }));
   };
 
-  const handleSelectCity = (city: string) => {
-    setCurrentCity(city);
+  const handleUsStateSelect = (state: UsStateEntry) => {
+    setSelectedUsStateCode(state.code);
+    setSelectedCityName("");
+    setUsSubPhase("city");
     setErrors((prev) => ({ ...prev, currentCity: undefined }));
-    setActiveSelector(null);
+  };
+
+  const handleCitySelect = (city: CityEntry) => {
+    setSelectedCityName(city.name);
+    setErrors((prev) => ({ ...prev, currentCity: undefined }));
+  };
+
+  const renderCityStep = () => {
+    if (!selectedCountry) {
+      return null;
+    }
+
+    if (isUsCountry(currentCountryCode)) {
+      if (usSubPhase === "state") {
+        return (
+          <SearchSelectList
+            emptyLabel={locale === "en" ? "No states found." : "Eyalet bulunamadı."}
+            filterItems={filterUsStates}
+            getKey={(state) => state.code}
+            getLabel={(state) => `${state.name} (${state.code})`}
+            items={getUsStates()}
+            onSelect={handleUsStateSelect}
+            searchPlaceholder={locale === "en" ? "Search state" : "Eyalet ara"}
+            selectedKey={selectedUsStateCode}
+          />
+        );
+      }
+
+      return (
+        <>
+          <Pressable
+            onPress={() => {
+              setUsSubPhase("state");
+              setSelectedCityName("");
+            }}
+            style={styles.backLink}
+          >
+            <AppText style={styles.backLinkText}>
+              {locale === "en"
+                ? `← ${selectedUsState?.name ?? "Change state"}`
+                : `← ${selectedUsState?.name ?? "Eyalet değiştir"}`}
+            </AppText>
+          </Pressable>
+
+          <SearchSelectList
+            emptyLabel={locale === "en" ? "No cities found." : "Şehir bulunamadı."}
+            filterItems={filterCityEntries}
+            getKey={(city) => city.name}
+            getLabel={(city) => city.name}
+            items={getCitiesForUsState(selectedUsStateCode)}
+            onSelect={handleCitySelect}
+            searchPlaceholder={locale === "en" ? "Search city" : "Şehir ara"}
+            selectedKey={selectedCityName}
+          />
+        </>
+      );
+    }
+
+    return (
+      <SearchSelectList
+        emptyLabel={locale === "en" ? "No cities found." : "Şehir bulunamadı."}
+        filterItems={filterCityEntries}
+        getKey={(city) => city.name}
+        getLabel={(city) => city.name}
+        items={getCitiesForCountry(currentCountryCode)}
+        onSelect={handleCitySelect}
+        searchPlaceholder={locale === "en" ? "Search city" : "Şehir ara"}
+        selectedKey={selectedCityName}
+      />
+    );
   };
 
   return (
-    <Screen>
+    <Screen contentContainerStyle={styles.screenContent}>
       <View style={styles.container}>
-        <FlowProgressBar currentStep={5} totalSteps={7} />
-        <View style={styles.content}>
-          <AppText style={styles.title}>Current location</AppText>
+        <FlowProgressBar currentStep={SIGNUP_FLOW_STEPS.country} totalSteps={SIGNUP_FLOW_TOTAL_STEPS} />
 
-          <AppText style={styles.label}>Current country</AppText>
-          <Pressable onPress={() => setActiveSelector("country")} style={styles.selector}>
-            <AppText muted={!selectedCountry} style={styles.selectorValue}>
-              {selectedCountry ? `${selectedCountry.label} (${selectedCountry.code})` : "Select current country"}
+        {selectionPhase === "country" ? (
+          <>
+            <AppText style={styles.title}>
+              {locale === "en" ? "Current location" : "Yaşadığınız yer"}
             </AppText>
-            <Ionicons color={theme.colors.muted} name="chevron-down" size={18} />
-          </Pressable>
-          {errors.currentCountryCode ? <AppText style={styles.error}>{errors.currentCountryCode}</AppText> : null}
+            <AppText muted style={styles.subtitle}>
+              {locale === "en" ? "Select the country you live in." : "Yaşadığınız ülkeyi seçin."}
+            </AppText>
 
-          {selectedCountry ? (
-            <>
-              <AppText style={styles.label}>Current city</AppText>
-              <Pressable onPress={() => setActiveSelector("city")} style={styles.selector}>
-                <AppText muted={!currentCity} style={styles.selectorValue}>
-                  {currentCity || "Select current city"}
-                </AppText>
-                <Ionicons color={theme.colors.muted} name="chevron-down" size={18} />
-              </Pressable>
-              {errors.currentCity ? <AppText style={styles.error}>{errors.currentCity}</AppText> : null}
-            </>
-          ) : null}
+            <CountryPickerGrid onSelect={handleCountrySelect} selectedCode={currentCountryCode} />
 
-          <AppButton label="Continue" onPress={onContinue} />
-        </View>
+            {errors.currentCountryCode ? <AppText style={styles.error}>{errors.currentCountryCode}</AppText> : null}
+
+            <AppButton label={locale === "en" ? "Continue" : "Devam"} onPress={onCountryContinue} />
+          </>
+        ) : (
+          <>
+            <Pressable
+              onPress={() => {
+                setSelectionPhase("country");
+                resetCitySelection();
+              }}
+              style={styles.backLink}
+            >
+              <AppText style={styles.backLinkText}>
+                {locale === "en"
+                  ? `← ${selectedCountry ? getCountryLabel(selectedCountry, locale) : "Change country"}`
+                  : `← ${selectedCountry ? getCountryLabel(selectedCountry, locale) : "Ülke değiştir"}`}
+              </AppText>
+            </Pressable>
+
+            <AppText style={styles.title}>
+              {isUsCountry(currentCountryCode) && usSubPhase === "state"
+                ? locale === "en"
+                  ? "Select state"
+                  : "Eyalet seçin"
+                : locale === "en"
+                  ? "Select city"
+                  : "Şehir seçin"}
+            </AppText>
+
+            {destinationCity ? (
+              <AppText muted style={styles.subtitle}>
+                {locale === "en" ? "Selected:" : "Seçilen:"} {destinationCity}
+              </AppText>
+            ) : null}
+
+            {renderCityStep()}
+
+            {errors.currentCity ? <AppText style={styles.error}>{errors.currentCity}</AppText> : null}
+
+            <AppButton label={locale === "en" ? "Continue" : "Devam"} onPress={onCityContinue} />
+          </>
+        )}
       </View>
-
-      <Modal animationType="slide" onRequestClose={() => setActiveSelector(null)} transparent visible={activeSelector !== null}>
-        <Pressable onPress={() => setActiveSelector(null)} style={styles.modalBackdrop}>
-          <Pressable style={styles.sheet}>
-            <AppText style={styles.sheetTitle}>
-              {activeSelector === "country" ? "Select current country" : "Select current city"}
-            </AppText>
-            <ScrollView contentContainerStyle={styles.sheetList} showsVerticalScrollIndicator={false}>
-              {activeSelector === "country"
-                ? COUNTRY_CITY_OPTIONS.map((option) => (
-                    <Pressable key={option.code} onPress={() => handleSelectCountry(option.code)} style={styles.sheetItem}>
-                      <AppText style={styles.sheetItemText}>{`${option.label} (${option.code})`}</AppText>
-                    </Pressable>
-                  ))
-                : selectedCountry?.cities.map((city) => (
-                    <Pressable key={city} onPress={() => handleSelectCity(city)} style={styles.sheetItem}>
-                      <AppText style={styles.sheetItemText}>{city}</AppText>
-                    </Pressable>
-                  ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screenContent: {
+    paddingBottom: theme.spacing.md,
+  },
   container: {
     flex: 1,
-  },
-  content: {
-    flex: 1,
-    gap: 12,
-    justifyContent: "center",
+    gap: theme.spacing.sm,
   },
   title: {
     fontSize: 24,
     fontWeight: "700",
   },
   subtitle: {
-    marginBottom: 8,
+    marginBottom: theme.spacing.xs,
   },
-  label: {
+  backLink: {
+    alignSelf: "flex-start",
+    paddingVertical: theme.spacing.xs,
+  },
+  backLinkText: {
+    color: theme.colors.primary,
     fontSize: 14,
     fontWeight: "600",
-  },
-  selector: {
-    alignItems: "center",
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    minHeight: 52,
-    paddingHorizontal: theme.spacing.md,
-  },
-  selectorDisabled: {
-    opacity: 0.6,
-  },
-  selectorValue: {
-    color: theme.colors.textPrimary,
-    flex: 1,
-  },
-  modalBackdrop: {
-    backgroundColor: "rgba(0, 0, 0, 0.34)",
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: "58%",
-    paddingBottom: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: theme.spacing.md,
-  },
-  sheetList: {
-    paddingBottom: theme.spacing.md,
-  },
-  sheetItem: {
-    borderBottomColor: theme.colors.border,
-    borderBottomWidth: 1,
-    paddingVertical: 14,
-  },
-  sheetItemText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
   },
   error: {
     color: "#DC2626",

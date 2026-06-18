@@ -4,6 +4,8 @@ import {
   completeEmailVerification as completeEmailVerificationService,
   completePhoneVerification as completePhoneVerificationService,
   hydrateAuthState,
+  resendEmailCode as resendEmailCodeService,
+  resendPhoneCode as resendPhoneCodeService,
   signInWithEmail,
   signOutSession,
   signUpWithEmail,
@@ -34,6 +36,8 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   completePhoneVerification: (code: string) => Promise<void>;
   completeEmailVerification: (code: string) => Promise<void>;
+  resendPhoneCode: () => Promise<void>;
+  resendEmailCode: () => Promise<void>;
   completeOnboarding: (payload: {
     nationalityCountryCode: string;
     homeCommunity: string;
@@ -182,6 +186,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user],
   );
 
+  const resendPhoneCode = useCallback(async () => {
+    await resendPhoneCodeService();
+  }, []);
+
+  const resendEmailCode = useCallback(async () => {
+    await resendEmailCodeService();
+  }, []);
+
   const completeOnboarding = useCallback(
     async ({
       nationalityCountryCode,
@@ -278,6 +290,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut,
       completePhoneVerification,
       completeEmailVerification,
+      resendPhoneCode,
+      resendEmailCode,
       completeOnboarding,
       refreshSession,
     }),
@@ -291,6 +305,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut,
       completePhoneVerification,
       completeEmailVerification,
+      resendPhoneCode,
+      resendEmailCode,
       completeOnboarding,
       refreshSession,
     ],

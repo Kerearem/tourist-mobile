@@ -139,7 +139,7 @@ export function LoginScreen({ navigation }: Props) {
 
         <AppButton label={t("auth.login.signIn")} loading={isSubmitting} onPress={onSubmit} />
 
-        <Pressable onPress={() => navigation.navigate(AuthRoutes.SignupScreen)}>
+        <Pressable onPress={() => navigation.navigate(AuthRoutes.SignupDisplayNameScreen)}>
           <AppText muted style={styles.link}>
             {t("auth.login.createAccount")}
           </AppText>

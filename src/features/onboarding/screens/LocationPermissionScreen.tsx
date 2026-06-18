@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppText } from "../../../components/ui/AppText";
 import { FlowProgressBar } from "../../../components/ui/FlowProgressBar";
+import { SIGNUP_FLOW_STEPS, SIGNUP_FLOW_TOTAL_STEPS } from "../../auth/constants/signupFlow";
 import { Screen } from "../../../components/ui/Screen";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
@@ -45,23 +46,29 @@ export function LocationPermissionScreen({ route }: Props) {
 
     setError("");
     setIsSubmitting(true);
-    await completeOnboarding({
-      nationalityCountryCode: route.params.nationalityCountryCode,
-      homeCommunity: route.params.homeCommunity,
-      destinationCountryCode: route.params.destinationCountryCode,
-      destinationCity: route.params.destinationCity,
-      currentCity: route.params.currentCity,
-      spokenLanguages: route.params.spokenLanguages,
-      relocationReason,
-      interests,
-    });
-    setIsSubmitting(false);
+    try {
+      await completeOnboarding({
+        nationalityCountryCode: route.params.nationalityCountryCode,
+        homeCommunity: route.params.homeCommunity,
+        destinationCountryCode: route.params.destinationCountryCode,
+        destinationCity: route.params.destinationCity,
+        currentCity: route.params.currentCity,
+        spokenLanguages: route.params.spokenLanguages,
+        relocationReason,
+        interests,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not complete onboarding.";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <Screen>
       <View style={styles.container}>
-        <FlowProgressBar currentStep={7} totalSteps={7} />
+        <FlowProgressBar currentStep={SIGNUP_FLOW_STEPS.city} totalSteps={SIGNUP_FLOW_TOTAL_STEPS} />
         <View style={styles.content}>
           <AppText style={styles.title}>Final details</AppText>
           <AppText muted style={styles.subtitle}>

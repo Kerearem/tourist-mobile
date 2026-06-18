@@ -465,3 +465,37 @@ export async function completeEmailVerification(userId: string, code: string): P
   await saveAuthState(payload);
   return payload.user;
 }
+
+export async function resendPhoneCode(): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    console.log("[auth.service] resendPhoneCode mock — use 123456 for verification");
+    return;
+  }
+
+  const state = await loadAuthState();
+  if (!state?.tokens.accessToken) {
+    throw new Error("Missing access token.");
+  }
+
+  await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.resendPhoneCode, {
+    method: "POST",
+    token: state.tokens.accessToken,
+  });
+}
+
+export async function resendEmailCode(): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    console.log("[auth.service] resendEmailCode mock — use 123456 for verification");
+    return;
+  }
+
+  const state = await loadAuthState();
+  if (!state?.tokens.accessToken) {
+    throw new Error("Missing access token.");
+  }
+
+  await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.resendEmailCode, {
+    method: "POST",
+    token: state.tokens.accessToken,
+  });
+}

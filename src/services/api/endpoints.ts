@@ -6,6 +6,8 @@ export const API_ENDPOINTS = {
     me: "/auth/me",
     verifyPhone: "/auth/verify-phone",
     verifyEmail: "/auth/verify-email",
+    resendPhoneCode: "/auth/resend-phone-code",
+    resendEmailCode: "/auth/resend-email-code",
   },
   onboarding: {
     complete: "/onboarding/complete",

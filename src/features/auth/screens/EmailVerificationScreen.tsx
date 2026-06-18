@@ -5,17 +5,19 @@ import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
 import { FlowProgressBar } from "../../../components/ui/FlowProgressBar";
+import { SIGNUP_FLOW_STEPS, SIGNUP_FLOW_TOTAL_STEPS } from "../constants/signupFlow";
 import { Screen } from "../../../components/ui/Screen";
 import { useAuth } from "../../../hooks/useAuth";
 
 export function EmailVerificationScreen() {
-  const { completeEmailVerification, signOut } = useAuth();
+  const { completeEmailVerification, resendEmailCode, signOut } = useAuth();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState("A 6-digit code was sent to your email.");
-  const [expiresInSec, setExpiresInSec] = useState(300);
+  const [expiresInSec, setExpiresInSec] = useState(600);
   const [resendInSec, setResendInSec] = useState(30);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -55,21 +57,35 @@ export function EmailVerificationScreen() {
     }
   };
 
-  const onResend = () => {
-    if (resendInSec > 0) {
+  const onResend = async () => {
+    if (resendInSec > 0 || isResending) {
       return;
     }
-    setCode("");
+
+    setIsResending(true);
     setError(null);
-    setInfo("New code sent. Check your email inbox.");
-    setExpiresInSec(300);
-    setResendInSec(30);
+    try {
+      await resendEmailCode();
+      setCode("");
+      setInfo("New code sent. Check your email inbox.");
+      setExpiresInSec(600);
+      setResendInSec(30);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not resend code.";
+      if (message.toLowerCase().includes("once per minute") || message.toLowerCase().includes("too many")) {
+        setError("Çok sık denediniz, biraz bekleyin.");
+      } else {
+        setError(message);
+      }
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
     <Screen>
       <View style={styles.container}>
-        <FlowProgressBar currentStep={3} totalSteps={7} />
+        <FlowProgressBar currentStep={SIGNUP_FLOW_STEPS.emailVerification} totalSteps={SIGNUP_FLOW_TOTAL_STEPS} />
         <View style={styles.content}>
           <AppText style={styles.title}>Email Verification</AppText>
           <AppText muted style={styles.subtitle}>
@@ -95,8 +111,8 @@ export function EmailVerificationScreen() {
             </AppText>
             <AppButton
               containerStyle={[styles.resendButton, resendInSec > 0 && styles.resendButtonDisabled]}
-              disabled={resendInSec > 0}
-              label={resendInSec > 0 ? `Resend in ${resendInSec}s` : "Resend code"}
+              disabled={resendInSec > 0 || isResending}
+              label={resendInSec > 0 ? `Resend in ${resendInSec}s` : isResending ? "Sending..." : "Resend code"}
               onPress={onResend}
               variant="secondary"
             />

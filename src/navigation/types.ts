@@ -3,7 +3,10 @@ import type { UserLanguage } from "../models/user";
 
 export type AuthStackParamList = {
   LoginScreen: undefined;
-  SignupScreen: undefined;
+  SignupDisplayNameScreen: undefined;
+  SignupBirthDateScreen: undefined;
+  SignupUsernameScreen: undefined;
+  SignupAccountScreen: undefined;
   PhoneVerificationScreen: undefined;
   EmailVerificationScreen: undefined;
 };

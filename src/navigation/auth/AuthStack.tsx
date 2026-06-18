@@ -3,10 +3,14 @@ import { CommonActions } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { AuthRoutes } from "../../constants/routes";
+import { SignupDraftProvider } from "../../features/auth/providers/SignupDraftProvider";
 import { EmailVerificationScreen } from "../../features/auth/screens/EmailVerificationScreen";
 import { LoginScreen } from "../../features/auth/screens/LoginScreen";
 import { PhoneVerificationScreen } from "../../features/auth/screens/PhoneVerificationScreen";
-import { SignupScreen } from "../../features/auth/screens/SignupScreen";
+import { SignupAccountScreen } from "../../features/auth/screens/SignupAccountScreen";
+import { SignupBirthDateScreen } from "../../features/auth/screens/SignupBirthDateScreen";
+import { SignupDisplayNameScreen } from "../../features/auth/screens/SignupDisplayNameScreen";
+import { SignupUsernameScreen } from "../../features/auth/screens/SignupUsernameScreen";
 import { useAuth } from "../../hooks/useAuth";
 import type { AuthStackParamList } from "../types";
 
@@ -52,16 +56,21 @@ export function AuthStack() {
   }, [gateTargetRoute]);
 
   return (
-    <Stack.Navigator
-      initialRouteName={initialRouteName}
-      key={gateStatus}
-      ref={navigationRef}
-      screenOptions={{ headerShown: false }}
-    >
-      <Stack.Screen component={LoginScreen} name={AuthRoutes.LoginScreen} />
-      <Stack.Screen component={SignupScreen} name={AuthRoutes.SignupScreen} />
-      <Stack.Screen component={PhoneVerificationScreen} name={AuthRoutes.PhoneVerificationScreen} />
-      <Stack.Screen component={EmailVerificationScreen} name={AuthRoutes.EmailVerificationScreen} />
-    </Stack.Navigator>
+    <SignupDraftProvider>
+      <Stack.Navigator
+        initialRouteName={initialRouteName}
+        key={gateStatus}
+        ref={navigationRef}
+        screenOptions={{ headerShown: false }}
+      >
+        <Stack.Screen component={LoginScreen} name={AuthRoutes.LoginScreen} />
+        <Stack.Screen component={SignupDisplayNameScreen} name={AuthRoutes.SignupDisplayNameScreen} />
+        <Stack.Screen component={SignupBirthDateScreen} name={AuthRoutes.SignupBirthDateScreen} />
+        <Stack.Screen component={SignupUsernameScreen} name={AuthRoutes.SignupUsernameScreen} />
+        <Stack.Screen component={SignupAccountScreen} name={AuthRoutes.SignupAccountScreen} />
+        <Stack.Screen component={PhoneVerificationScreen} name={AuthRoutes.PhoneVerificationScreen} />
+        <Stack.Screen component={EmailVerificationScreen} name={AuthRoutes.EmailVerificationScreen} />
+      </Stack.Navigator>
+    </SignupDraftProvider>
   );
 }

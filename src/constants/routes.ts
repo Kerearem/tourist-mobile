@@ -1,6 +1,9 @@
 export const AuthRoutes = {
   LoginScreen: "LoginScreen",
-  SignupScreen: "SignupScreen",
+  SignupDisplayNameScreen: "SignupDisplayNameScreen",
+  SignupBirthDateScreen: "SignupBirthDateScreen",
+  SignupUsernameScreen: "SignupUsernameScreen",
+  SignupAccountScreen: "SignupAccountScreen",
   PhoneVerificationScreen: "PhoneVerificationScreen",
   EmailVerificationScreen: "EmailVerificationScreen",
 } as const;

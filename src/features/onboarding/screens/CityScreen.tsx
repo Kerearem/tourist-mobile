@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppText } from "../../../components/ui/AppText";
 import { FlowProgressBar } from "../../../components/ui/FlowProgressBar";
+import { SIGNUP_FLOW_STEPS, SIGNUP_FLOW_TOTAL_STEPS } from "../../auth/constants/signupFlow";
 import { Screen } from "../../../components/ui/Screen";
 import { OnboardingRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
@@ -64,7 +65,7 @@ export function CityScreen({ navigation, route }: Props) {
   return (
     <Screen>
       <View style={styles.container}>
-        <FlowProgressBar currentStep={6} totalSteps={7} />
+        <FlowProgressBar currentStep={SIGNUP_FLOW_STEPS.city} totalSteps={SIGNUP_FLOW_TOTAL_STEPS} />
         <View style={styles.content}>
           <AppText style={styles.title}>Languages</AppText>
           <AppText muted style={styles.subtitle}>
