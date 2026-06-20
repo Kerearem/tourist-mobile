@@ -52,6 +52,7 @@ export type EventsStackParamList = {
   EventDetailScreen: { eventId: string };
   CreateEventScreen: undefined;
   OrganizerApplicationScreen: undefined;
+  MyOrganizerEventsScreen: undefined;
 };
 
 export type ProfileStackParamList = {
@@ -59,6 +60,10 @@ export type ProfileStackParamList = {
   SettingsScreen: undefined;
   BlockedUsersScreen: undefined;
   ReportProblemScreen: undefined;
+  CreateEventScreen: undefined;
+  MyOrganizerEventsScreen: undefined;
+  OrganizerApplicationScreen: undefined;
+  EventDetailScreen: { eventId: string };
 };
 
 export type MainTabParamList = {

@@ -34,3 +34,29 @@ export type ToggleEventAttendanceInput = {
   eventId: string;
   userId: string;
 };
+
+export type CreateEventInput = {
+  title: string;
+  description: string;
+  city: string;
+  countryCode: string;
+  venueName: string;
+  startsAt: string;
+  endsAt: string;
+  coverImageUrl?: string;
+  requiresApproval?: boolean;
+  type?: EventType;
+  visibility?: EventVisibility;
+  capacity?: number;
+  timezone?: string;
+  tags?: string[];
+};
+
+export type ListEventsQuery = {
+  city?: string;
+  countryCode?: string;
+  type?: EventType;
+  scope?: "community" | "global";
+  page?: number;
+  limit?: number;
+};

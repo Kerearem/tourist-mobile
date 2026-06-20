@@ -13,10 +13,17 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList } from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
-import { getEventById } from "../services/events.service";
-import type { EventItem } from "../types";
+import { getEventById, toggleEventAttendance } from "../services/events.service";
+import type { EventAttendanceStatus, EventItem } from "../types";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventDetailScreen">;
+
+const toAttendanceUiState = (status?: EventAttendanceStatus): AttendanceUiState => {
+  if (status === "approved") return "approved";
+  if (status === "pending") return "pending";
+  return "idle";
+};
+
 type AttendanceUiState = "idle" | "pending" | "approved";
 
 const formatDateTime = (startsAt: string, endsAt?: string) => {
@@ -79,6 +86,7 @@ export function EventDetailScreen({ route }: Props) {
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [attendanceState, setAttendanceState] = useState<AttendanceUiState>("idle");
+  const [isTogglingAttendance, setIsTogglingAttendance] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadEvent = async () => {
@@ -93,7 +101,7 @@ export function EventDetailScreen({ route }: Props) {
           ...result,
           isUserAttending: user ? result.isUserAttending : false,
         });
-        setAttendanceState(user && result.isUserAttending ? "approved" : "idle");
+        setAttendanceState(user ? toAttendanceUiState(result.attendanceStatus) : "idle");
       }
       setError(null);
     } catch {
@@ -110,15 +118,26 @@ export function EventDetailScreen({ route }: Props) {
   }, [route.params.eventId, user?.id]);
 
   const onToggleAttend = async () => {
-    if (!event) {
+    if (!event || !user || isTogglingAttendance) {
       return;
     }
 
-    if (attendanceState === "approved") {
-      return;
-    }
+    setIsTogglingAttendance(true);
+    try {
+      const updated = await toggleEventAttendance({ eventId: event.id, userId: user.id });
+      if (!updated) {
+        setError("Could not update attendance.");
+        return;
+      }
 
-    setAttendanceState((prev) => (prev === "idle" ? "pending" : "idle"));
+      setEvent(updated);
+      setAttendanceState(toAttendanceUiState(updated.attendanceStatus));
+      setError(null);
+    } catch {
+      setError("Could not update attendance.");
+    } finally {
+      setIsTogglingAttendance(false);
+    }
   };
 
   if (isLoading) {
@@ -157,7 +176,8 @@ export function EventDetailScreen({ route }: Props) {
   const locationLabel = event.venueName
     ? `${event.venueName} - ${event.city}, ${event.countryCode}`
     : `${event.city}, ${event.countryCode}`;
-  const attendanceLabel = attendanceState === "approved" ? "Katıldın" : attendanceState === "pending" ? "İptal Et" : "Başvur";
+  const attendanceLabel =
+    attendanceState === "approved" ? "Ayrıl" : attendanceState === "pending" ? "İptal Et" : "Başvur";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -225,16 +245,17 @@ export function EventDetailScreen({ route }: Props) {
         </Card>
 
         <Pressable
-          disabled={attendanceState === "approved"}
+          disabled={isTogglingAttendance || !user}
           onPress={() => void onToggleAttend()}
           style={[
             styles.attendButton,
             attendanceState === "pending" && styles.pendingButton,
             attendanceState === "approved" && styles.approvedButton,
+            isTogglingAttendance && styles.disabledButton,
           ]}
         >
           <AppText style={styles.attendButtonLabel} variant="label">
-            {attendanceLabel}
+            {isTogglingAttendance ? "Updating..." : attendanceLabel}
           </AppText>
         </Pressable>
       </ScrollView>
@@ -339,6 +360,9 @@ const styles = StyleSheet.create({
   },
   approvedButton: {
     backgroundColor: "#2563EB",
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   attendButtonLabel: {
     color: "#FFFFFF",

@@ -1,4 +1,4 @@
-import type { EventItem, ToggleEventAttendanceInput } from "../types";
+import type { CreateEventInput, EventItem, ListEventsQuery, ToggleEventAttendanceInput } from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
@@ -13,6 +13,23 @@ const getAccessToken = async () => {
 };
 
 const withPathParam = (template: string, value: string) => template.replace(":eventId", value);
+
+const buildListQuery = (query?: ListEventsQuery) => {
+  if (!query) {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+  if (query.city) params.set("city", query.city);
+  if (query.countryCode) params.set("countryCode", query.countryCode);
+  if (query.type) params.set("type", query.type);
+  if (query.scope) params.set("scope", query.scope);
+  if (query.page) params.set("page", String(query.page));
+  if (query.limit) params.set("limit", String(query.limit));
+
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
+};
 
 const mockEvents: EventItem[] = [
   {
@@ -61,13 +78,13 @@ const mockEvents: EventItem[] = [
   },
 ];
 
-export async function getEvents(): Promise<EventItem[]> {
+export async function getEvents(query?: ListEventsQuery): Promise<EventItem[]> {
   if (USE_MOCK_BACKEND) {
     return mockEvents;
   }
 
   const token = await getAccessToken();
-  return apiRequest<EventItem[]>(API_ENDPOINTS.events.list, {
+  return apiRequest<EventItem[]>(`${API_ENDPOINTS.events.list}${buildListQuery(query)}`, {
     method: "GET",
     token,
   });
@@ -105,5 +122,46 @@ export async function toggleEventAttendance({ eventId, userId }: ToggleEventAtte
   return apiRequest<EventItem | null>(withPathParam(API_ENDPOINTS.events.toggleAttendance, eventId), {
     method: "POST",
     token,
+  });
+}
+
+export async function createEvent(input: CreateEventInput): Promise<EventItem> {
+  if (USE_MOCK_BACKEND) {
+    const created: EventItem = {
+      id: `event_${Date.now()}`,
+      title: input.title,
+      description: input.description,
+      host: {
+        id: "mock_host",
+        displayName: "Mock Organizer",
+      },
+      type: input.type ?? "social",
+      visibility: input.visibility ?? "city",
+      city: input.city,
+      countryCode: input.countryCode,
+      venueName: input.venueName,
+      timezone: input.timezone,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      attendeeCount: 0,
+      capacity: input.capacity,
+      isUserAttending: false,
+      attendanceStatus: "none",
+      tags: input.tags,
+      ...(input.coverImageUrl ? { coverImageUrl: input.coverImageUrl } : {}),
+      metadata: {
+        requiresApproval: input.requiresApproval ?? false,
+        status: "PENDING_REVIEW",
+      },
+    };
+    mockEvents.unshift(created);
+    return created;
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EventItem>(API_ENDPOINTS.events.create, {
+    method: "POST",
+    token,
+    body: input,
   });
 }

@@ -17,9 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.tourist-mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "Kamera, cevredeki yerleri ve deneyimleri cekebilmen icin kullanilir.",
-        "NSPhotoLibraryUsageDescription": "Albumden fotograf ve video secip paylasabilmen icin erisim gerekir.",
-        "NSPhotoLibraryAddUsageDescription": "Cektigin fotograf ve videolari albumune kaydedebilmek icin erisim gerekir."
+        "NSCameraUsageDescription": "Profil fotografinizi cekmek ve anilarinizi paylasmak icin kameraya erisim gerekir.",
+        "NSPhotoLibraryUsageDescription": "Profil fotografinizi secmek ve paylasimlar icin galeriden fotograf secmek gerekir.",
+        "NSPhotoLibraryAddUsageDescription": "Cektiginiz fotograflari cihaziniza kaydetmek icin galeri erisimi gerekir."
       }
     },
     "android": {
@@ -29,7 +29,27 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
-    }
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Profil fotografinizi secmek ve paylasimlar icin galeriden fotograf secmek gerekir.",
+          "cameraPermission": "Profil fotografinizi cekmek ve anilarinizi paylasmak icin kameraya erisim gerekir."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Profil fotografinizi cekmek ve anilarinizi paylasmak icin kameraya erisim gerekir."
+        }
+      ]
+    ]
   }
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "../../../components/ui/AppText";
@@ -7,21 +7,39 @@ import { theme } from "../../../constants/theme";
 
 type ProfileAvatarRingProps = {
   displayName: string;
+  avatarUrl?: string;
+  isUploading?: boolean;
   showPlus?: boolean;
+  onPress?: () => void;
 };
 
-export function ProfileAvatarRing({ displayName, showPlus = true }: ProfileAvatarRingProps) {
+export function ProfileAvatarRing({
+  displayName,
+  avatarUrl,
+  isUploading = false,
+  showPlus = true,
+  onPress,
+}: ProfileAvatarRingProps) {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <View style={styles.wrapper}>
+    <Pressable disabled={!onPress || isUploading} onPress={onPress} style={styles.wrapper}>
       <View style={styles.ring}>
         <View style={[styles.ringAccent, styles.ringAccentWarm]} />
         <View style={[styles.ringAccent, styles.ringAccentCool]} />
         <View style={styles.avatar}>
-          <AppText style={styles.initials} variant="sectionTitle">
-            {initials}
-          </AppText>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <AppText style={styles.initials} variant="sectionTitle">
+              {initials}
+            </AppText>
+          )}
+          {isUploading ? (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            </View>
+          ) : null}
         </View>
       </View>
       {showPlus ? (
@@ -29,7 +47,7 @@ export function ProfileAvatarRing({ displayName, showPlus = true }: ProfileAvata
           <Ionicons color="#FFFFFF" name="add" size={20} />
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -71,10 +89,21 @@ const styles = StyleSheet.create({
     borderWidth: 5,
     height: 104,
     justifyContent: "center",
+    overflow: "hidden",
     width: 104,
+  },
+  avatarImage: {
+    height: "100%",
+    width: "100%",
   },
   initials: {
     color: theme.colors.primary,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "center",
   },
   plusBadge: {
     alignItems: "center",

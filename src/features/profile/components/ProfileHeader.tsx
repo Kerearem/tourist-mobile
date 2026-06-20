@@ -11,10 +11,22 @@ type ProfileHeaderProps = {
   username: string;
   location: string;
   bio: string;
+  avatarUrl?: string;
+  isAvatarUploading?: boolean;
+  onAvatarPress?: () => void;
   onMenuPress: () => void;
 };
 
-export function ProfileHeader({ displayName, username, location, bio, onMenuPress }: ProfileHeaderProps) {
+export function ProfileHeader({
+  displayName,
+  username,
+  location,
+  bio,
+  avatarUrl,
+  isAvatarUploading = false,
+  onAvatarPress,
+  onMenuPress,
+}: ProfileHeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -26,7 +38,12 @@ export function ProfileHeader({ displayName, username, location, bio, onMenuPres
         </Pressable>
       </View>
 
-      <ProfileAvatarRing displayName={displayName} />
+      <ProfileAvatarRing
+        avatarUrl={avatarUrl}
+        displayName={displayName}
+        isUploading={isAvatarUploading}
+        onPress={onAvatarPress}
+      />
 
       <View style={styles.identity}>
         <AppText style={styles.name} variant="title">

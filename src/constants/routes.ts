@@ -36,6 +36,7 @@ export const EventsRoutes = {
   EventDetailScreen: "EventDetailScreen",
   CreateEventScreen: "CreateEventScreen",
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
+  MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
 } as const;
 
 export const ProfileRoutes = {
@@ -43,6 +44,10 @@ export const ProfileRoutes = {
   SettingsScreen: "SettingsScreen",
   BlockedUsersScreen: "BlockedUsersScreen",
   ReportProblemScreen: "ReportProblemScreen",
+  CreateEventScreen: "CreateEventScreen",
+  MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
+  OrganizerApplicationScreen: "OrganizerApplicationScreen",
+  EventDetailScreen: "EventDetailScreen",
 } as const;
 
 export const TabRoutes = {

@@ -16,7 +16,7 @@ import { EventCategoryTabs } from "../components/EventCategoryTabs";
 import { EventCard } from "../components/EventCard";
 import { EventsFilterSheet } from "../components/EventsFilterSheet";
 import { EventTopSearch } from "../components/EventTopSearch";
-import { getEvents } from "../services/events.service";
+import { getEvents, toggleEventAttendance } from "../services/events.service";
 import type { EventItem } from "../types";
 import { DEFAULT_EVENTS_FILTERS, type EventsFilterState } from "../types/filters";
 
@@ -59,7 +59,7 @@ export function EventsListScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [activeChip, setActiveChip] = useState("All");
-  const [joinedById, setJoinedById] = useState<Record<string, boolean>>({});
+  const [togglingEventId, setTogglingEventId] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
 
@@ -91,7 +91,10 @@ export function EventsListScreen({ navigation }: Props) {
     }
 
     try {
-      const result = await getEvents();
+      const result = await getEvents({
+        scope: filters.community === "my_community" ? "community" : "global",
+        ...(activeChip !== "All" ? { type: activeChip.toLowerCase() as EventItem["type"] } : {}),
+      });
       setEvents(result);
       setError(null);
     } catch {
@@ -105,7 +108,27 @@ export function EventsListScreen({ navigation }: Props) {
 
   useEffect(() => {
     void loadEvents("initial");
-  }, []);
+  }, [filters.community, activeChip]);
+
+  const onToggleJoin = async (event: EventItem) => {
+    if (!user || togglingEventId) {
+      return;
+    }
+
+    setTogglingEventId(event.id);
+    try {
+      const updated = await toggleEventAttendance({ eventId: event.id, userId: user.id });
+      if (!updated) {
+        return;
+      }
+
+      setEvents((previous) => previous.map((item) => (item.id === updated.id ? updated : item)));
+    } catch {
+      setError("Could not update attendance.");
+    } finally {
+      setTogglingEventId(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -132,7 +155,7 @@ export function EventsListScreen({ navigation }: Props) {
       <View style={styles.container}>
         <View style={styles.topSearchWrap}>
           <EventTopSearch
-            locationLabel={`${user?.currentCity || "Anywhere"} · This week`}
+            locationLabel={`${user?.publicProfile.currentCity || "Anywhere"} · This week`}
             onChangeText={setSearchText}
             value={searchText}
           />
@@ -160,13 +183,8 @@ export function EventsListScreen({ navigation }: Props) {
             renderItem={({ item }) => (
               <EventCard
                 event={item}
-                isJoined={joinedById[item.id] ?? Boolean(item.isUserAttending)}
-                onToggleJoin={() =>
-                  setJoinedById((previous) => ({
-                    ...previous,
-                    [item.id]: !(previous[item.id] ?? Boolean(item.isUserAttending)),
-                  }))
-                }
+                isJoined={Boolean(item.isUserAttending)}
+                onToggleJoin={() => void onToggleJoin(item)}
                 onPress={() => navigation.navigate(EventsRoutes.EventDetailScreen, { eventId: item.id })}
               />
             )}

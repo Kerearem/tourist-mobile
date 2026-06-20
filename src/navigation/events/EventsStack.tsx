@@ -5,6 +5,7 @@ import { EventsRoutes } from "../../constants/routes";
 import { CreateEventScreen } from "../../features/events/screens/CreateEventScreen";
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { EventsListScreen } from "../../features/events/screens/EventsListScreen";
+import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
 import type { EventsStackParamList } from "../types";
 
@@ -17,6 +18,7 @@ export function EventsStack() {
       <Stack.Screen component={EventDetailScreen} name={EventsRoutes.EventDetailScreen} />
       <Stack.Screen component={CreateEventScreen} name={EventsRoutes.CreateEventScreen} />
       <Stack.Screen component={OrganizerApplicationScreen} name={EventsRoutes.OrganizerApplicationScreen} />
+      <Stack.Screen component={MyOrganizerEventsScreen} name={EventsRoutes.MyOrganizerEventsScreen} />
     </Stack.Navigator>
   );
 }

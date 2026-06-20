@@ -17,6 +17,7 @@ export type AppUserPublicProfile = {
   homeCommunity: string;
   currentCity: string;
   interests: string[];
+  avatarUrl?: string;
 };
 
 export type AppUserPrivateProfile = {

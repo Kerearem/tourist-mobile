@@ -48,6 +48,7 @@ type AuthContextValue = {
     relocationReason: RelocationReason;
     interests: string[];
   }) => Promise<void>;
+  updateAvatarUrl: (avatarUrl: string) => void;
   refreshSession: () => Promise<void>;
 };
 
@@ -235,6 +236,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user],
   );
 
+  const updateAvatarUrl = useCallback((avatarUrl: string) => {
+    setUser((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        updatedAt: new Date().toISOString(),
+        publicProfile: {
+          ...current.publicProfile,
+          avatarUrl,
+        },
+      };
+    });
+  }, []);
+
   const refreshSession = useCallback(async () => {
     try {
       const authState = await hydrateAuthState();
@@ -293,6 +311,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resendPhoneCode,
       resendEmailCode,
       completeOnboarding,
+      updateAvatarUrl,
       refreshSession,
     }),
     [
@@ -308,6 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resendPhoneCode,
       resendEmailCode,
       completeOnboarding,
+      updateAvatarUrl,
       refreshSession,
     ],
   );

@@ -334,15 +334,18 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
 export async function signOutSession(): Promise<void> {
   const state = await loadAuthState();
 
-  if (!USE_MOCK_BACKEND && state?.tokens.accessToken) {
-    await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.signOut, {
-      method: "POST",
-      token: state.tokens.accessToken,
-      body: state.tokens.refreshToken ? { refreshToken: state.tokens.refreshToken } : undefined,
-    });
+  try {
+    if (!USE_MOCK_BACKEND && state?.tokens.refreshToken) {
+      await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.signOut, {
+        method: "POST",
+        body: { refreshToken: state.tokens.refreshToken },
+      });
+    }
+  } catch (error) {
+    console.warn("[auth.service] signOut API failed; clearing local session anyway.", error);
+  } finally {
+    await clearAuthState();
   }
-
-  await clearAuthState();
 }
 
 export async function hydrateAuthState(): Promise<HydratedAuthState | null> {

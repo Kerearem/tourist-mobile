@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppText } from "../../../components/ui/AppText";
@@ -8,6 +9,7 @@ import { ProfileRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ProfileStackParamList } from "../../../navigation/types";
+import { getOrganizerStatus } from "../../events/services/organizer.service";
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "SettingsScreen">;
 
@@ -107,9 +109,29 @@ function AccountInfoRow({ title, subtitle, rightText, warning }: AccountInfoRowP
 }
 
 export function SettingsScreen({ navigation }: Props) {
-  const { signOut } = useAuth();
+  const { signOut, user, refreshSession } = useAuth();
   const [isAccountManagementOpen, setIsAccountManagementOpen] = React.useState(false);
   const [accountManagementView, setAccountManagementView] = React.useState<"management" | "info">("management");
+  const [hasActiveEvent, setHasActiveEvent] = React.useState(false);
+  const [activeEventTitle, setActiveEventTitle] = React.useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshSession();
+      void (async () => {
+        try {
+          const status = await getOrganizerStatus();
+          setHasActiveEvent(Boolean(status.hasActiveEvent));
+          setActiveEventTitle(status.activeEventTitle ?? null);
+        } catch {
+          setHasActiveEvent(false);
+          setActiveEventTitle(null);
+        }
+      })();
+    }, [refreshSession]),
+  );
+
+  const organizerStatus = user?.organizerStatus ?? "not_applied";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -141,6 +163,56 @@ export function SettingsScreen({ navigation }: Props) {
           subtitle="Şifre, güvenlik, kişisel detaylar, bağlı deneyimler, reklam tercihleri"
           title="Hesap Yönetimi"
         />
+
+        <View style={styles.sectionDivider} />
+        <AppText style={styles.sectionTitle} variant="label">
+          Organizatör
+        </AppText>
+        {organizerStatus === "approved" ? (
+          <>
+            {hasActiveEvent ? (
+              <SettingsRow
+                icon="information-circle-outline"
+                subtitle={
+                  activeEventTitle
+                    ? `"${activeEventTitle}" bitene kadar yeni etkinlik oluşturamazsın.`
+                    : "Zaten aktif bir etkinliğin var."
+                }
+                title="Zaten aktif bir etkinliğin var"
+              />
+            ) : (
+              <SettingsRow
+                icon="add-circle-outline"
+                onPress={() => navigation.navigate(ProfileRoutes.CreateEventScreen)}
+                title="Etkinlik Oluştur"
+              />
+            )}
+            <SettingsRow
+              icon="calendar-outline"
+              onPress={() => navigation.navigate(ProfileRoutes.MyOrganizerEventsScreen)}
+              title="Etkinliklerim"
+            />
+          </>
+        ) : null}
+        {organizerStatus === "pending" ? (
+          <SettingsRow
+            icon="time-outline"
+            subtitle="Organizatör başvurun değerlendiriliyor."
+            title="Başvurun İnceleniyor"
+          />
+        ) : null}
+        {organizerStatus === "not_applied" || organizerStatus === "rejected" ? (
+          <SettingsRow
+            icon="ribbon-outline"
+            onPress={() => navigation.navigate(ProfileRoutes.OrganizerApplicationScreen)}
+            subtitle={
+              organizerStatus === "rejected"
+                ? "Önceki başvurun reddedildi, tekrar başvurabilirsin."
+                : "Topluluğunda etkinlik düzenlemek için başvur."
+            }
+            title="Organizatör Ol"
+          />
+        ) : null}
 
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">

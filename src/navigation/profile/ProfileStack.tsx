@@ -2,6 +2,10 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { ProfileRoutes } from "../../constants/routes";
+import { CreateEventScreen } from "../../features/events/screens/CreateEventScreen";
+import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
+import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
+import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
 import { BlockedUsersScreen } from "../../features/profile/screens/BlockedUsersScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ReportProblemScreen } from "../../features/profile/screens/ReportProblemScreen";
@@ -17,6 +21,10 @@ export function ProfileStack() {
       <Stack.Screen component={SettingsScreen} name={ProfileRoutes.SettingsScreen} />
       <Stack.Screen component={BlockedUsersScreen} name={ProfileRoutes.BlockedUsersScreen} />
       <Stack.Screen component={ReportProblemScreen} name={ProfileRoutes.ReportProblemScreen} />
+      <Stack.Screen component={CreateEventScreen} name={ProfileRoutes.CreateEventScreen} />
+      <Stack.Screen component={MyOrganizerEventsScreen} name={ProfileRoutes.MyOrganizerEventsScreen} />
+      <Stack.Screen component={OrganizerApplicationScreen} name={ProfileRoutes.OrganizerApplicationScreen} />
+      <Stack.Screen component={EventDetailScreen} name={ProfileRoutes.EventDetailScreen} />
     </Stack.Navigator>
   );
 }

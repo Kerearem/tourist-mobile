@@ -19,6 +19,8 @@ export const API_ENDPOINTS = {
     list: "/events",
     detail: "/events/:eventId",
     toggleAttendance: "/events/:eventId/attendance/toggle",
+    create: "/events",
+    myAttendances: "/events/my-attendances",
   },
   help: {
     list: "/help/requests",
@@ -32,5 +34,13 @@ export const API_ENDPOINTS = {
     messages: "/messages/conversations/:threadId/messages",
     sendMessage: "/messages/conversations/:threadId/messages",
     helpConversation: "/messages/help-conversations",
+  },
+  profile: {
+    updateAvatar: "/profile/avatar",
+  },
+  organizer: {
+    apply: "/organizer/apply",
+    status: "/organizer/status",
+    myEvents: "/organizer/events",
   },
 } as const;
