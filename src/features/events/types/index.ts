@@ -26,6 +26,8 @@ export type EventItem = {
   capacity?: number;
   isUserAttending?: boolean;
   attendanceStatus?: EventAttendanceStatus;
+  canJoin?: boolean;
+  joinBlockReason?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
 };

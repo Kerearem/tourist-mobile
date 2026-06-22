@@ -549,6 +549,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               {group.title}
             </AppText>
             <AppText style={styles.headerSubtitle} variant="caption">
+              {group.isArchived ? "Arşivlendi · " : ""}
               {group.memberCount} üye
             </AppText>
           </Pressable>

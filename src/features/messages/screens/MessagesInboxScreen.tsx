@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FlatList, StyleSheet, TextInput, View } from "react-native";
+import { Alert, FlatList, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -13,6 +13,8 @@ import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { MessagesStackParamList } from "../../../navigation/types";
+import { archiveEventGroup } from "../../events/services/eventGroup.service";
+import { getEventById, toggleEventAttendance } from "../../events/services/events.service";
 import { ConversationListItem } from "../components/ConversationListItem";
 import { getConversations } from "../services/messages.service";
 import type { ConversationThread } from "../types";
@@ -26,6 +28,8 @@ export function MessagesInboxScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
 
   const viewerId = user?.id ?? "";
 
@@ -33,8 +37,11 @@ export function MessagesInboxScreen({ navigation }: Props) {
     if (!viewerId) {
       return [];
     }
-    return items.filter((thread) => thread.participants.some((participant) => participant.id === viewerId));
-  }, [items, viewerId]);
+    return items.filter(
+      (thread) =>
+        !hiddenIds.has(thread.id) && thread.participants.some((participant) => participant.id === viewerId),
+    );
+  }, [hiddenIds, items, viewerId]);
 
   const loadData = async (mode: "initial" | "refresh") => {
     if (mode === "initial") {
@@ -66,6 +73,117 @@ export function MessagesInboxScreen({ navigation }: Props) {
       return undefined;
     }, []),
   );
+
+  const hideConversation = (conversationId: string) => {
+    setHiddenIds((prev) => new Set(prev).add(conversationId));
+  };
+
+  const toggleMute = (conversationId: string) => {
+    setMutedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(conversationId)) {
+        next.delete(conversationId);
+      } else {
+        next.add(conversationId);
+      }
+      return next;
+    });
+  };
+
+  const confirmLeaveEventGroup = (conversation: ConversationThread) => {
+    const eventId = conversation.metadata?.eventId;
+    if (!eventId || !user) {
+      return;
+    }
+
+    void (async () => {
+      let selfLeaveCount = 0;
+      try {
+        const event = await getEventById(eventId);
+        selfLeaveCount = Number(event?.metadata?.selfLeaveCount ?? 0);
+      } catch {
+        // proceed without warning if event fetch fails
+      }
+
+      const warning =
+        selfLeaveCount >= 1
+          ? "Bir kez daha ayrılırsan bu etkinliğe tekrar katılamazsın."
+          : null;
+
+      Alert.alert(
+        "Etkinlikten ayrıl",
+        ["Gruptan çıkmak, etkinlikten de ayrılmak demektir. Emin misin?", warning].filter(Boolean).join("\n\n"),
+        [
+          { text: "Vazgeç", style: "cancel" },
+          {
+            text: "Ayrıl",
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                try {
+                  await toggleEventAttendance({ eventId, userId: user.id });
+                  hideConversation(conversation.id);
+                  void loadData("refresh");
+                } catch (leaveError) {
+                  const message =
+                    leaveError instanceof Error ? leaveError.message : "Etkinlikten ayrılamadın.";
+                  Alert.alert("Hata", message);
+                }
+              })();
+            },
+          },
+        ],
+      );
+    })();
+  };
+
+  const confirmDeleteConversation = (conversation: ConversationThread) => {
+    if (conversation.type === "group" && conversation.metadata?.eventId) {
+      confirmLeaveEventGroup(conversation);
+      return;
+    }
+
+    Alert.alert("Sohbeti sil", "Bu sohbet listenizden kaldırılacak.", [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Sil",
+        style: "destructive",
+        onPress: () => hideConversation(conversation.id),
+      },
+    ]);
+  };
+
+  const handleArchive = (conversation: ConversationThread) => {
+    const eventId = conversation.metadata?.eventId;
+    if (!eventId) {
+      hideConversation(conversation.id);
+      return;
+    }
+
+    const isOrganizer = conversation.metadata?.viewerRole === "ORGANIZER";
+    if (isOrganizer) {
+      Alert.alert(
+        "Grubu Arşivle",
+        "Arşivlenen grupta kimse yeni mesaj gönderemez. Eski mesajlar okunabilir kalır.",
+        [
+          { text: "Vazgeç", style: "cancel" },
+          {
+            text: "Arşivle",
+            onPress: () => {
+              void archiveEventGroup(eventId)
+                .then(() => void loadData("refresh"))
+                .catch(() => {
+                  Alert.alert("Hata", "Grup arşivlenemedi.");
+                });
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    hideConversation(conversation.id);
+  };
 
   if (isLoading) {
     return (
@@ -132,7 +250,11 @@ export function MessagesInboxScreen({ navigation }: Props) {
             renderItem={({ item, index }) => (
               <ConversationListItem
                 conversation={item}
+                isMuted={mutedIds.has(item.id)}
                 isOnline={index === 0 && item.type === "direct"}
+                onArchive={() => handleArchive(item)}
+                onDelete={() => confirmDeleteConversation(item)}
+                onMute={() => toggleMute(item.id)}
                 onPress={() => {
                   if (item.type === "group" && item.metadata?.eventId) {
                     navigation.navigate(MessagesRoutes.GroupDetailScreen, {

@@ -60,6 +60,25 @@ export async function createEventGroup(eventId: string): Promise<EventGroupInfo>
   return result;
 }
 
+export async function archiveEventGroup(eventId: string): Promise<EventGroupInfo> {
+  if (USE_MOCK_BACKEND) {
+    throw new Error("Event groups require backend.");
+  }
+
+  const token = await getAccessToken();
+  const result = await apiRequest<EventGroupInfo | null>(
+    withEventId(API_ENDPOINTS.events.archiveGroup, eventId),
+    {
+      method: "POST",
+      token,
+    },
+  );
+  if (!result) {
+    throw new Error("Group could not be archived.");
+  }
+  return result;
+}
+
 export async function removeEventGroupMember(eventId: string, userId: string): Promise<EventGroupInfo | null> {
   if (USE_MOCK_BACKEND) {
     return null;

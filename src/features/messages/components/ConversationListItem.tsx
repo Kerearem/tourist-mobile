@@ -10,7 +10,11 @@ type ConversationListItemProps = {
   conversation: ConversationThread;
   viewerId: string;
   isOnline?: boolean;
+  isMuted?: boolean;
   onPress: () => void;
+  onMute?: () => void;
+  onDelete?: () => void;
+  onArchive?: () => void;
 };
 
 const getTitle = (conversation: ConversationThread, viewerId: string) => {
@@ -41,9 +45,19 @@ const formatTime = (iso?: string) => {
 
 const avatarColors = ["#E0F2FE", "#FCE7F3", "#EDE9FE", "#DCFCE7"];
 const SWIPE_ACTION_WIDTH = 62;
-const MAX_SWIPE = SWIPE_ACTION_WIDTH * 2 + theme.spacing.sm;
+const MAX_SWIPE_LEFT = SWIPE_ACTION_WIDTH * 2 + theme.spacing.sm;
+const MAX_SWIPE_RIGHT = SWIPE_ACTION_WIDTH + theme.spacing.sm;
 
-export function ConversationListItem({ conversation, viewerId, isOnline = false, onPress }: ConversationListItemProps) {
+export function ConversationListItem({
+  conversation,
+  viewerId,
+  isOnline = false,
+  isMuted = false,
+  onPress,
+  onMute,
+  onDelete,
+  onArchive,
+}: ConversationListItemProps) {
   const isGroup = conversation.type === "group";
   const title = getTitle(conversation, viewerId);
   const firstOther = conversation.participants.find((item) => item.id !== viewerId);
@@ -52,6 +66,7 @@ export function ConversationListItem({ conversation, viewerId, isOnline = false,
   const unreadCount = conversation.unreadCount ?? 0;
   const avatarColor = isGroup ? "#DBEAFE" : avatarColors[Math.abs(title.length) % avatarColors.length];
   const memberCount = conversation.metadata?.memberCount ?? String(conversation.participants.length);
+  const isArchivedGroup = conversation.metadata?.isArchived === "true";
   const previewText =
     conversation.lastMessagePreview ||
     (isGroup ? `${memberCount} üye · Etkinlik grubu` : "Henüz mesaj yok");
@@ -73,13 +88,17 @@ export function ConversationListItem({ conversation, viewerId, isOnline = false,
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 7 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
       onPanResponderMove: (_, gesture) => {
-        const next = Math.max(-MAX_SWIPE, Math.min(0, currentOffset.current + gesture.dx));
+        const next = Math.max(-MAX_SWIPE_LEFT, Math.min(MAX_SWIPE_RIGHT, currentOffset.current + gesture.dx));
         translateX.setValue(next);
       },
       onPanResponderRelease: (_, gesture) => {
         const next = currentOffset.current + gesture.dx;
-        if (next < -MAX_SWIPE / 2) {
-          animateTo(-MAX_SWIPE);
+        if (next < -MAX_SWIPE_LEFT / 2) {
+          animateTo(-MAX_SWIPE_LEFT);
+          return;
+        }
+        if (next > MAX_SWIPE_RIGHT / 2) {
+          animateTo(MAX_SWIPE_RIGHT);
           return;
         }
         animateTo(0);
@@ -88,15 +107,46 @@ export function ConversationListItem({ conversation, viewerId, isOnline = false,
     }),
   ).current;
 
+  const handleMute = () => {
+    animateTo(0);
+    onMute?.();
+  };
+
+  const handleDelete = () => {
+    animateTo(0);
+    onDelete?.();
+  };
+
+  const handleArchive = () => {
+    animateTo(0);
+    onArchive?.();
+  };
+
   return (
     <View style={styles.swipeRoot}>
+      {onArchive ? (
+        <View style={styles.leftActionsLayer}>
+          <Pressable onPress={handleArchive} style={[styles.actionCircle, styles.archiveAction]}>
+            <Ionicons color="#FFFFFF" name="archive-outline" size={22} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.actionsLayer}>
-        <Pressable style={[styles.actionCircle, styles.muteAction]}>
-          <Ionicons color="#FFFFFF" name="notifications-off-outline" size={22} />
-        </Pressable>
-        <Pressable style={[styles.actionCircle, styles.deleteAction]}>
-          <Ionicons color="#FFFFFF" name="trash-outline" size={22} />
-        </Pressable>
+        {onMute ? (
+          <Pressable onPress={handleMute} style={[styles.actionCircle, styles.muteAction]}>
+            <Ionicons
+              color="#FFFFFF"
+              name={isMuted ? "notifications-outline" : "notifications-off-outline"}
+              size={22}
+            />
+          </Pressable>
+        ) : null}
+        {onDelete ? (
+          <Pressable onPress={handleDelete} style={[styles.actionCircle, styles.deleteAction]}>
+            <Ionicons color="#FFFFFF" name="trash-outline" size={22} />
+          </Pressable>
+        ) : null}
       </View>
 
       <Animated.View style={[styles.rowWrap, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
@@ -125,9 +175,21 @@ export function ConversationListItem({ conversation, viewerId, isOnline = false,
 
           <View style={styles.content}>
             <View style={styles.topLine}>
-              <AppText style={styles.title} numberOfLines={1} variant="label">
-                {title}
-              </AppText>
+              <View style={styles.titleRow}>
+                <AppText style={styles.title} numberOfLines={1} variant="label">
+                  {title}
+                </AppText>
+                {isMuted ? (
+                  <Ionicons color={theme.colors.textSecondary} name="notifications-off-outline" size={14} />
+                ) : null}
+                {isArchivedGroup ? (
+                  <View style={styles.archivedBadge}>
+                    <AppText style={styles.archivedBadgeText} variant="caption">
+                      Arşivlendi
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               {time ? (
                 <AppText style={styles.time} variant="caption">
                   {time}
@@ -161,6 +223,16 @@ const styles = StyleSheet.create({
   rowWrap: {
     zIndex: 2,
   },
+  leftActionsLayer: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    left: theme.spacing.sm,
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
   actionsLayer: {
     alignItems: "center",
     flexDirection: "row",
@@ -177,6 +249,9 @@ const styles = StyleSheet.create({
     height: 52,
     justifyContent: "center",
     width: 52,
+  },
+  archiveAction: {
+    backgroundColor: "#B45309",
   },
   muteAction: {
     backgroundColor: "#5B6BFF",
@@ -232,11 +307,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: theme.spacing.sm,
+  },
+  titleRow: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+    minWidth: 0,
   },
   title: {
     color: theme.colors.textPrimary,
-    flex: 1,
+    flexShrink: 1,
     fontSize: 15,
+  },
+  archivedBadge: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  archivedBadgeText: {
+    color: theme.colors.textSecondary,
+    fontSize: 10,
+    fontWeight: "700",
   },
   time: {
     color: theme.colors.textSecondary,

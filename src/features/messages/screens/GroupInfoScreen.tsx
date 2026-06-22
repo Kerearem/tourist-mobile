@@ -72,7 +72,7 @@ export function GroupInfoScreen({ navigation, route }: Props) {
   const coverUri = useMemo(() => getCoverUri(event, group?.title ?? ""), [event, group?.title]);
 
   const onRemoveMember = async (member: EventGroupMember) => {
-    if (!group || removingUserId || member.role === "ORGANIZER") {
+    if (!group || removingUserId || member.role === "ORGANIZER" || group.isArchived) {
       return;
     }
 
@@ -169,6 +169,15 @@ export function GroupInfoScreen({ navigation, route }: Props) {
               </View>
             </Card>
 
+            {group.isArchived ? (
+              <View style={styles.archivedBanner}>
+                <Ionicons color={theme.colors.textSecondary} name="archive-outline" size={18} />
+                <AppText style={styles.archivedBannerText} variant="caption">
+                  Bu grup arşivlendi
+                </AppText>
+              </View>
+            ) : null}
+
             <AppText style={styles.membersTitle} variant="label">
               Üyeler ({group.memberCount})
             </AppText>
@@ -190,7 +199,7 @@ export function GroupInfoScreen({ navigation, route }: Props) {
                 </View>
               </View>
             </View>
-            {isOrganizer && item.role !== "ORGANIZER" ? (
+            {isOrganizer && item.role !== "ORGANIZER" && !group.isArchived ? (
               <Pressable
                 disabled={removingUserId === item.id}
                 onPress={() => void onRemoveMember(item)}
@@ -285,6 +294,20 @@ const styles = StyleSheet.create({
   },
   statText: {
     color: "#1D4ED8",
+    fontWeight: "600",
+  },
+  archivedBanner: {
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: theme.radius.lg,
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  archivedBannerText: {
+    color: theme.colors.textSecondary,
     fontWeight: "600",
   },
   membersTitle: {

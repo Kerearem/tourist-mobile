@@ -234,6 +234,8 @@ export function EventDetailScreen({ route }: Props) {
     attendanceState === "approved" ? "Ayrıl" : attendanceState === "pending" ? "İptal Et" : "Başvur";
   const isHost = Boolean(user && event.host.id === user.id);
   const isApproved = event.metadata?.status === "APPROVED";
+  const canJoin = event.canJoin !== false;
+  const joinBlockReason = event.joinBlockReason ?? "Bu etkinliğe tekrar katılamazsın";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -319,20 +321,27 @@ export function EventDetailScreen({ route }: Props) {
         ) : null}
 
         {!isHost ? (
-          <Pressable
-            disabled={isTogglingAttendance || !user}
-            onPress={() => void onToggleAttend()}
-            style={[
-              styles.attendButton,
-              attendanceState === "pending" && styles.pendingButton,
-              attendanceState === "approved" && styles.approvedButton,
-              isTogglingAttendance && styles.disabledButton,
-            ]}
-          >
-            <AppText style={styles.attendButtonLabel} variant="label">
-              {isTogglingAttendance ? "Güncelleniyor..." : attendanceLabel}
-            </AppText>
-          </Pressable>
+          <>
+            {!canJoin && attendanceState === "idle" ? (
+              <AppText style={styles.joinBlockText} variant="caption">
+                {joinBlockReason}
+              </AppText>
+            ) : null}
+            <Pressable
+              disabled={isTogglingAttendance || !user || (!canJoin && attendanceState === "idle")}
+              onPress={() => void onToggleAttend()}
+              style={[
+                styles.attendButton,
+                attendanceState === "pending" && styles.pendingButton,
+                attendanceState === "approved" && styles.approvedButton,
+                (isTogglingAttendance || (!canJoin && attendanceState === "idle")) && styles.disabledButton,
+              ]}
+            >
+              <AppText style={styles.attendButtonLabel} variant="label">
+                {isTogglingAttendance ? "Güncelleniyor..." : attendanceLabel}
+              </AppText>
+            </Pressable>
+          </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -423,6 +432,11 @@ const styles = StyleSheet.create({
   },
   description: {
     color: theme.colors.textPrimary,
+  },
+  joinBlockText: {
+    color: theme.colors.danger,
+    marginBottom: theme.spacing.xs,
+    textAlign: "center",
   },
   attendButton: {
     alignItems: "center",

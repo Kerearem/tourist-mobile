@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
     create: "/events",
     myAttendances: "/events/my-attendances",
     group: "/events/:eventId/group",
+    archiveGroup: "/events/:eventId/group/archive",
     removeGroupMember: "/events/:eventId/group/members/:userId",
   },
   help: {
