@@ -132,8 +132,17 @@ export function MessagesInboxScreen({ navigation }: Props) {
             renderItem={({ item, index }) => (
               <ConversationListItem
                 conversation={item}
-                isOnline={index === 0}
-                onPress={() => navigation.navigate(MessagesRoutes.MessageThreadScreen, { threadId: item.id })}
+                isOnline={index === 0 && item.type === "direct"}
+                onPress={() => {
+                  if (item.type === "group" && item.metadata?.eventId) {
+                    navigation.navigate(MessagesRoutes.GroupDetailScreen, {
+                      eventId: item.metadata.eventId,
+                      conversationId: item.id,
+                    });
+                    return;
+                  }
+                  navigation.navigate(MessagesRoutes.MessageThreadScreen, { threadId: item.id });
+                }}
                 viewerId={viewerId}
               />
             )}

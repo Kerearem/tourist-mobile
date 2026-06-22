@@ -30,6 +30,8 @@ export type ConversationMessage = {
   sender: {
     id: string;
     displayName: string;
+    avatarUrl?: string;
+    role?: "MEMBER" | "ORGANIZER";
   };
   type: MessageType;
   text: string;

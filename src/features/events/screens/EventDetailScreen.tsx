@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ImageBackground, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -9,10 +10,12 @@ import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
+import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
-import type { EventsStackParamList } from "../../../navigation/types";
+import type { EventsStackParamList, MainTabParamList } from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
+import { createEventGroup, getEventGroup, type EventGroupInfo } from "../services/eventGroup.service";
 import { getEventById, toggleEventAttendance } from "../services/events.service";
 import type { EventAttendanceStatus, EventItem } from "../types";
 
@@ -83,7 +86,11 @@ const formatDateBadge = (startsAt: string) => {
 
 export function EventDetailScreen({ route }: Props) {
   const { user } = useAuth();
+  const navigation = useNavigation<NavigationProp<MainTabParamList>>();
   const [event, setEvent] = useState<EventItem | null>(null);
+  const [groupInfo, setGroupInfo] = useState<EventGroupInfo | null>(null);
+  const [isGroupSubmitting, setIsGroupSubmitting] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [attendanceState, setAttendanceState] = useState<AttendanceUiState>("idle");
   const [isTogglingAttendance, setIsTogglingAttendance] = useState(false);
@@ -117,6 +124,23 @@ export function EventDetailScreen({ route }: Props) {
     void loadEvent();
   }, [route.params.eventId, user?.id]);
 
+  useEffect(() => {
+    if (!event) {
+      setGroupInfo(null);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const group = await getEventGroup(event.id);
+        setGroupInfo(group);
+        setGroupError(null);
+      } catch {
+        setGroupInfo(null);
+      }
+    })();
+  }, [event?.id]);
+
   const onToggleAttend = async () => {
     if (!event || !user || isTogglingAttendance) {
       return;
@@ -137,6 +161,36 @@ export function EventDetailScreen({ route }: Props) {
       setError("Could not update attendance.");
     } finally {
       setIsTogglingAttendance(false);
+    }
+  };
+
+  const openGroupScreen = (eventId: string, conversationId?: string) => {
+    navigation.navigate(TabRoutes.MessagesTab, {
+      screen: MessagesRoutes.GroupDetailScreen,
+      params: { eventId, conversationId },
+    });
+  };
+
+  const onGroupAction = async () => {
+    if (!event || isGroupSubmitting) {
+      return;
+    }
+
+    if (groupInfo) {
+      openGroupScreen(event.id, groupInfo.conversationId);
+      return;
+    }
+
+    setIsGroupSubmitting(true);
+    setGroupError(null);
+    try {
+      const created = await createEventGroup(event.id);
+      setGroupInfo(created);
+      openGroupScreen(event.id, created.conversationId);
+    } catch {
+      setGroupError("Grup oluşturulamadı.");
+    } finally {
+      setIsGroupSubmitting(false);
     }
   };
 
@@ -178,6 +232,8 @@ export function EventDetailScreen({ route }: Props) {
     : `${event.city}, ${event.countryCode}`;
   const attendanceLabel =
     attendanceState === "approved" ? "Ayrıl" : attendanceState === "pending" ? "İptal Et" : "Başvur";
+  const isHost = Boolean(user && event.host.id === user.id);
+  const isApproved = event.metadata?.status === "APPROVED";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -244,20 +300,40 @@ export function EventDetailScreen({ route }: Props) {
           </AppText>
         </Card>
 
-        <Pressable
-          disabled={isTogglingAttendance || !user}
-          onPress={() => void onToggleAttend()}
-          style={[
-            styles.attendButton,
-            attendanceState === "pending" && styles.pendingButton,
-            attendanceState === "approved" && styles.approvedButton,
-            isTogglingAttendance && styles.disabledButton,
-          ]}
-        >
-          <AppText style={styles.attendButtonLabel} variant="label">
-            {isTogglingAttendance ? "Updating..." : attendanceLabel}
+        {isHost && isApproved ? (
+          <Pressable
+            disabled={isGroupSubmitting}
+            onPress={() => void onGroupAction()}
+            style={[styles.groupButton, isGroupSubmitting && styles.disabledButton]}
+          >
+            <AppText style={styles.groupButtonLabel} variant="label">
+              {isGroupSubmitting ? "Hazırlanıyor..." : groupInfo ? "Gruba Git" : "Grup Oluştur"}
+            </AppText>
+          </Pressable>
+        ) : null}
+
+        {groupError ? (
+          <AppText style={styles.groupError} variant="caption">
+            {groupError}
           </AppText>
-        </Pressable>
+        ) : null}
+
+        {!isHost ? (
+          <Pressable
+            disabled={isTogglingAttendance || !user}
+            onPress={() => void onToggleAttend()}
+            style={[
+              styles.attendButton,
+              attendanceState === "pending" && styles.pendingButton,
+              attendanceState === "approved" && styles.approvedButton,
+              isTogglingAttendance && styles.disabledButton,
+            ]}
+          >
+            <AppText style={styles.attendButtonLabel} variant="label">
+              {isTogglingAttendance ? "Güncelleniyor..." : attendanceLabel}
+            </AppText>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -367,5 +443,21 @@ const styles = StyleSheet.create({
   attendButtonLabel: {
     color: "#FFFFFF",
     fontSize: 16,
+  },
+  groupButton: {
+    alignItems: "center",
+    backgroundColor: "#DBEAFE",
+    borderRadius: theme.radius.md,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  groupButtonLabel: {
+    color: "#1D4ED8",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  groupError: {
+    color: theme.colors.danger,
+    textAlign: "center",
   },
 });

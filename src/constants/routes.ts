@@ -29,6 +29,8 @@ export const HelpRoutes = {
 export const MessagesRoutes = {
   MessagesInboxScreen: "MessagesInboxScreen",
   MessageThreadScreen: "MessageThreadScreen",
+  GroupDetailScreen: "GroupDetailScreen",
+  GroupInfoScreen: "GroupInfoScreen",
 } as const;
 
 export const EventsRoutes = {

@@ -7,9 +7,10 @@ import { theme } from "../../../constants/theme";
 type MessageComposerProps = {
   onSend: (text: string) => Promise<void>;
   disabled?: boolean;
+  textOnly?: boolean;
 };
 
-export function MessageComposer({ onSend, disabled = false }: MessageComposerProps) {
+export function MessageComposer({ onSend, disabled = false, textOnly = false }: MessageComposerProps) {
   const [text, setText] = useState("");
   const hasText = Boolean(text.trim());
 
@@ -24,9 +25,11 @@ export function MessageComposer({ onSend, disabled = false }: MessageComposerPro
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.cameraButton}>
-        <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={20} />
-      </Pressable>
+      {!textOnly ? (
+        <Pressable style={styles.cameraButton}>
+          <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={20} />
+        </Pressable>
+      ) : null}
 
       <View style={styles.composerBody}>
         <TextInput
@@ -40,9 +43,11 @@ export function MessageComposer({ onSend, disabled = false }: MessageComposerPro
         />
 
         <View style={styles.rightActions}>
-          <Pressable style={styles.inlineIconButton}>
-            <Ionicons color={theme.colors.textSecondary} name="image-outline" size={20} />
-          </Pressable>
+          {!textOnly ? (
+            <Pressable style={styles.inlineIconButton}>
+              <Ionicons color={theme.colors.textSecondary} name="image-outline" size={20} />
+            </Pressable>
+          ) : null}
           <Pressable
             disabled={disabled || !hasText}
             onPress={() => void handleSend()}
@@ -50,7 +55,7 @@ export function MessageComposer({ onSend, disabled = false }: MessageComposerPro
           >
             <Ionicons
               color={hasText ? "#FFFFFF" : theme.colors.textPrimary}
-              name={hasText ? "paper-plane-outline" : "mic-outline"}
+              name={hasText || textOnly ? "paper-plane-outline" : "mic-outline"}
               size={20}
             />
           </Pressable>

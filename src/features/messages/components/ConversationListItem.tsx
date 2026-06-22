@@ -44,12 +44,17 @@ const SWIPE_ACTION_WIDTH = 62;
 const MAX_SWIPE = SWIPE_ACTION_WIDTH * 2 + theme.spacing.sm;
 
 export function ConversationListItem({ conversation, viewerId, isOnline = false, onPress }: ConversationListItemProps) {
+  const isGroup = conversation.type === "group";
   const title = getTitle(conversation, viewerId);
   const firstOther = conversation.participants.find((item) => item.id !== viewerId);
-  const initials = (firstOther?.displayName || title).slice(0, 2).toUpperCase();
+  const initials = isGroup ? "GR" : (firstOther?.displayName || title).slice(0, 2).toUpperCase();
   const time = formatTime(conversation.lastMessageAt);
   const unreadCount = conversation.unreadCount ?? 0;
-  const avatarColor = avatarColors[Math.abs(title.length) % avatarColors.length];
+  const avatarColor = isGroup ? "#DBEAFE" : avatarColors[Math.abs(title.length) % avatarColors.length];
+  const memberCount = conversation.metadata?.memberCount ?? String(conversation.participants.length);
+  const previewText =
+    conversation.lastMessagePreview ||
+    (isGroup ? `${memberCount} üye · Etkinlik grubu` : "Henüz mesaj yok");
   const translateX = useRef(new Animated.Value(0)).current;
   const currentOffset = useRef(0);
 
@@ -107,11 +112,15 @@ export function ConversationListItem({ conversation, viewerId, isOnline = false,
         >
           <View style={styles.avatarWrap}>
             <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-              <AppText style={styles.initials} variant="label">
-                {initials}
-              </AppText>
+              {isGroup ? (
+                <Ionicons color={theme.colors.primary} name="people" size={22} />
+              ) : (
+                <AppText style={styles.initials} variant="label">
+                  {initials}
+                </AppText>
+              )}
             </View>
-            {isOnline ? <View style={styles.onlineDot} /> : null}
+            {isOnline && !isGroup ? <View style={styles.onlineDot} /> : null}
           </View>
 
           <View style={styles.content}>
@@ -128,7 +137,7 @@ export function ConversationListItem({ conversation, viewerId, isOnline = false,
 
             <View style={styles.previewLine}>
               <AppText numberOfLines={1} style={[styles.preview, unreadCount > 0 && styles.previewUnread]} variant="body">
-                {conversation.lastMessagePreview || "No messages yet"}
+                {previewText}
               </AppText>
               {unreadCount > 0 ? (
                 <View style={styles.unreadBadge}>

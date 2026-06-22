@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { FlatList, Pressable, SafeAreaView, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, type NavigationProp } from "@react-navigation/native";
 
 import { AppText } from "../../../components/ui/AppText";
 import { Badge } from "../../../components/ui/Badge";
@@ -10,10 +10,11 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
-import { ProfileRoutes } from "../../../constants/routes";
+import { MessagesRoutes, ProfileRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
-import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
+import type { EventsStackParamList, MainTabParamList, ProfileStackParamList } from "../../../navigation/types";
 import { EventCard } from "../components/EventCard";
+import { createEventGroup, getEventGroup } from "../services/eventGroup.service";
 import { getMyAttendedEvents, getMyOrganizerEvents } from "../services/organizer.service";
 import type { EventItem } from "../types";
 
@@ -42,6 +43,7 @@ const attendanceLabel = (event: EventItem) => {
 };
 
 export function MyOrganizerEventsScreen({ navigation }: Props) {
+  const tabNavigation = useNavigation<NavigationProp<MainTabParamList>>();
   const [activeTab, setActiveTab] = useState<TabKey>("created");
   const [createdEvents, setCreatedEvents] = useState<EventItem[]>([]);
   const [attendedEvents, setAttendedEvents] = useState<EventItem[]>([]);
@@ -72,10 +74,32 @@ export function MyOrganizerEventsScreen({ navigation }: Props) {
 
   const events = activeTab === "created" ? createdEvents : attendedEvents;
 
+  const onGroupPress = async (event: EventItem) => {
+    try {
+      let group = await getEventGroup(event.id);
+      if (!group) {
+        group = await createEventGroup(event.id);
+      }
+      tabNavigation.navigate(TabRoutes.MessagesTab, {
+        screen: MessagesRoutes.GroupDetailScreen,
+        params: { eventId: event.id, conversationId: group.conversationId },
+      });
+    } catch {
+      // silent for now
+    }
+  };
+
   const renderEvent = (item: EventItem) => (
     <View style={styles.itemWrap}>
       <View style={styles.statusRow}>
         <Badge label={activeTab === "created" ? statusLabel(item) : attendanceLabel(item)} />
+        {activeTab === "created" && item.metadata?.status === "APPROVED" ? (
+          <Pressable onPress={() => void onGroupPress(item)} style={styles.groupLink}>
+            <AppText style={styles.groupLinkText} variant="caption">
+              Grup
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
       <EventCard
         event={item}
@@ -189,6 +213,20 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   statusRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "space-between",
     paddingHorizontal: theme.spacing.xs,
+  },
+  groupLink: {
+    backgroundColor: "#DBEAFE",
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+  },
+  groupLinkText: {
+    color: "#1D4ED8",
+    fontWeight: "700",
   },
 });

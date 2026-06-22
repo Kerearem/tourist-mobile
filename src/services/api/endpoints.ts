@@ -21,6 +21,8 @@ export const API_ENDPOINTS = {
     toggleAttendance: "/events/:eventId/attendance/toggle",
     create: "/events",
     myAttendances: "/events/my-attendances",
+    group: "/events/:eventId/group",
+    removeGroupMember: "/events/:eventId/group/members/:userId",
   },
   help: {
     list: "/help/requests",
