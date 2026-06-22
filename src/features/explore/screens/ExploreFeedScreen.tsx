@@ -9,7 +9,6 @@ import { ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/rou
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ExploreStackParamList, MainTabParamList } from "../../../navigation/types";
-import { getMockUserRegistryUsers } from "../../../services/api/authSession";
 import { ProfileContentTabs } from "../../profile/components/ProfileContentTabs";
 import { ProfileAvatarRing } from "../../profile/components/ProfileAvatarRing";
 import { ProfileHighlightRow } from "../../profile/components/ProfileHighlightRow";
@@ -20,6 +19,7 @@ import { ExplorePostCard } from "../components/ExplorePostCard";
 import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
 import { loadExploreFeed } from "../services/explore.service";
+import { searchUsers } from "../services/userSearch.service";
 import type { ExploreFeedScope, ExplorePost } from "../types";
 
 type MockComment = {
@@ -134,9 +134,11 @@ export function ExploreFeedScreen() {
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<ExploreSearchUser[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [searchUsersError, setSearchUsersError] = useState<string | null>(null);
   const [isAudienceMenuOpen, setIsAudienceMenuOpen] = useState(false);
   const [feedViewportHeight, setFeedViewportHeight] = useState(0);
-  const [mockRegistryUsers, setMockRegistryUsers] = useState<ExploreSearchUser[]>([]);
   const [dismissedSearchUserIds, setDismissedSearchUserIds] = useState<string[]>([]);
   const [selectedSearchUser, setSelectedSearchUser] = useState<ExploreSearchUser | null>(null);
   const [followedUserIds, setFollowedUserIds] = useState<string[]>([]);
@@ -195,47 +197,56 @@ export function ExploreFeedScreen() {
     [feedContext.city, feedContext.countryCode],
   );
   const audienceLabel = audienceMode === "community" ? "Your community" : "Global";
-  const searchableUsers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLocaleLowerCase("tr-TR");
-    const uniqueUsers = mockRegistryUsers.filter(
-      (item, index, arr) =>
-        arr.findIndex(
-          (candidate) =>
-            candidate.id === item.id ||
-            candidate.username.toLocaleLowerCase("tr-TR") === item.username.toLocaleLowerCase("tr-TR"),
-        ) === index,
-    );
-    const globalUsers = uniqueUsers.filter(
-      (item) => item.id !== user?.id && !dismissedSearchUserIds.includes(item.id),
-    );
-    if (!normalizedQuery) {
-      return globalUsers;
-    }
-    return globalUsers.filter(
-      (item) =>
-        item.username.toLocaleLowerCase("tr-TR").startsWith(normalizedQuery) ||
-        item.displayName.toLocaleLowerCase("tr-TR").startsWith(normalizedQuery),
-    );
-  }, [dismissedSearchUserIds, mockRegistryUsers, searchQuery, user?.id]);
+  const trimmedSearchQuery = searchQuery.trim();
+  const searchableUsers = useMemo(
+    () =>
+      searchResults
+        .filter((item) => !dismissedSearchUserIds.includes(item.id))
+        .map((item) => ({
+          ...item,
+          isFollowing: followedUserIds.includes(item.id),
+        })),
+    [dismissedSearchUserIds, followedUserIds, searchResults],
+  );
 
   useEffect(() => {
     if (!isSearchOpen) {
       return;
     }
-    const hydrateMockUsers = async () => {
-      const registryUsers = await getMockUserRegistryUsers();
-      const mapped: ExploreSearchUser[] = registryUsers.map((registryUser) => ({
-        id: registryUser.id,
-        username: registryUser.publicProfile.username,
-        displayName: registryUser.publicProfile.displayName,
-        countryCode: registryUser.privateProfile.destinationCountryCode,
-        city: registryUser.publicProfile.currentCity,
-        bio: `${registryUser.publicProfile.displayName} is part of the Tourist community.`,
-      }));
-      setMockRegistryUsers(mapped);
-    };
-    void hydrateMockUsers();
-  }, [isSearchOpen]);
+
+    if (!trimmedSearchQuery) {
+      setSearchResults([]);
+      setSearchUsersError(null);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        setIsSearchingUsers(true);
+        setSearchUsersError(null);
+        try {
+          const results = await searchUsers(trimmedSearchQuery);
+          setSearchResults(
+            results.map((item) => ({
+              id: item.id,
+              username: item.username,
+              displayName: item.displayName,
+              countryCode: "",
+              avatarUrl: item.avatarUrl,
+            })),
+          );
+        } catch {
+          setSearchResults([]);
+          setSearchUsersError("Kullanıcı araması başarısız oldu.");
+        } finally {
+          setIsSearchingUsers(false);
+        }
+      })();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [isSearchOpen, trimmedSearchQuery]);
   useEffect(() => {
     if (!isSearchOpen) {
       return;
@@ -783,13 +794,25 @@ export function ExploreFeedScreen() {
 
             <View style={styles.searchHeaderRow}>
               <AppText style={styles.searchHeaderTitle} variant="sectionTitle">
-                Yakındakiler
+                {trimmedSearchQuery ? "Sonuçlar" : "Kullanıcı ara"}
               </AppText>
+              {isSearchingUsers ? <ActivityIndicator color={theme.colors.primary} size="small" /> : null}
             </View>
 
             <FlatList
               data={searchableUsers}
               keyExtractor={(item) => item.id}
+              ListEmptyComponent={
+                <View style={styles.searchEmptyState}>
+                  <AppText muted variant="bodyMuted">
+                    {searchUsersError
+                      ? searchUsersError
+                      : trimmedSearchQuery
+                        ? "Sonuç bulunamadı."
+                        : "Aramak için kullanıcı adı veya isim yaz."}
+                  </AppText>
+                </View>
+              }
               renderItem={({ item }) => (
                 <Pressable onPress={() => openSearchUserProfile(item)} style={styles.searchUserRow}>
                   <Avatar initials={item.displayName.slice(0, 2).toUpperCase()} size={42} uri={item.avatarUrl} />
@@ -1314,6 +1337,10 @@ const styles = StyleSheet.create({
   searchHeaderTitle: {
     color: "#0F172A",
     fontSize: 22,
+  },
+  searchEmptyState: {
+    alignItems: "center",
+    paddingTop: theme.spacing.xl,
   },
   searchUserRow: {
     alignItems: "center",

@@ -16,7 +16,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
-import { getConversationById, getMessages, sendMessage } from "../services/messages.service";
+import { getConversationById, getMessages, markConversationRead, sendMessage } from "../services/messages.service";
 import type { ConversationMessage, ConversationThread } from "../types";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageThreadScreen">;
@@ -79,6 +79,9 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       setConversation(thread);
       setMessages(threadMessages);
       setError(null);
+      if (thread) {
+        await markConversationRead(route.params.threadId);
+      }
     } catch {
       setConversation(null);
       setMessages([]);

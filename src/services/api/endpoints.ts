@@ -33,10 +33,15 @@ export const API_ENDPOINTS = {
     conversationDetail: "/messages/conversations/:threadId",
     messages: "/messages/conversations/:threadId/messages",
     sendMessage: "/messages/conversations/:threadId/messages",
+    directConversation: "/messages/conversations/direct",
+    markRead: "/messages/conversations/:threadId/read",
     helpConversation: "/messages/help-conversations",
   },
   profile: {
     updateAvatar: "/profile/avatar",
+  },
+  users: {
+    search: "/users/search",
   },
   organizer: {
     apply: "/organizer/apply",

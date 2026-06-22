@@ -14,6 +14,41 @@ const getAccessToken = async () => {
 
 const withThreadId = (template: string, threadId: string) => template.replace(":threadId", threadId);
 
+const mockHelpThreads = (): ConversationThread[] => {
+  const now = new Date();
+  return [
+    {
+      id: "thread_help_ayse",
+      type: "help",
+      title: "Help request follow-up",
+      participants: [
+        { id: "user_test_tourist", displayName: "Test Tourist" },
+        { id: "user_ayse", displayName: "Ayse Yilmaz" },
+      ],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      lastMessagePreview: "Thanks for the help yesterday! Really appreciate it.",
+      lastMessageAt: now.toISOString(),
+      unreadCount: 0,
+      helpRequestId: "help_demo_sofa",
+    },
+  ];
+};
+
+const mockHelpMessages: Record<string, ConversationMessage[]> = {
+  thread_help_ayse: [
+    {
+      id: "message_ayse_1",
+      conversationId: "thread_help_ayse",
+      sender: { id: "user_ayse", displayName: "Ayse Yilmaz" },
+      type: "text",
+      text: "Thanks for the help yesterday! Really appreciate it.",
+      createdAt: new Date().toISOString(),
+      status: "read",
+    },
+  ],
+};
+
 const now = new Date();
 const mockThreads: ConversationThread[] = [
   {
@@ -29,21 +64,7 @@ const mockThreads: ConversationThread[] = [
     lastMessageAt: now.toISOString(),
     unreadCount: 2,
   },
-  {
-    id: "thread_help_ayse",
-    type: "help",
-    title: "Help request follow-up",
-    participants: [
-      { id: "user_test_tourist", displayName: "Test Tourist" },
-      { id: "user_ayse", displayName: "Ayse Yilmaz" },
-    ],
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-    lastMessagePreview: "Thanks for the help yesterday! Really appreciate it.",
-    lastMessageAt: now.toISOString(),
-    unreadCount: 0,
-    helpRequestId: "help_demo_sofa",
-  },
+  ...mockHelpThreads(),
   {
     id: "thread_support",
     type: "direct",
@@ -72,17 +93,7 @@ const mockMessages: Record<string, ConversationMessage[]> = {
       status: "delivered",
     },
   ],
-  thread_help_ayse: [
-    {
-      id: "message_ayse_1",
-      conversationId: "thread_help_ayse",
-      sender: { id: "user_ayse", displayName: "Ayse Yilmaz" },
-      type: "text",
-      text: "Thanks for the help yesterday! Really appreciate it.",
-      createdAt: now.toISOString(),
-      status: "read",
-    },
-  ],
+  ...mockHelpMessages,
   thread_support: [
     {
       id: "message_support_1",
@@ -96,21 +107,29 @@ const mockMessages: Record<string, ConversationMessage[]> = {
   ],
 };
 
+const isMockHelpThread = (threadId: string) => threadId.startsWith("thread_help_");
+
 export async function getConversations(): Promise<ConversationThread[]> {
   if (USE_MOCK_BACKEND) {
     return mockThreads;
   }
 
   const token = await getAccessToken();
-  return apiRequest<ConversationThread[]>(API_ENDPOINTS.messages.conversations, {
+  const directThreads = await apiRequest<ConversationThread[]>(API_ENDPOINTS.messages.conversations, {
     method: "GET",
     token,
   });
+
+  return [...directThreads, ...mockHelpThreads()];
 }
 
 export async function getConversationById(threadId: string): Promise<ConversationThread | null> {
   if (USE_MOCK_BACKEND) {
     return mockThreads.find((thread) => thread.id === threadId) ?? null;
+  }
+
+  if (isMockHelpThread(threadId)) {
+    return mockHelpThreads().find((thread) => thread.id === threadId) ?? null;
   }
 
   const token = await getAccessToken();
@@ -125,9 +144,25 @@ export async function getMessages(threadId: string): Promise<ConversationMessage
     return mockMessages[threadId] ?? [];
   }
 
+  if (isMockHelpThread(threadId)) {
+    return mockHelpMessages[threadId] ?? [];
+  }
+
   const token = await getAccessToken();
   return apiRequest<ConversationMessage[]>(withThreadId(API_ENDPOINTS.messages.messages, threadId), {
     method: "GET",
+    token,
+  });
+}
+
+export async function markConversationRead(threadId: string): Promise<void> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  await apiRequest<{ success: boolean }>(withThreadId(API_ENDPOINTS.messages.markRead, threadId), {
+    method: "POST",
     token,
   });
 }
@@ -139,7 +174,7 @@ export async function sendMessage({ threadId, sender, text }: SendMessageInput):
     return null;
   }
 
-  if (USE_MOCK_BACKEND) {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
     const next: ConversationMessage = {
       id: `message_${Date.now()}`,
       conversationId: threadId,
@@ -207,19 +242,18 @@ export async function getOrCreateDirectConversation({
     return nextThread;
   }
 
-  // Non-mock backend integration is not available yet.
-  const existing = await getConversations();
-  const matched = existing.find((thread) => {
-    if (thread.type !== "direct") {
-      return false;
-    }
-    const participantIds = thread.participants.map((item) => item.id);
-    return participantIds.includes(viewer.id) && participantIds.includes(target.id);
+  void viewer;
+  void target.displayName;
+  void target.avatarUrl;
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationThread>(API_ENDPOINTS.messages.directConversation, {
+    method: "POST",
+    token,
+    body: {
+      targetUserId: target.id,
+    },
   });
-  if (matched) {
-    return matched;
-  }
-  throw new Error("Direct conversation could not be created.");
 }
 
 export async function getOrCreateHelpConversation({
