@@ -1,4 +1,10 @@
-import type { ConversationMessage, ConversationThread, HelpConversationInput, SendMessageInput } from "../types";
+import type {
+  ConversationMessage,
+  ConversationMessagesPage,
+  ConversationThread,
+  HelpConversationInput,
+  SendMessageInput,
+} from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
@@ -139,17 +145,17 @@ export async function getConversationById(threadId: string): Promise<Conversatio
   });
 }
 
-export async function getMessages(threadId: string): Promise<ConversationMessage[]> {
+export async function getMessages(threadId: string): Promise<ConversationMessagesPage> {
   if (USE_MOCK_BACKEND) {
-    return mockMessages[threadId] ?? [];
+    return { messages: mockMessages[threadId] ?? [], pinnedMessage: null };
   }
 
   if (isMockHelpThread(threadId)) {
-    return mockHelpMessages[threadId] ?? [];
+    return { messages: mockHelpMessages[threadId] ?? [], pinnedMessage: null };
   }
 
   const token = await getAccessToken();
-  return apiRequest<ConversationMessage[]>(withThreadId(API_ENDPOINTS.messages.messages, threadId), {
+  return apiRequest<ConversationMessagesPage>(withThreadId(API_ENDPOINTS.messages.messages, threadId), {
     method: "GET",
     token,
   });
@@ -167,7 +173,12 @@ export async function markConversationRead(threadId: string): Promise<void> {
   });
 }
 
-export async function sendMessage({ threadId, sender, text }: SendMessageInput): Promise<ConversationMessage | null> {
+export async function sendMessage({
+  threadId,
+  sender,
+  text,
+  isAnnouncement,
+}: SendMessageInput): Promise<ConversationMessage | null> {
   void sender;
   const cleanText = text.trim();
   if (!cleanText) {
@@ -183,6 +194,7 @@ export async function sendMessage({ threadId, sender, text }: SendMessageInput):
       text: cleanText,
       createdAt: new Date().toISOString(),
       status: "sent",
+      ...(isAnnouncement ? { isAnnouncement: true } : {}),
     };
     mockMessages[threadId] = [...(mockMessages[threadId] ?? []), next];
     const thread = mockThreads.find((item) => item.id === threadId);
@@ -200,7 +212,33 @@ export async function sendMessage({ threadId, sender, text }: SendMessageInput):
     token,
     body: {
       text: cleanText,
+      ...(isAnnouncement ? { isAnnouncement: true } : {}),
     },
+  });
+}
+
+export async function pinMessage(threadId: string, messageId: string): Promise<void> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  await apiRequest<{ success: boolean }>(withThreadId(API_ENDPOINTS.messages.pinMessage, threadId), {
+    method: "POST",
+    token,
+    body: { messageId },
+  });
+}
+
+export async function unpinMessage(threadId: string): Promise<void> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  await apiRequest<{ success: boolean }>(withThreadId(API_ENDPOINTS.messages.unpinMessage, threadId), {
+    method: "DELETE",
+    token,
   });
 }
 

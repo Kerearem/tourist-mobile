@@ -2,16 +2,24 @@ import React, { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 
 type MessageComposerProps = {
-  onSend: (text: string) => Promise<void>;
+  onSend: (text: string, options?: { isAnnouncement?: boolean }) => Promise<void>;
   disabled?: boolean;
   textOnly?: boolean;
+  showAnnouncementOption?: boolean;
 };
 
-export function MessageComposer({ onSend, disabled = false, textOnly = false }: MessageComposerProps) {
+export function MessageComposer({
+  onSend,
+  disabled = false,
+  textOnly = false,
+  showAnnouncementOption = false,
+}: MessageComposerProps) {
   const [text, setText] = useState("");
+  const [announcementMode, setAnnouncementMode] = useState(false);
   const hasText = Boolean(text.trim());
 
   const handleSend = async () => {
@@ -19,46 +27,68 @@ export function MessageComposer({ onSend, disabled = false, textOnly = false }: 
       return;
     }
     const next = text;
+    const sendAsAnnouncement = announcementMode;
     setText("");
-    await onSend(next);
+    setAnnouncementMode(false);
+    await onSend(next, sendAsAnnouncement ? { isAnnouncement: true } : undefined);
   };
 
   return (
-    <View style={styles.container}>
-      {!textOnly ? (
-        <Pressable style={styles.cameraButton}>
-          <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={20} />
+    <View style={styles.wrapper}>
+      {showAnnouncementOption ? (
+        <Pressable
+          disabled={disabled}
+          onPress={() => setAnnouncementMode((current) => !current)}
+          style={[styles.announcementButton, announcementMode && styles.announcementButtonActive]}
+        >
+          <AppText
+            style={[styles.announcementButtonText, announcementMode && styles.announcementButtonTextActive]}
+            variant="caption"
+          >
+            📢 Duyuru Yap
+          </AppText>
         </Pressable>
       ) : null}
 
-      <View style={styles.composerBody}>
-        <TextInput
-          editable={!disabled}
-          onChangeText={setText}
-          onSubmitEditing={() => void handleSend()}
-          placeholder="Mesaj..."
-          placeholderTextColor={theme.colors.muted}
-          style={styles.input}
-          value={text}
-        />
-
-        <View style={styles.rightActions}>
-          {!textOnly ? (
-            <Pressable style={styles.inlineIconButton}>
-              <Ionicons color={theme.colors.textSecondary} name="image-outline" size={20} />
-            </Pressable>
-          ) : null}
-          <Pressable
-            disabled={disabled || !hasText}
-            onPress={() => void handleSend()}
-            style={[styles.trailingActionButton, hasText ? styles.trailingSendButton : styles.trailingMicButton]}
-          >
-            <Ionicons
-              color={hasText ? "#FFFFFF" : theme.colors.textPrimary}
-              name={hasText || textOnly ? "paper-plane-outline" : "mic-outline"}
-              size={20}
-            />
+      <View style={styles.container}>
+        {!textOnly ? (
+          <Pressable style={styles.cameraButton}>
+            <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={20} />
           </Pressable>
+        ) : null}
+
+        <View style={[styles.composerBody, announcementMode && styles.composerBodyAnnouncement]}>
+          <TextInput
+            editable={!disabled}
+            onChangeText={setText}
+            onSubmitEditing={() => void handleSend()}
+            placeholder={announcementMode ? "Duyuru metni..." : "Mesaj..."}
+            placeholderTextColor={theme.colors.muted}
+            style={styles.input}
+            value={text}
+          />
+
+          <View style={styles.rightActions}>
+            {!textOnly ? (
+              <Pressable style={styles.inlineIconButton}>
+                <Ionicons color={theme.colors.textSecondary} name="image-outline" size={20} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              disabled={disabled || !hasText}
+              onPress={() => void handleSend()}
+              style={[
+                styles.trailingActionButton,
+                hasText ? (announcementMode ? styles.trailingAnnouncementButton : styles.trailingSendButton) : styles.trailingMicButton,
+              ]}
+            >
+              <Ionicons
+                color={hasText ? "#FFFFFF" : theme.colors.textPrimary}
+                name={hasText || textOnly ? "paper-plane-outline" : "mic-outline"}
+                size={20}
+              />
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -66,6 +96,28 @@ export function MessageComposer({ onSend, disabled = false, textOnly = false }: 
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    gap: theme.spacing.sm,
+  },
+  announcementButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+  },
+  announcementButtonActive: {
+    backgroundColor: "#FEF3C7",
+    borderColor: "#FCD34D",
+    borderWidth: 1,
+  },
+  announcementButtonText: {
+    color: theme.colors.textSecondary,
+    fontWeight: "700",
+  },
+  announcementButtonTextActive: {
+    color: "#92400E",
+  },
   container: {
     alignItems: "center",
     flexDirection: "row",
@@ -89,6 +141,11 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingLeft: theme.spacing.lg,
     paddingRight: theme.spacing.sm,
+  },
+  composerBodyAnnouncement: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+    borderWidth: 1,
   },
   input: {
     color: theme.colors.textPrimary,
@@ -118,5 +175,8 @@ const styles = StyleSheet.create({
   },
   trailingSendButton: {
     backgroundColor: "#5B3CF6",
+  },
+  trailingAnnouncementButton: {
+    backgroundColor: "#D97706",
   },
 });

@@ -77,7 +77,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
         getMessages(route.params.threadId),
       ]);
       setConversation(thread);
-      setMessages(threadMessages);
+      setMessages(threadMessages.messages);
       setError(null);
       if (thread) {
         await markConversationRead(route.params.threadId);
@@ -114,7 +114,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     }
 
     const nextMessages = await getMessages(route.params.threadId);
-    setMessages(nextMessages);
+    setMessages(nextMessages.messages);
     const nextThread = await getConversationById(route.params.threadId);
     setConversation(nextThread);
   };

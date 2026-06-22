@@ -38,6 +38,12 @@ export type ConversationMessage = {
   createdAt: string;
   status?: MessageStatus;
   systemKind?: MessageSystemKind;
+  isAnnouncement?: boolean;
+};
+
+export type ConversationMessagesPage = {
+  messages: ConversationMessage[];
+  pinnedMessage: ConversationMessage | null;
 };
 
 export type SendMessageInput = {
@@ -47,6 +53,7 @@ export type SendMessageInput = {
     displayName: string;
   };
   text: string;
+  isAnnouncement?: boolean;
 };
 
 export type HelpConversationInput = {

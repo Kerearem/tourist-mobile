@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -10,6 +10,7 @@ type MessageBubbleProps = {
   message: ConversationMessage;
   isMine: boolean;
   variant?: "dm" | "group";
+  onLongPress?: () => void;
 };
 
 const formatMessageTime = (createdAt: string) => {
@@ -20,7 +21,15 @@ const formatMessageTime = (createdAt: string) => {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
-export function MessageBubble({ message, isMine, variant = "dm" }: MessageBubbleProps) {
+const AnnouncementLabel = () => (
+  <View style={styles.announcementLabel}>
+    <AppText style={styles.announcementLabelText} variant="caption">
+      📢 Duyuru
+    </AppText>
+  </View>
+);
+
+export function MessageBubble({ message, isMine, variant = "dm", onLongPress }: MessageBubbleProps) {
   if (message.type === "system") {
     return (
       <View style={styles.systemWrap}>
@@ -36,6 +45,29 @@ export function MessageBubble({ message, isMine, variant = "dm" }: MessageBubble
   const showSenderMeta = isGroup && !isMine;
   const initials = message.sender.displayName.slice(0, 2).toUpperCase();
   const isOrganizer = message.sender.role === "ORGANIZER";
+  const isAnnouncement = Boolean(message.isAnnouncement);
+
+  const bubbleStyles = [
+    styles.bubble,
+    isAnnouncement
+      ? isMine
+        ? styles.bubbleAnnouncementMine
+        : styles.bubbleAnnouncementOther
+      : isMine
+        ? styles.bubbleMine
+        : styles.bubbleOther,
+  ];
+
+  const bubbleContent = (
+    <Pressable disabled={!onLongPress} onLongPress={onLongPress}>
+      {isAnnouncement ? <AnnouncementLabel /> : null}
+      <View style={bubbleStyles}>
+        <AppText style={isMine && !isAnnouncement ? styles.textMine : undefined} variant="body">
+          {message.text}
+        </AppText>
+      </View>
+    </Pressable>
+  );
 
   if (showSenderMeta) {
     return (
@@ -54,9 +86,7 @@ export function MessageBubble({ message, isMine, variant = "dm" }: MessageBubble
               </View>
             ) : null}
           </View>
-          <View style={[styles.bubble, styles.bubbleOther]}>
-            <AppText variant="body">{message.text}</AppText>
-          </View>
+          {bubbleContent}
           {timeLabel ? (
             <AppText style={styles.timeLabel} variant="caption">
               {timeLabel}
@@ -69,11 +99,7 @@ export function MessageBubble({ message, isMine, variant = "dm" }: MessageBubble
 
   return (
     <View style={[styles.row, isMine ? styles.rowMine : styles.rowOther]}>
-      <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
-        <AppText style={isMine ? styles.textMine : undefined} variant="body">
-          {message.text}
-        </AppText>
-      </View>
+      {bubbleContent}
       {isGroup && timeLabel ? (
         <AppText style={[styles.timeLabel, isMine && styles.timeLabelMine]} variant="caption">
           {timeLabel}
@@ -126,6 +152,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
+  announcementLabel: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FDE68A",
+    borderRadius: 999,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  announcementLabelText: {
+    color: "#92400E",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   bubble: {
     borderRadius: 20,
     maxWidth: "100%",
@@ -144,6 +183,19 @@ const styles = StyleSheet.create({
     shadowOffset: { height: 6, width: 0 },
     shadowOpacity: 0.08,
     shadowRadius: 14,
+  },
+  bubbleAnnouncementMine: {
+    backgroundColor: "#FEF3C7",
+    borderBottomRightRadius: 6,
+    borderColor: "#FCD34D",
+    borderWidth: 1,
+    maxWidth: "82%",
+  },
+  bubbleAnnouncementOther: {
+    backgroundColor: "#FEF3C7",
+    borderBottomLeftRadius: 6,
+    borderColor: "#FCD34D",
+    borderWidth: 1,
   },
   textMine: {
     color: "#FFFFFF",

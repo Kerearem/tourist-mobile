@@ -37,6 +37,8 @@ export const API_ENDPOINTS = {
     sendMessage: "/messages/conversations/:threadId/messages",
     directConversation: "/messages/conversations/direct",
     markRead: "/messages/conversations/:threadId/read",
+    pinMessage: "/messages/conversations/:threadId/pin",
+    unpinMessage: "/messages/conversations/:threadId/pin",
     helpConversation: "/messages/help-conversations",
   },
   profile: {

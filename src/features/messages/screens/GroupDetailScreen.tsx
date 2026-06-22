@@ -1,6 +1,17 @@
-import React, { useCallback, useRef, useState } from "react";
-import { FlatList, Pressable, SafeAreaView, StyleSheet, View } from "react-native";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Modal,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Vibration,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { requireOptionalNativeModule } from "expo-modules-core";
+import * as Haptics from "expo-haptics";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions, useFocusEffect } from "@react-navigation/native";
 
@@ -15,20 +26,164 @@ import { getEventGroup, type EventGroupInfo } from "../../events/services/eventG
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
-import { getMessages, markConversationRead, sendMessage } from "../services/messages.service";
+import { PinnedMessageBar } from "../components/PinnedMessageBar";
+import {
+  getMessages,
+  markConversationRead,
+  pinMessage,
+  sendMessage,
+  unpinMessage,
+} from "../services/messages.service";
 import type { ConversationMessage } from "../types";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "GroupDetailScreen">;
+
+type ActionMenuState = {
+  message: ConversationMessage;
+};
+
+const ExpoClipboard = requireOptionalNativeModule<{
+  setStringAsync: (text: string) => Promise<boolean>;
+}>("ExpoClipboard");
+
+const triggerMessageHaptic = async () => {
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch {
+    Vibration.vibrate(10);
+  }
+};
+
+const triggerCopySuccessHaptic = async () => {
+  try {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch {
+    Vibration.vibrate(10);
+  }
+};
+
+const copyMessageText = async (text: string) => {
+  if (!ExpoClipboard?.setStringAsync) {
+    return false;
+  }
+
+  await ExpoClipboard.setStringAsync(text);
+  return true;
+};
+
+type GroupMessageActionSheetProps = {
+  visible: boolean;
+  message: ConversationMessage | null;
+  isOrganizer: boolean;
+  isArchived: boolean;
+  isPinned: boolean;
+  onClose: () => void;
+  onPin: () => void;
+  onUnpin: () => void;
+  onCopy: () => void;
+};
+
+function GroupMessageActionSheet({
+  visible,
+  message,
+  isOrganizer,
+  isArchived,
+  isPinned,
+  onClose,
+  onPin,
+  onUnpin,
+  onCopy,
+}: GroupMessageActionSheetProps) {
+  if (!message) {
+    return null;
+  }
+
+  const showPinActions = isOrganizer && !isArchived;
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+      <View style={actionSheetStyles.overlay}>
+        <Pressable onPress={onClose} style={actionSheetStyles.backdrop} />
+
+        <View style={actionSheetStyles.sheetWrap}>
+          <View style={actionSheetStyles.handle} />
+
+          <View style={actionSheetStyles.previewCard}>
+            <AppText numberOfLines={3} style={actionSheetStyles.previewText} variant="body">
+              {message.isAnnouncement ? "📢 " : ""}
+              {message.text}
+            </AppText>
+          </View>
+
+          <View style={actionSheetStyles.optionsCard}>
+            {showPinActions ? (
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  if (isPinned) {
+                    onUnpin();
+                  } else {
+                    onPin();
+                  }
+                }}
+                style={({ pressed }) => [actionSheetStyles.optionRow, pressed && actionSheetStyles.optionRowPressed]}
+              >
+                <View style={[actionSheetStyles.optionIcon, actionSheetStyles.pinIconWrap]}>
+                  <AppText style={actionSheetStyles.optionEmoji}>📌</AppText>
+                </View>
+                <AppText style={actionSheetStyles.optionLabel} variant="label">
+                  {isPinned ? "Sabitlemeyi Kaldır" : "Sabitle"}
+                </AppText>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={() => {
+                onClose();
+                onCopy();
+              }}
+              style={({ pressed }) => [actionSheetStyles.optionRow, pressed && actionSheetStyles.optionRowPressed]}
+            >
+              <View style={[actionSheetStyles.optionIcon, actionSheetStyles.copyIconWrap]}>
+                <AppText style={actionSheetStyles.optionEmoji}>📋</AppText>
+              </View>
+              <AppText style={actionSheetStyles.optionLabel} variant="label">
+                Kopyala
+              </AppText>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [actionSheetStyles.cancelButton, pressed && actionSheetStyles.cancelButtonPressed]}
+          >
+            <AppText style={actionSheetStyles.cancelLabel} variant="label">
+              İptal
+            </AppText>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export function GroupDetailScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const listRef = useRef<FlatList<ConversationMessage>>(null);
   const [group, setGroup] = useState<EventGroupInfo | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [pinnedMessage, setPinnedMessage] = useState<ConversationMessage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
 
   const viewerId = user?.id ?? "";
+  const isOrganizer = group?.viewerRole === "ORGANIZER";
+
+  const messageIndexById = useMemo(
+    () => Object.fromEntries(messages.map((message, index) => [message.id, index])),
+    [messages],
+  );
 
   const goToInbox = useCallback(() => {
     navigation.dispatch(
@@ -45,6 +200,26 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     });
   }, []);
 
+  const scrollToMessage = useCallback(
+    (messageId: string) => {
+      const index = messageIndexById[messageId];
+      if (index === undefined) {
+        return;
+      }
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+    },
+    [messageIndexById],
+  );
+
+  const applyMessagesPage = useCallback((page: Awaited<ReturnType<typeof getMessages>>) => {
+    setMessages(page.messages);
+    setPinnedMessage(page.pinnedMessage);
+  }, []);
+
+  const closeActionMenu = useCallback(() => {
+    setActionMenu(null);
+  }, []);
+
   const loadChat = async () => {
     setIsLoading(true);
     try {
@@ -52,6 +227,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       if (!groupResult) {
         setGroup(null);
         setMessages([]);
+        setPinnedMessage(null);
         setError("Grup bulunamadı.");
         return;
       }
@@ -59,6 +235,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       if (!groupResult.isMember) {
         setGroup(groupResult);
         setMessages([]);
+        setPinnedMessage(null);
         setError("Bu gruba erişim iznin yok.");
         return;
       }
@@ -67,18 +244,20 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       if (!conversationId) {
         setGroup(groupResult);
         setMessages([]);
+        setPinnedMessage(null);
         setError("Grup sohbeti bulunamadı.");
         return;
       }
 
       const threadMessages = await getMessages(conversationId);
       setGroup(groupResult);
-      setMessages(threadMessages);
+      applyMessagesPage(threadMessages);
       setError(null);
       await markConversationRead(conversationId);
     } catch {
       setGroup(null);
       setMessages([]);
+      setPinnedMessage(null);
       setError("Grup sohbeti yüklenemedi.");
     } finally {
       setIsLoading(false);
@@ -91,7 +270,12 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     }, [route.params.eventId]),
   );
 
-  const onSend = async (text: string) => {
+  const refreshMessages = async (conversationId: string) => {
+    const threadMessages = await getMessages(conversationId);
+    applyMessagesPage(threadMessages);
+  };
+
+  const onSend = async (text: string, options?: { isAnnouncement?: boolean }) => {
     if (!user || !group?.conversationId || group.isArchived) {
       return;
     }
@@ -103,16 +287,56 @@ export function GroupDetailScreen({ navigation, route }: Props) {
         displayName: user.publicProfile.displayName || user.publicProfile.username || "Tourist Member",
       },
       text,
+      isAnnouncement: options?.isAnnouncement,
     });
 
-    const nextMessages = await getMessages(group.conversationId);
-    setMessages(nextMessages);
+    await refreshMessages(group.conversationId);
     scrollToBottom();
   };
+
+  const onPinMessage = async (message: ConversationMessage) => {
+    if (!group?.conversationId || !isOrganizer) {
+      return;
+    }
+
+    await pinMessage(group.conversationId, message.id);
+    await refreshMessages(group.conversationId);
+  };
+
+  const onUnpinMessage = async () => {
+    if (!group?.conversationId || !isOrganizer) {
+      return;
+    }
+
+    await unpinMessage(group.conversationId);
+    await refreshMessages(group.conversationId);
+  };
+
+  const onMessageLongPress = useCallback((message: ConversationMessage) => {
+    void triggerMessageHaptic();
+    setActionMenu({ message });
+  }, []);
+
+  const onCopyMessage = useCallback(async (message: ConversationMessage) => {
+    const copied = await copyMessageText(message.text);
+    if (copied) {
+      await triggerCopySuccessHaptic();
+      return;
+    }
+
+    Alert.alert(
+      "Kopyalanamadı",
+      "Panoya kopyalamak için Expo Go'yu güncelleyin veya uygulamayı yeniden derleyin (npx expo run:ios).",
+    );
+  }, []);
 
   const openGroupInfo = () => {
     navigation.navigate(MessagesRoutes.GroupInfoScreen, { eventId: route.params.eventId });
   };
+
+  const selectedMessageId = actionMenu?.message.id ?? null;
+  const actionMessage = actionMenu?.message ?? null;
+  const isActionMessagePinned = Boolean(actionMessage && pinnedMessage?.id === actionMessage.id);
 
   if (isLoading) {
     return (
@@ -161,6 +385,15 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
 
+        {pinnedMessage ? (
+          <PinnedMessageBar
+            canUnpin={Boolean(isOrganizer)}
+            message={pinnedMessage}
+            onPress={() => scrollToMessage(pinnedMessage.id)}
+            onUnpin={() => void onUnpinMessage()}
+          />
+        ) : null}
+
         <View style={styles.messagesArea}>
           {messages.length === 0 ? (
             <View style={styles.emptyWrap}>
@@ -174,11 +407,26 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               contentContainerStyle={styles.messagesList}
               data={messages}
               keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
               onContentSizeChange={() => scrollToBottom(false)}
               onLayout={() => scrollToBottom(false)}
-              renderItem={({ item }) => (
-                <MessageBubble isMine={item.sender.id === viewerId} message={item} variant="group" />
-              )}
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  listRef.current?.scrollToIndex({ animated: true, index: info.index, viewPosition: 0.5 });
+                }, 100);
+              }}
+              renderItem={({ item }) => {
+                const isSelected = selectedMessageId === item.id;
+                return (
+                  <Pressable
+                    delayLongPress={280}
+                    onLongPress={() => onMessageLongPress(item)}
+                    style={[styles.messagePressable, isSelected && styles.messagePressableSelected]}
+                  >
+                    <MessageBubble isMine={item.sender.id === viewerId} message={item} variant="group" />
+                  </Pressable>
+                );
+              }}
               showsVerticalScrollIndicator={false}
             />
           )}
@@ -193,10 +441,35 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               </AppText>
             </View>
           ) : (
-            <MessageComposer disabled={!user} onSend={onSend} textOnly />
+            <MessageComposer
+              disabled={!user}
+              onSend={onSend}
+              showAnnouncementOption={isOrganizer}
+              textOnly
+            />
           )}
         </View>
       </View>
+
+      <GroupMessageActionSheet
+        isArchived={group.isArchived}
+        isOrganizer={Boolean(isOrganizer)}
+        isPinned={isActionMessagePinned}
+        message={actionMessage}
+        onClose={closeActionMenu}
+        onCopy={() => {
+          if (actionMessage) {
+            void onCopyMessage(actionMessage);
+          }
+        }}
+        onPin={() => {
+          if (actionMessage) {
+            void onPinMessage(actionMessage);
+          }
+        }}
+        onUnpin={() => void onUnpinMessage()}
+        visible={Boolean(actionMenu)}
+      />
     </SafeAreaView>
   );
 }
@@ -255,6 +528,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
   },
+  messagePressable: {
+    borderRadius: theme.radius.lg,
+    marginHorizontal: -theme.spacing.xs,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 2,
+  },
+  messagePressableSelected: {
+    backgroundColor: "rgba(91, 60, 246, 0.08)",
+    transform: [{ scale: 0.985 }],
+  },
   emptyWrap: {
     alignItems: "center",
     flex: 1,
@@ -290,5 +573,93 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     marginHorizontal: theme.spacing.lg,
+  },
+});
+
+const actionSheetStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+  sheetWrap: {
+    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+  },
+  handle: {
+    alignSelf: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    borderRadius: 999,
+    height: 4,
+    marginBottom: theme.spacing.xs,
+    width: 40,
+  },
+  previewCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  previewText: {
+    color: theme.colors.textSecondary,
+    textAlign: "center",
+  },
+  optionsCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: theme.radius.lg,
+    overflow: "hidden",
+  },
+  optionRow: {
+    alignItems: "center",
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    minHeight: 56,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  optionRowPressed: {
+    backgroundColor: "#F8FAFC",
+  },
+  optionIcon: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  pinIconWrap: {
+    backgroundColor: "#EFF6FF",
+  },
+  copyIconWrap: {
+    backgroundColor: "#F3F4F6",
+  },
+  optionEmoji: {
+    fontSize: 18,
+  },
+  optionLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+  },
+  cancelButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: theme.radius.lg,
+    justifyContent: "center",
+    minHeight: 56,
+    paddingVertical: theme.spacing.md,
+  },
+  cancelButtonPressed: {
+    backgroundColor: "#F8FAFC",
+  },
+  cancelLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
