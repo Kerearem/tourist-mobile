@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "../../../components/ui/AppText";
@@ -10,6 +10,10 @@ type MessageComposerProps = {
   disabled?: boolean;
   textOnly?: boolean;
   showAnnouncementOption?: boolean;
+  showLiveCameraButton?: boolean;
+  onCameraPress?: (caption: string) => void;
+  isPhotoUploading?: boolean;
+  resetToken?: number;
 };
 
 export function MessageComposer({
@@ -17,13 +21,23 @@ export function MessageComposer({
   disabled = false,
   textOnly = false,
   showAnnouncementOption = false,
+  showLiveCameraButton = false,
+  onCameraPress,
+  isPhotoUploading = false,
+  resetToken = 0,
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [announcementMode, setAnnouncementMode] = useState(false);
   const hasText = Boolean(text.trim());
+  const isBusy = disabled || isPhotoUploading;
+
+  useEffect(() => {
+    setText("");
+    setAnnouncementMode(false);
+  }, [resetToken]);
 
   const handleSend = async () => {
-    if (!hasText || disabled) {
+    if (!hasText || isBusy) {
       return;
     }
     const next = text;
@@ -37,7 +51,7 @@ export function MessageComposer({
     <View style={styles.wrapper}>
       {showAnnouncementOption ? (
         <Pressable
-          disabled={disabled}
+          disabled={isBusy}
           onPress={() => setAnnouncementMode((current) => !current)}
           style={[styles.announcementButton, announcementMode && styles.announcementButtonActive]}
         >
@@ -51,7 +65,19 @@ export function MessageComposer({
       ) : null}
 
       <View style={styles.container}>
-        {!textOnly ? (
+        {showLiveCameraButton ? (
+          <Pressable
+            disabled={isBusy}
+            onPress={() => onCameraPress?.(text.trim())}
+            style={[styles.cameraButton, isPhotoUploading && styles.cameraButtonBusy]}
+          >
+            {isPhotoUploading ? (
+              <ActivityIndicator color={theme.colors.primary} size="small" />
+            ) : (
+              <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={20} />
+            )}
+          </Pressable>
+        ) : !textOnly ? (
           <Pressable style={styles.cameraButton}>
             <Ionicons color={theme.colors.textPrimary} name="camera-outline" size={20} />
           </Pressable>
@@ -59,7 +85,7 @@ export function MessageComposer({
 
         <View style={[styles.composerBody, announcementMode && styles.composerBodyAnnouncement]}>
           <TextInput
-            editable={!disabled}
+            editable={!isBusy}
             onChangeText={setText}
             onSubmitEditing={() => void handleSend()}
             placeholder={announcementMode ? "Duyuru metni..." : "Mesaj..."}
@@ -69,13 +95,13 @@ export function MessageComposer({
           />
 
           <View style={styles.rightActions}>
-            {!textOnly ? (
+            {!textOnly && !showLiveCameraButton ? (
               <Pressable style={styles.inlineIconButton}>
                 <Ionicons color={theme.colors.textSecondary} name="image-outline" size={20} />
               </Pressable>
             ) : null}
             <Pressable
-              disabled={disabled || !hasText}
+              disabled={isBusy || !hasText}
               onPress={() => void handleSend()}
               style={[
                 styles.trailingActionButton,
@@ -84,7 +110,7 @@ export function MessageComposer({
             >
               <Ionicons
                 color={hasText ? "#FFFFFF" : theme.colors.textPrimary}
-                name={hasText || textOnly ? "paper-plane-outline" : "mic-outline"}
+                name={hasText || textOnly || showLiveCameraButton ? "paper-plane-outline" : "mic-outline"}
                 size={20}
               />
             </Pressable>
@@ -131,6 +157,9 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     width: 44,
+  },
+  cameraButtonBusy: {
+    opacity: 0.85,
   },
   composerBody: {
     alignItems: "center",

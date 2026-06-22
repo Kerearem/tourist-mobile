@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -11,6 +11,7 @@ type MessageBubbleProps = {
   isMine: boolean;
   variant?: "dm" | "group";
   onLongPress?: () => void;
+  onImagePress?: (imageUrl: string) => void;
 };
 
 const formatMessageTime = (createdAt: string) => {
@@ -29,7 +30,7 @@ const AnnouncementLabel = () => (
   </View>
 );
 
-export function MessageBubble({ message, isMine, variant = "dm", onLongPress }: MessageBubbleProps) {
+export function MessageBubble({ message, isMine, variant = "dm", onLongPress, onImagePress }: MessageBubbleProps) {
   if (message.type === "system") {
     return (
       <View style={styles.systemWrap}>
@@ -46,9 +47,12 @@ export function MessageBubble({ message, isMine, variant = "dm", onLongPress }: 
   const initials = message.sender.displayName.slice(0, 2).toUpperCase();
   const isOrganizer = message.sender.role === "ORGANIZER";
   const isAnnouncement = Boolean(message.isAnnouncement);
+  const hasMedia = Boolean(message.mediaUrl);
+  const hasText = Boolean(message.text?.trim());
 
   const bubbleStyles = [
     styles.bubble,
+    hasMedia && styles.bubbleWithMedia,
     isAnnouncement
       ? isMine
         ? styles.bubbleAnnouncementMine
@@ -58,14 +62,38 @@ export function MessageBubble({ message, isMine, variant = "dm", onLongPress }: 
         : styles.bubbleOther,
   ];
 
+  const bubbleBody = (
+    <View style={bubbleStyles}>
+      {hasMedia ? (
+        <Pressable
+          disabled={!onImagePress}
+          onPress={() => {
+            if (message.mediaUrl) {
+              onImagePress?.(message.mediaUrl);
+            }
+          }}
+        >
+          <Image resizeMode="cover" source={{ uri: message.mediaUrl }} style={styles.messageImage} />
+        </Pressable>
+      ) : null}
+      {hasText ? (
+        <AppText
+          style={[
+            isMine && !isAnnouncement && !hasMedia ? styles.textMine : undefined,
+            hasMedia && hasText ? styles.captionText : undefined,
+          ]}
+          variant="body"
+        >
+          {message.text}
+        </AppText>
+      ) : null}
+    </View>
+  );
+
   const bubbleContent = (
     <Pressable disabled={!onLongPress} onLongPress={onLongPress}>
       {isAnnouncement ? <AnnouncementLabel /> : null}
-      <View style={bubbleStyles}>
-        <AppText style={isMine && !isAnnouncement ? styles.textMine : undefined} variant="body">
-          {message.text}
-        </AppText>
-      </View>
+      {bubbleBody}
     </Pressable>
   );
 
@@ -168,8 +196,13 @@ const styles = StyleSheet.create({
   bubble: {
     borderRadius: 20,
     maxWidth: "100%",
+    overflow: "hidden",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
+  },
+  bubbleWithMedia: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   bubbleMine: {
     backgroundColor: "#5B3CF6",
@@ -196,6 +229,15 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 6,
     borderColor: "#FCD34D",
     borderWidth: 1,
+  },
+  messageImage: {
+    borderRadius: 16,
+    height: 220,
+    width: 220,
+  },
+  captionText: {
+    marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
   },
   textMine: {
     color: "#FFFFFF",

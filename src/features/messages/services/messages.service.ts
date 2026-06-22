@@ -178,10 +178,13 @@ export async function sendMessage({
   sender,
   text,
   isAnnouncement,
+  mediaUrl,
+  mediaType,
 }: SendMessageInput): Promise<ConversationMessage | null> {
   void sender;
-  const cleanText = text.trim();
-  if (!cleanText) {
+  const cleanText = (text ?? "").trim();
+  const cleanMediaUrl = mediaUrl?.trim() ?? "";
+  if (!cleanText && !cleanMediaUrl) {
     return null;
   }
 
@@ -190,16 +193,17 @@ export async function sendMessage({
       id: `message_${Date.now()}`,
       conversationId: threadId,
       sender,
-      type: "text",
+      type: cleanMediaUrl ? "image" : "text",
       text: cleanText,
       createdAt: new Date().toISOString(),
       status: "sent",
       ...(isAnnouncement ? { isAnnouncement: true } : {}),
+      ...(cleanMediaUrl ? { mediaUrl: cleanMediaUrl, mediaType: "image" as const } : {}),
     };
     mockMessages[threadId] = [...(mockMessages[threadId] ?? []), next];
     const thread = mockThreads.find((item) => item.id === threadId);
     if (thread) {
-      thread.lastMessagePreview = cleanText;
+      thread.lastMessagePreview = cleanText || "📷 Fotoğraf";
       thread.lastMessageAt = next.createdAt;
       thread.updatedAt = next.createdAt;
     }
@@ -211,8 +215,14 @@ export async function sendMessage({
     method: "POST",
     token,
     body: {
-      text: cleanText,
+      ...(cleanText ? { text: cleanText } : {}),
       ...(isAnnouncement ? { isAnnouncement: true } : {}),
+      ...(cleanMediaUrl
+        ? {
+            mediaUrl: cleanMediaUrl,
+            mediaType: mediaType ?? "image",
+          }
+        : {}),
     },
   });
 }

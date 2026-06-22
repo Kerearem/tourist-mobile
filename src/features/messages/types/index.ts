@@ -20,7 +20,7 @@ export type ConversationThread = {
   metadata?: Record<string, string>;
 };
 
-export type MessageType = "text" | "system";
+export type MessageType = "text" | "system" | "image";
 export type MessageStatus = "sent" | "delivered" | "read";
 export type MessageSystemKind = "help_conversation_started" | "participant_joined" | "other";
 
@@ -39,6 +39,8 @@ export type ConversationMessage = {
   status?: MessageStatus;
   systemKind?: MessageSystemKind;
   isAnnouncement?: boolean;
+  mediaUrl?: string;
+  mediaType?: "image";
 };
 
 export type ConversationMessagesPage = {
@@ -52,8 +54,10 @@ export type SendMessageInput = {
     id: string;
     displayName: string;
   };
-  text: string;
+  text?: string;
   isAnnouncement?: boolean;
+  mediaUrl?: string;
+  mediaType?: "image";
 };
 
 export type HelpConversationInput = {

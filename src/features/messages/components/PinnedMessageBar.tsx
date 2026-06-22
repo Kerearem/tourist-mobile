@@ -23,8 +23,8 @@ export function PinnedMessageBar({ message, canUnpin, onPress, onUnpin }: Pinned
             Sabitlenmiş mesaj
           </AppText>
           <AppText numberOfLines={1} style={styles.preview} variant="caption">
-            {message.isAnnouncement ? "📢 " : ""}
-            {message.text}
+            {message.isAnnouncement ? "📢 " : message.mediaUrl && !message.text?.trim() ? "📷 " : ""}
+            {message.mediaUrl && !message.text?.trim() ? "Fotoğraf" : message.text}
           </AppText>
         </View>
       </Pressable>

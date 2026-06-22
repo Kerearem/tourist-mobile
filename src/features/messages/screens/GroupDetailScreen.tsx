@@ -1,7 +1,9 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   Pressable,
   SafeAreaView,
@@ -10,10 +12,12 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import * as Haptics from "expo-haptics";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions, useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "../../../components/ui/AppText";
 import { Card } from "../../../components/ui/Card";
@@ -22,6 +26,7 @@ import { Loader } from "../../../components/ui/Loader";
 import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
+import { uploadImage } from "../../../services/media/cloudinary";
 import { getEventGroup, type EventGroupInfo } from "../../events/services/eventGroup.service";
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { MessageBubble } from "../components/MessageBubble";
@@ -109,10 +114,10 @@ function GroupMessageActionSheet({
           <View style={actionSheetStyles.handle} />
 
           <View style={actionSheetStyles.previewCard}>
-            <AppText numberOfLines={3} style={actionSheetStyles.previewText} variant="body">
-              {message.isAnnouncement ? "📢 " : ""}
-              {message.text}
-            </AppText>
+          <AppText numberOfLines={3} style={actionSheetStyles.previewText} variant="body">
+            {message.isAnnouncement ? "📢 " : message.mediaUrl && !message.text?.trim() ? "📷 " : ""}
+            {message.mediaUrl && !message.text?.trim() ? "Fotoğraf" : message.text}
+          </AppText>
           </View>
 
           <View style={actionSheetStyles.optionsCard}>
@@ -167,6 +172,122 @@ function GroupMessageActionSheet({
   );
 }
 
+type GroupPhotoCameraModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  onCaptured: (uri: string) => void;
+};
+
+function GroupPhotoCameraModal({ visible, onClose, onCaptured }: GroupPhotoCameraModalProps) {
+  const insets = useSafeAreaInsets();
+  const cameraRef = useRef<CameraView | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<CameraType>("back");
+  const [isCapturing, setIsCapturing] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !permission || permission.granted || !permission.canAskAgain) {
+      return;
+    }
+    void requestPermission();
+  }, [permission, requestPermission, visible]);
+
+  const capturePhoto = async () => {
+    if (isCapturing || !cameraRef.current) {
+      return;
+    }
+
+    try {
+      setIsCapturing(true);
+      const result = await cameraRef.current.takePictureAsync({
+        quality: 0.82,
+        skipProcessing: false,
+      });
+      if (result?.uri) {
+        onCaptured(result.uri);
+        onClose();
+      }
+    } catch {
+      Alert.alert("Kamera hatası", "Fotoğraf çekilemedi.");
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+      <View style={cameraStyles.container}>
+        {permission?.granted ? (
+          <CameraView facing={facing} mode="picture" ref={cameraRef} style={cameraStyles.camera} />
+        ) : (
+          <View style={cameraStyles.permissionWrap}>
+            <AppText style={cameraStyles.permissionText} variant="body">
+              Fotoğraf göndermek için kamera izni gerekli.
+            </AppText>
+            <Pressable onPress={() => void requestPermission()} style={cameraStyles.permissionButton}>
+              <AppText style={cameraStyles.permissionButtonText} variant="label">
+                İzin ver
+              </AppText>
+            </Pressable>
+          </View>
+        )}
+
+        <View style={[cameraStyles.topBar, { paddingTop: Math.max(insets.top, theme.spacing.md) }]}>
+          <Pressable onPress={onClose} style={cameraStyles.iconButton}>
+            <Ionicons color="#FFFFFF" name="close" size={28} />
+          </Pressable>
+          <AppText style={cameraStyles.title} variant="label">
+            Fotoğraf çek
+          </AppText>
+          <Pressable
+            disabled={!permission?.granted}
+            onPress={() => setFacing((current) => (current === "back" ? "front" : "back"))}
+            style={cameraStyles.iconButton}
+          >
+            <Ionicons color="#FFFFFF" name="camera-reverse-outline" size={26} />
+          </Pressable>
+        </View>
+
+        <View style={[cameraStyles.bottomBar, { paddingBottom: Math.max(insets.bottom, theme.spacing.lg) }]}>
+          <Pressable
+            disabled={!permission?.granted || isCapturing}
+            onPress={() => void capturePhoto()}
+            style={cameraStyles.shutterOuter}
+          >
+            {isCapturing ? (
+              <ActivityIndicator color="#111827" size="small" />
+            ) : (
+              <View style={cameraStyles.shutterInner} />
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+type FullscreenImageViewerProps = {
+  imageUrl: string | null;
+  onClose: () => void;
+};
+
+function FullscreenImageViewer({ imageUrl, onClose }: FullscreenImageViewerProps) {
+  if (!imageUrl) {
+    return null;
+  }
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible>
+      <Pressable onPress={onClose} style={viewerStyles.overlay}>
+        <Pressable onPress={onClose} style={viewerStyles.closeButton}>
+          <Ionicons color="#FFFFFF" name="close" size={28} />
+        </Pressable>
+        <Image resizeMode="contain" source={{ uri: imageUrl }} style={viewerStyles.image} />
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function GroupDetailScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const listRef = useRef<FlatList<ConversationMessage>>(null);
@@ -176,6 +297,11 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+  const [pendingPhotoCaption, setPendingPhotoCaption] = useState("");
+  const [composerResetToken, setComposerResetToken] = useState(0);
+  const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
 
   const viewerId = user?.id ?? "";
   const isOrganizer = group?.viewerRole === "ORGANIZER";
@@ -270,10 +396,10 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     }, [route.params.eventId]),
   );
 
-  const refreshMessages = async (conversationId: string) => {
+  const refreshMessages = useCallback(async (conversationId: string) => {
     const threadMessages = await getMessages(conversationId);
     applyMessagesPage(threadMessages);
-  };
+  }, [applyMessagesPage]);
 
   const onSend = async (text: string, options?: { isAnnouncement?: boolean }) => {
     if (!user || !group?.conversationId || group.isArchived) {
@@ -318,7 +444,12 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   }, []);
 
   const onCopyMessage = useCallback(async (message: ConversationMessage) => {
-    const copied = await copyMessageText(message.text);
+    const copyValue = message.text?.trim() || message.mediaUrl || "";
+    if (!copyValue) {
+      return;
+    }
+
+    const copied = await copyMessageText(copyValue);
     if (copied) {
       await triggerCopySuccessHaptic();
       return;
@@ -329,6 +460,48 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       "Panoya kopyalamak için Expo Go'yu güncelleyin veya uygulamayı yeniden derleyin (npx expo run:ios).",
     );
   }, []);
+
+  const onOpenCamera = useCallback((caption: string) => {
+    if (group?.isArchived) {
+      return;
+    }
+    setPendingPhotoCaption(caption);
+    setIsCameraOpen(true);
+  }, [group?.isArchived]);
+
+  const onPhotoCaptured = useCallback(
+    async (localUri: string) => {
+      if (!user || !group?.conversationId || group.isArchived) {
+        return;
+      }
+
+      setIsPhotoUploading(true);
+      try {
+        const mediaUrl = await uploadImage(localUri, { folder: "group-messages" });
+        await sendMessage({
+          threadId: group.conversationId,
+          sender: {
+            id: user.id,
+            displayName: user.publicProfile.displayName || user.publicProfile.username || "Tourist Member",
+          },
+          text: pendingPhotoCaption,
+          mediaUrl,
+          mediaType: "image",
+        });
+        await refreshMessages(group.conversationId);
+        setComposerResetToken((current) => current + 1);
+        setPendingPhotoCaption("");
+        scrollToBottom();
+      } catch (captureError) {
+        const message =
+          captureError instanceof Error ? captureError.message : "Fotoğraf gönderilemedi.";
+        Alert.alert("Fotoğraf gönderilemedi", message);
+      } finally {
+        setIsPhotoUploading(false);
+      }
+    },
+    [group, pendingPhotoCaption, refreshMessages, scrollToBottom, user],
+  );
 
   const openGroupInfo = () => {
     navigation.navigate(MessagesRoutes.GroupInfoScreen, { eventId: route.params.eventId });
@@ -423,7 +596,12 @@ export function GroupDetailScreen({ navigation, route }: Props) {
                     onLongPress={() => onMessageLongPress(item)}
                     style={[styles.messagePressable, isSelected && styles.messagePressableSelected]}
                   >
-                    <MessageBubble isMine={item.sender.id === viewerId} message={item} variant="group" />
+                    <MessageBubble
+                      isMine={item.sender.id === viewerId}
+                      message={item}
+                      onImagePress={setFullscreenImageUrl}
+                      variant="group"
+                    />
                   </Pressable>
                 );
               }}
@@ -443,8 +621,12 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           ) : (
             <MessageComposer
               disabled={!user}
+              isPhotoUploading={isPhotoUploading}
+              onCameraPress={onOpenCamera}
               onSend={onSend}
+              resetToken={composerResetToken}
               showAnnouncementOption={isOrganizer}
+              showLiveCameraButton
               textOnly
             />
           )}
@@ -470,6 +652,14 @@ export function GroupDetailScreen({ navigation, route }: Props) {
         onUnpin={() => void onUnpinMessage()}
         visible={Boolean(actionMenu)}
       />
+
+      <GroupPhotoCameraModal
+        onCaptured={(uri) => void onPhotoCaptured(uri)}
+        onClose={() => setIsCameraOpen(false)}
+        visible={isCameraOpen}
+      />
+
+      <FullscreenImageViewer imageUrl={fullscreenImageUrl} onClose={() => setFullscreenImageUrl(null)} />
     </SafeAreaView>
   );
 }
@@ -661,5 +851,101 @@ const actionSheetStyles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: "600",
+  },
+});
+
+const cameraStyles = StyleSheet.create({
+  container: {
+    backgroundColor: "#000000",
+    flex: 1,
+  },
+  camera: {
+    flex: 1,
+  },
+  permissionWrap: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.xl,
+  },
+  permissionText: {
+    color: "#FFFFFF",
+    marginBottom: theme.spacing.lg,
+    textAlign: "center",
+  },
+  permissionButton: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  permissionButtonText: {
+    color: theme.colors.textPrimary,
+    fontWeight: "700",
+  },
+  topBar: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    left: 0,
+    paddingHorizontal: theme.spacing.md,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  title: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  iconButton: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  bottomBar: {
+    alignItems: "center",
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+  },
+  shutterOuter: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(255,255,255,0.45)",
+    borderRadius: 40,
+    borderWidth: 4,
+    height: 80,
+    justifyContent: "center",
+    width: 80,
+  },
+  shutterInner: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#111827",
+    borderRadius: 30,
+    borderWidth: 2,
+    height: 60,
+    width: 60,
+  },
+});
+
+const viewerStyles = StyleSheet.create({
+  overlay: {
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    flex: 1,
+    justifyContent: "center",
+  },
+  closeButton: {
+    position: "absolute",
+    right: theme.spacing.lg,
+    top: theme.spacing.xxl,
+    zIndex: 2,
+  },
+  image: {
+    height: "80%",
+    width: "100%",
   },
 });
