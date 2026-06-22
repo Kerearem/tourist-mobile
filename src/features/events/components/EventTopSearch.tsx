@@ -31,7 +31,7 @@ export function EventTopSearch({ value, onChangeText, locationLabel }: EventTopS
             onBlur={() => setIsSearchActive(false)}
             onChangeText={onChangeText}
             onFocus={() => setIsSearchActive(true)}
-            placeholder="Search events..."
+            placeholder="Etkinlik ara..."
             placeholderTextColor="#9CA3AF"
             ref={inputRef}
             style={styles.searchInput}
@@ -40,7 +40,7 @@ export function EventTopSearch({ value, onChangeText, locationLabel }: EventTopS
         ) : (
           <>
             <AppText style={styles.title} variant="label">
-              Where to?
+              Nereye?
             </AppText>
             <AppText style={styles.subtitle} variant="caption">
               {locationLabel}

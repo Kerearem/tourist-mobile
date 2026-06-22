@@ -11,12 +11,12 @@ type EventCategoryTabsProps = {
 };
 
 const tabs: Array<{ key: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "All", label: "All", icon: "apps-outline" },
-  { key: "Free", label: "Free", icon: "cash-outline" },
-  { key: "Paid", label: "Paid", icon: "card-outline" },
-  { key: "Social", label: "Social", icon: "people-outline" },
+  { key: "All", label: "Tümü", icon: "apps-outline" },
+  { key: "Free", label: "Ücretsiz", icon: "cash-outline" },
+  { key: "Paid", label: "Ücretli", icon: "card-outline" },
+  { key: "Social", label: "Sosyal", icon: "people-outline" },
   { key: "Networking", label: "Networking", icon: "briefcase-outline" },
-  { key: "Outdoors", label: "Outdoors", icon: "leaf-outline" },
+  { key: "Outdoors", label: "Açık Hava", icon: "leaf-outline" },
 ];
 
 export function EventCategoryTabs({ activeTab, onChange }: EventCategoryTabsProps) {
@@ -41,9 +41,9 @@ export function EventCategoryTabs({ activeTab, onChange }: EventCategoryTabsProp
 const styles = StyleSheet.create({
   row: {
     gap: theme.spacing.xl,
+    paddingBottom: theme.spacing.sm,
     paddingHorizontal: theme.spacing.xs,
     paddingTop: theme.spacing.xs,
-    paddingBottom: theme.spacing.sm,
   },
   item: {
     alignItems: "center",

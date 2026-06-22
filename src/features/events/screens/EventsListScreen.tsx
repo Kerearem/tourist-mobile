@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -18,38 +18,13 @@ import { EventsFilterSheet } from "../components/EventsFilterSheet";
 import { EventTopSearch } from "../components/EventTopSearch";
 import { getEvents, toggleEventAttendance } from "../services/events.service";
 import type { EventItem } from "../types";
-import { DEFAULT_EVENTS_FILTERS, type EventsFilterState } from "../types/filters";
+import {
+  DEFAULT_EVENTS_FILTERS,
+  buildEventsListQuery,
+  type EventsFilterState,
+} from "../types/filters";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventsListScreen">;
-
-const demoEvents: EventItem[] = [
-  {
-    id: "event_demo_social",
-    title: "International Food Festival",
-    description: "Meet nearby expats and discover social opportunities around your city.",
-    host: { id: "host_berlin_expats", displayName: "Berlin Expats" },
-    type: "social",
-    visibility: "city",
-    city: "Berlin",
-    countryCode: "DE",
-    startsAt: "2026-05-24T12:00:00.000Z",
-    attendeeCount: 127,
-    isUserAttending: false,
-  },
-  {
-    id: "event_demo_networking",
-    title: "Startup Networking Night",
-    description: "An evening to meet founders, engineers and creatives in your community.",
-    host: { id: "host_tourist_team", displayName: "Tourist Community" },
-    type: "community",
-    visibility: "city",
-    city: "Berlin",
-    countryCode: "DE",
-    startsAt: "2026-05-29T17:30:00.000Z",
-    attendeeCount: 86,
-    isUserAttending: true,
-  },
-];
 
 export function EventsListScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -58,10 +33,12 @@ export function EventsListScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeChip, setActiveChip] = useState("All");
   const [togglingEventId, setTogglingEventId] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
+  const [draftFilters, setDraftFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
 
   const scopedEvents = useMemo(() => {
     if (!user) {
@@ -73,42 +50,48 @@ export function EventsListScreen({ navigation }: Props) {
     }));
   }, [events, user]);
 
-  const eventsForUi = useMemo(() => {
-    if (scopedEvents.length > 0) {
-      return scopedEvents;
-    }
-    if (error) {
-      return demoEvents;
-    }
-    return scopedEvents;
-  }, [error, scopedEvents]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchText.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [searchText]);
 
-  const loadEvents = async (mode: "initial" | "refresh") => {
-    if (mode === "initial") {
-      setIsLoading(true);
-    } else {
-      setRefreshing(true);
+  useEffect(() => {
+    if (isFilterOpen) {
+      setDraftFilters(appliedFilters);
     }
+  }, [appliedFilters, isFilterOpen]);
 
-    try {
-      const result = await getEvents({
-        scope: filters.community === "my_community" ? "community" : "global",
-        ...(activeChip !== "All" ? { type: activeChip.toLowerCase() as EventItem["type"] } : {}),
-      });
-      setEvents(result);
-      setError(null);
-    } catch {
-      setEvents([]);
-      setError("Failed to load events.");
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const listQuery = useMemo(
+    () => buildEventsListQuery(appliedFilters, { search: debouncedSearch, activeTab: activeChip }),
+    [activeChip, appliedFilters, debouncedSearch],
+  );
+
+  const loadEvents = useCallback(
+    async (mode: "initial" | "refresh") => {
+      if (mode === "initial") {
+        setIsLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+
+      try {
+        const result = await getEvents(listQuery);
+        setEvents(result);
+        setError(null);
+      } catch {
+        setEvents([]);
+        setError("Etkinlikler yüklenemedi.");
+      } finally {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [listQuery],
+  );
 
   useEffect(() => {
     void loadEvents("initial");
-  }, [filters.community, activeChip]);
+  }, [loadEvents]);
 
   const onToggleJoin = async (event: EventItem) => {
     if (!user || togglingEventId) {
@@ -124,17 +107,26 @@ export function EventsListScreen({ navigation }: Props) {
 
       setEvents((previous) => previous.map((item) => (item.id === updated.id ? updated : item)));
     } catch {
-      setError("Could not update attendance.");
+      setError("Katılım durumu güncellenemedi.");
     } finally {
       setTogglingEventId(null);
     }
+  };
+
+  const onApplyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setIsFilterOpen(false);
+  };
+
+  const onClearFilters = () => {
+    setDraftFilters(DEFAULT_EVENTS_FILTERS);
   };
 
   if (isLoading) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <Loader label="Loading events..." />
+          <Loader label="Etkinlikler yükleniyor..." />
         </Card>
       </Screen>
     );
@@ -144,7 +136,7 @@ export function EventsListScreen({ navigation }: Props) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <ErrorState onRetry={() => void loadEvents("initial")} title="Could not load events" subtitle={error} />
+          <ErrorState onRetry={() => void loadEvents("initial")} subtitle={error} title="Etkinlikler yüklenemedi" />
         </Card>
       </Screen>
     );
@@ -155,7 +147,7 @@ export function EventsListScreen({ navigation }: Props) {
       <View style={styles.container}>
         <View style={styles.topSearchWrap}>
           <EventTopSearch
-            locationLabel={`${user?.publicProfile.currentCity || "Anywhere"} · This week`}
+            locationLabel={`${user?.publicProfile.currentCity || "Her yer"} · Bu hafta`}
             onChangeText={setSearchText}
             value={searchText}
           />
@@ -165,18 +157,18 @@ export function EventsListScreen({ navigation }: Props) {
         </View>
         <EventCategoryTabs activeTab={activeChip} onChange={setActiveChip} />
 
-        {eventsForUi.length === 0 ? (
+        {scopedEvents.length === 0 ? (
           <Card style={styles.stateCard}>
             <EmptyState
-              actionLabel="Refresh"
-              description="Check again later for community events."
+              actionLabel="Yenile"
+              description="Filtreleri değiştir veya daha sonra tekrar dene."
               onActionPress={() => void loadEvents("initial")}
-              title="No events available"
+              title="Etkinlik bulunamadı"
             />
           </Card>
         ) : (
           <FlatList
-            data={eventsForUi}
+            data={scopedEvents}
             keyExtractor={(item) => item.id}
             onRefresh={() => void loadEvents("refresh")}
             refreshing={refreshing}
@@ -194,10 +186,10 @@ export function EventsListScreen({ navigation }: Props) {
         )}
       </View>
       <EventsFilterSheet
-        filters={filters}
-        onApply={() => setIsFilterOpen(false)}
-        onChange={setFilters}
-        onClearAll={() => setFilters(DEFAULT_EVENTS_FILTERS)}
+        filters={draftFilters}
+        onApply={onApplyFilters}
+        onChange={setDraftFilters}
+        onClearAll={onClearFilters}
         onClose={() => setIsFilterOpen(false)}
         visible={isFilterOpen}
       />
@@ -231,7 +223,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   listContent: {
-    paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.xl,
+    paddingTop: theme.spacing.sm,
   },
 });

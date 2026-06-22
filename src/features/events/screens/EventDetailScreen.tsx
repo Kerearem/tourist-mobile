@@ -64,7 +64,7 @@ const getCoverUri = (event: EventItem) => {
   if (event.type === "social") {
     return "https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1400&q=80";
   }
-  if (event.type === "community") {
+  if (event.type === "outdoor") {
     return "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&q=80";
   }
   return "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80";

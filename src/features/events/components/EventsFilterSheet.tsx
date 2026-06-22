@@ -5,21 +5,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import {
-  ATTENDANCE_FILTERS,
   COMMUNITY_FILTERS,
   DATE_FILTERS,
-  DISTANCE_FILTERS,
   EVENT_TYPE_FILTERS,
   PRICE_FILTERS,
-  VIBE_FILTERS,
-  type AttendanceFilterOption,
   type CommunityFilterOption,
   type DateFilterOption,
-  type DistanceFilterOption,
   type EventTypeFilterOption,
   type EventsFilterState,
   type PriceFilterOption,
-  type VibeFilterOption,
 } from "../types/filters";
 
 type EventsFilterSheetProps = {
@@ -41,7 +35,7 @@ function FilterChip({ label, active, onPress }: { label: string; active: boolean
   );
 }
 
-const toggleItem = <T extends string,>(items: T[], item: T): T[] => {
+const toggleItem = <T extends string>(items: T[], item: T): T[] => {
   if (items.includes(item)) {
     return items.filter((value) => value !== item);
   }
@@ -52,25 +46,22 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
   const selectedPreviewItems = useMemo(() => {
     const items: Array<{ key: string; label: string }> = [];
     const dateLabel = DATE_FILTERS.find((item) => item.value === filters.date)?.label;
-    if (dateLabel && filters.date) items.push({ key: `date:${filters.date}`, label: dateLabel });
-    if (filters.price !== "any") {
-      items.push({ key: `price:${filters.price}`, label: PRICE_FILTERS.find((item) => item.value === filters.price)?.label ?? "" });
+    if (dateLabel && filters.date) {
+      items.push({ key: `date:${filters.date}`, label: dateLabel });
     }
-    if (filters.community !== "all_communities") items.push({ key: `community:${filters.community}`, label: "My community only" });
-    if (filters.distance !== "anywhere_city") {
+    if (filters.price !== "any") {
       items.push({
-        key: `distance:${filters.distance}`,
-        label: DISTANCE_FILTERS.find((item) => item.value === filters.distance)?.label ?? "",
+        key: `price:${filters.price}`,
+        label: PRICE_FILTERS.find((item) => item.value === filters.price)?.label ?? "",
       });
     }
+    if (filters.community !== "all_communities") {
+      items.push({ key: `community:${filters.community}`, label: "Topluluğum" });
+    }
     items.push(
-      ...filters.eventTypes.map((value) => ({ key: `eventType:${value}`, label: EVENT_TYPE_FILTERS.find((item) => item.value === value)?.label ?? "" })),
-    );
-    items.push(...filters.vibe.map((value) => ({ key: `vibe:${value}`, label: VIBE_FILTERS.find((item) => item.value === value)?.label ?? "" })));
-    items.push(
-      ...filters.attendance.map((value) => ({
-        key: `attendance:${value}`,
-        label: ATTENDANCE_FILTERS.find((item) => item.value === value)?.label ?? "",
+      ...filters.eventTypes.map((value) => ({
+        key: `eventType:${value}`,
+        label: EVENT_TYPE_FILTERS.find((item) => item.value === value)?.label ?? "",
       })),
     );
     return items.filter((item) => item.label);
@@ -79,21 +70,23 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
   const setDate = (value: DateFilterOption) => onChange({ ...filters, date: filters.date === value ? null : value });
   const setPrice = (value: PriceFilterOption) => onChange({ ...filters, price: value });
   const setCommunity = (value: CommunityFilterOption) => onChange({ ...filters, community: value });
-  const setDistance = (value: DistanceFilterOption) => onChange({ ...filters, distance: value });
-  const toggleType = (value: EventTypeFilterOption) => onChange({ ...filters, eventTypes: toggleItem(filters.eventTypes, value) });
-  const toggleVibe = (value: VibeFilterOption) => onChange({ ...filters, vibe: toggleItem(filters.vibe, value) });
-  const toggleAttendance = (value: AttendanceFilterOption) =>
-    onChange({ ...filters, attendance: toggleItem(filters.attendance, value) });
+  const toggleType = (value: EventTypeFilterOption) =>
+    onChange({ ...filters, eventTypes: toggleItem(filters.eventTypes, value) });
+
   const removeSelectedItem = (key: string) => {
     const [group, value] = key.split(":");
-    if (!value) return;
-    if (group === "date") onChange({ ...filters, date: null });
-    else if (group === "price") onChange({ ...filters, price: "any" });
-    else if (group === "community") onChange({ ...filters, community: "all_communities" });
-    else if (group === "distance") onChange({ ...filters, distance: "anywhere_city" });
-    else if (group === "eventType") onChange({ ...filters, eventTypes: filters.eventTypes.filter((item) => item !== value) });
-    else if (group === "vibe") onChange({ ...filters, vibe: filters.vibe.filter((item) => item !== value) });
-    else if (group === "attendance") onChange({ ...filters, attendance: filters.attendance.filter((item) => item !== value) });
+    if (!value) {
+      return;
+    }
+    if (group === "date") {
+      onChange({ ...filters, date: null });
+    } else if (group === "price") {
+      onChange({ ...filters, price: "any" });
+    } else if (group === "community") {
+      onChange({ ...filters, community: "all_communities" });
+    } else if (group === "eventType") {
+      onChange({ ...filters, eventTypes: filters.eventTypes.filter((item) => item !== value) });
+    }
   };
 
   return (
@@ -106,7 +99,7 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
           <View style={styles.header}>
             <View style={styles.headerSpacer} />
             <AppText style={styles.title} variant="sectionTitle">
-              Filters
+              Filtreler
             </AppText>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons color={theme.colors.textPrimary} name="close" size={20} />
@@ -129,7 +122,7 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.section}>
               <AppText style={styles.sectionTitle} variant="label">
-                Date
+                Tarih
               </AppText>
               <View style={styles.chipWrap}>
                 {DATE_FILTERS.map((item) => (
@@ -140,7 +133,7 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
 
             <View style={styles.section}>
               <AppText style={styles.sectionTitle} variant="label">
-                Price
+                Fiyat
               </AppText>
               <View style={styles.chipWrap}>
                 {PRICE_FILTERS.map((item) => (
@@ -151,7 +144,7 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
 
             <View style={styles.section}>
               <AppText style={styles.sectionTitle} variant="label">
-                Event type
+                Etkinlik Türü
               </AppText>
               <View style={styles.chipWrap}>
                 {EVENT_TYPE_FILTERS.map((item) => (
@@ -167,7 +160,7 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
 
             <View style={styles.section}>
               <AppText style={styles.sectionTitle} variant="label">
-                Community
+                Topluluk
               </AppText>
               <View style={styles.chipWrap}>
                 {COMMUNITY_FILTERS.map((item) => (
@@ -180,60 +173,17 @@ export function EventsFilterSheet({ visible, filters, onChange, onClose, onClear
                 ))}
               </View>
             </View>
-
-            <View style={styles.section}>
-              <AppText style={styles.sectionTitle} variant="label">
-                Distance
-              </AppText>
-              <View style={styles.chipWrap}>
-                {DISTANCE_FILTERS.map((item) => (
-                  <FilterChip
-                    active={filters.distance === item.value}
-                    key={item.value}
-                    label={item.label}
-                    onPress={() => setDistance(item.value)}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <AppText style={styles.sectionTitle} variant="label">
-                Vibe
-              </AppText>
-              <View style={styles.chipWrap}>
-                {VIBE_FILTERS.map((item) => (
-                  <FilterChip active={filters.vibe.includes(item.value)} key={item.value} label={item.label} onPress={() => toggleVibe(item.value)} />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <AppText style={styles.sectionTitle} variant="label">
-                Attendance
-              </AppText>
-              <View style={styles.chipWrap}>
-                {ATTENDANCE_FILTERS.map((item) => (
-                  <FilterChip
-                    active={filters.attendance.includes(item.value)}
-                    key={item.value}
-                    label={item.label}
-                    onPress={() => toggleAttendance(item.value)}
-                  />
-                ))}
-              </View>
-            </View>
           </ScrollView>
 
           <View style={styles.footer}>
             <Pressable onPress={onClearAll} style={styles.clearButton}>
               <AppText style={styles.clearText} variant="label">
-                Clear all
+                Temizle
               </AppText>
             </Pressable>
             <Pressable onPress={onApply} style={styles.applyButton}>
               <AppText style={styles.applyText} variant="label">
-                Show 24 events
+                Uygula
               </AppText>
             </Pressable>
           </View>
@@ -257,7 +207,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     maxHeight: "88%",
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
   },
   handle: {
@@ -272,7 +222,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.xs,
   },
   headerSpacer: {
     width: 34,
@@ -293,15 +242,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     gap: theme.spacing.xl,
-    paddingVertical: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.xs,
+    paddingBottom: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
   },
   selectedPreviewRow: {
     alignItems: "center",
     gap: theme.spacing.xs,
-    paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
-    paddingHorizontal: 2,
+    paddingTop: theme.spacing.md,
   },
   selectedPreviewChip: {
     alignItems: "center",
@@ -321,25 +269,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   section: {
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   sectionTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
   },
   chipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: theme.spacing.xs,
+    gap: theme.spacing.sm,
   },
   chip: {
     backgroundColor: "#FFFFFF",
     borderColor: "#E5E7EB",
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 9,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 10,
   },
   chipActive: {
     backgroundColor: "#111827",
@@ -357,10 +305,9 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5E7EB",
     borderTopWidth: 1,
     flexDirection: "row",
-    gap: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.xs,
-    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
   },
   clearButton: {
     alignItems: "center",
@@ -370,7 +317,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
     justifyContent: "center",
-    minHeight: 42,
+    minHeight: 48,
   },
   clearText: {
     color: theme.colors.textPrimary,
@@ -382,10 +329,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flex: 1.2,
     justifyContent: "center",
-    minHeight: 42,
+    minHeight: 48,
   },
   applyText: {
     color: "#FFFFFF",
     fontSize: 15,
+    fontWeight: "600",
   },
 });

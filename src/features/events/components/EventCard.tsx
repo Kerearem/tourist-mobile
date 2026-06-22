@@ -7,6 +7,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { theme } from "../../../constants/theme";
 import type { EventItem } from "../types";
+import { getEventTypeLabel } from "../constants/eventTypes";
 
 type EventCardProps = {
   event: EventItem;
@@ -19,10 +20,10 @@ const getCoverUri = (event: EventItem) => {
   if (event.coverImageUrl) {
     return event.coverImageUrl;
   }
-  if (event.type === "social") {
+  if (event.type === "food") {
     return "https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1400&q=80";
   }
-  if (event.type === "community") {
+  if (event.type === "outdoor") {
     return "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&q=80";
   }
   return "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80";
@@ -47,23 +48,16 @@ const formatDateBadge = (startsAt: string) => {
   };
 };
 
-const typeLabel = (event: EventItem) => {
-  if (event.type === "community") return "Networking";
-  if (event.type === "help") return "Meetup";
-  if (event.type === "social") return "Social";
-  return "Outdoors";
-};
+const typeLabel = (event: EventItem) => getEventTypeLabel(event.type);
 
 const priceLabel = (event: EventItem) => {
-  if (event.type === "community" || event.visibility === "private") return "€10";
-  return "Free";
+  if (event.metadata?.isPaid === true) {
+    return "Ücretli";
+  }
+  return "Ücretsiz";
 };
 
-const ratingLabel = (event: EventItem) => {
-  if (event.type === "community") return "4.9";
-  if (event.type === "social") return "4.8";
-  return "4.7";
-};
+const ratingLabel = (_event: EventItem) => "4.8";
 
 export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJoin, onPress }: EventCardProps) {
   const dateBadge = formatDateBadge(event.startsAt);
@@ -132,7 +126,7 @@ export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJ
 
           <View style={styles.footer}>
             <AppText style={styles.priceText} variant="label">
-              {priceLabel(event) === "Free" ? "Free · no ticket required" : `${priceLabel(event)} · per person`}
+              {priceLabel(event) === "Ücretsiz" ? "Ücretsiz · bilet gerekmez" : `${priceLabel(event)} · kişi başı`}
             </AppText>
             <Badge label={priceLabel(event)} />
           </View>

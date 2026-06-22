@@ -1,4 +1,4 @@
-export type EventType = "social" | "community" | "help" | "other";
+export type { EventType } from "../constants/eventTypes";
 export type EventVisibility = "city" | "country" | "private";
 export type EventAttendanceStatus = "none" | "pending" | "approved";
 
@@ -14,7 +14,7 @@ export type EventItem = {
   description: string;
   coverImageUrl?: string;
   host: EventHost;
-  type: EventType;
+  type: import("../constants/eventTypes").EventType;
   visibility: EventVisibility;
   city: string;
   countryCode: string;
@@ -45,7 +45,10 @@ export type CreateEventInput = {
   endsAt: string;
   coverImageUrl?: string;
   requiresApproval?: boolean;
-  type?: EventType;
+  type: import("../constants/eventTypes").EventType;
+  isPaid?: boolean;
+  price?: number;
+  priceCurrency?: "EUR" | "USD" | "TRY" | "GBP";
   visibility?: EventVisibility;
   capacity?: number;
   timezone?: string;
@@ -55,8 +58,11 @@ export type CreateEventInput = {
 export type ListEventsQuery = {
   city?: string;
   countryCode?: string;
-  type?: EventType;
   scope?: "community" | "global";
+  price?: "any" | "free" | "paid";
+  eventTypes?: import("../constants/eventTypes").EventType[];
+  dateFilter?: string;
+  search?: string;
   page?: number;
   limit?: number;
 };

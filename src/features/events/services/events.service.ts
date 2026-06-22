@@ -22,8 +22,11 @@ const buildListQuery = (query?: ListEventsQuery) => {
   const params = new URLSearchParams();
   if (query.city) params.set("city", query.city);
   if (query.countryCode) params.set("countryCode", query.countryCode);
-  if (query.type) params.set("type", query.type);
   if (query.scope) params.set("scope", query.scope);
+  if (query.price && query.price !== "any") params.set("price", query.price);
+  if (query.eventTypes?.length) params.set("eventType", query.eventTypes.join(","));
+  if (query.dateFilter) params.set("dateFilter", query.dateFilter);
+  if (query.search) params.set("search", query.search);
   if (query.page) params.set("page", String(query.page));
   if (query.limit) params.set("limit", String(query.limit));
 
@@ -62,7 +65,7 @@ const mockEvents: EventItem[] = [
       id: "host_tourist_team",
       displayName: "Tourist Community",
     },
-    type: "community",
+    type: "newcomer",
     visibility: "city",
     city: "Berlin",
     countryCode: "DE",
