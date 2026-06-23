@@ -6,7 +6,9 @@ import { CreateEventScreen } from "../../features/events/screens/CreateEventScre
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
+import { AccountManagementScreen } from "../../features/profile/screens/AccountManagementScreen";
 import { BlockedUsersScreen } from "../../features/profile/screens/BlockedUsersScreen";
+import { DeleteAccountScreen } from "../../features/profile/screens/DeleteAccountScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ReportProblemScreen } from "../../features/profile/screens/ReportProblemScreen";
 import { SettingsScreen } from "../../features/profile/screens/SettingsScreen";
@@ -19,6 +21,8 @@ export function ProfileStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={ProfileScreen} name={ProfileRoutes.ProfileScreen} />
       <Stack.Screen component={SettingsScreen} name={ProfileRoutes.SettingsScreen} />
+      <Stack.Screen component={AccountManagementScreen} name={ProfileRoutes.AccountManagementScreen} />
+      <Stack.Screen component={DeleteAccountScreen} name={ProfileRoutes.DeleteAccountScreen} />
       <Stack.Screen component={BlockedUsersScreen} name={ProfileRoutes.BlockedUsersScreen} />
       <Stack.Screen component={ReportProblemScreen} name={ProfileRoutes.ReportProblemScreen} />
       <Stack.Screen component={CreateEventScreen} name={ProfileRoutes.CreateEventScreen} />

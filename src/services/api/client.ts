@@ -5,11 +5,13 @@ import type { ApiRequestOptions, ApiResponseEnvelope } from "./types";
 
 export class ApiRequestError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -27,12 +29,15 @@ const AUTH_PUBLIC_PATHS = new Set([
   API_ENDPOINTS.auth.signUp,
   API_ENDPOINTS.auth.signOut,
   API_ENDPOINTS.auth.refresh,
+  API_ENDPOINTS.auth.restoreAccount,
+  API_ENDPOINTS.auth.restoreAccountRequest,
+  API_ENDPOINTS.auth.restoreAccountVerify,
 ]);
 
 let refreshInFlight: Promise<string | null> | null = null;
 
 const parseErrorMessage = (payload: unknown, fallback: string) => {
-  const errorPayload = payload as { message?: string | string[] };
+  const errorPayload = payload as { message?: string | string[]; code?: string };
   if (Array.isArray(errorPayload.message)) {
     return errorPayload.message.join(", ");
   }
@@ -40,6 +45,11 @@ const parseErrorMessage = (payload: unknown, fallback: string) => {
     return errorPayload.message;
   }
   return fallback;
+};
+
+const parseErrorCode = (payload: unknown) => {
+  const errorPayload = payload as { code?: string };
+  return typeof errorPayload.code === "string" ? errorPayload.code : undefined;
 };
 
 const performRefresh = async (): Promise<string | null> => {
@@ -141,22 +151,27 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       if (retry.response.status === 401) {
         await clearAuthState();
         notifyAuthSessionExpired();
-        throw new ApiRequestError(parseErrorMessage(retry.payload, "Unauthorized"), 401);
+        throw new ApiRequestError(parseErrorMessage(retry.payload, "Unauthorized"), 401, parseErrorCode(retry.payload));
       }
 
       throw new ApiRequestError(
         parseErrorMessage(retry.payload, "API request failed."),
         retry.response.status,
+        parseErrorCode(retry.payload),
       );
     }
 
     await clearAuthState();
     notifyAuthSessionExpired();
-    throw new ApiRequestError(parseErrorMessage(payload, "Unauthorized"), 401);
+    throw new ApiRequestError(parseErrorMessage(payload, "Unauthorized"), 401, parseErrorCode(payload));
   }
 
   if (!response.ok) {
-    throw new ApiRequestError(parseErrorMessage(payload, "API request failed."), response.status);
+    throw new ApiRequestError(
+      parseErrorMessage(payload, "API request failed."),
+      response.status,
+      parseErrorCode(payload),
+    );
   }
 
   return (payload as ApiResponseEnvelope<T>).data;

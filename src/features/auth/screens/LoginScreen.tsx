@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -12,6 +12,7 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { useLanguage } from "../../../hooks/useLanguage";
 import type { AuthStackParamList } from "../../../navigation/types";
+import { AccountPendingDeletionError } from "../services/auth.service";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "LoginScreen">;
 
@@ -25,7 +26,7 @@ const LANGUAGE_OPTIONS: Array<{ code: "tr" | "fr" | "en" | "de" | "es" | "it"; l
 ];
 
 export function LoginScreen({ navigation }: Props) {
-  const { signIn } = useAuth();
+  const { signIn, requestRestoreAccount, verifyRestoreAccount } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +34,43 @@ export function LoginScreen({ navigation }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ identifier?: string; password?: string; form?: string }>({});
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<{ identifier: string; password: string } | null>(null);
+  const [restoreStep, setRestoreStep] = useState<"confirm" | "verify">("confirm");
+  const [restoreEmail, setRestoreEmail] = useState("");
+  const [restoreCode, setRestoreCode] = useState("");
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreExpiresInSec, setRestoreExpiresInSec] = useState(600);
+  const [restoreResendInSec, setRestoreResendInSec] = useState(30);
+
+  useEffect(() => {
+    if (restoreStep !== "verify" || !pendingRestore) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setRestoreExpiresInSec((prev) => Math.max(0, prev - 1));
+      setRestoreResendInSec((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [pendingRestore, restoreStep]);
+
+  const restoreExpireLabel = useMemo(() => {
+    const min = Math.floor(restoreExpiresInSec / 60);
+    const sec = restoreExpiresInSec % 60;
+    return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }, [restoreExpiresInSec]);
+
+  const closeRestoreModal = () => {
+    setPendingRestore(null);
+    setRestoreStep("confirm");
+    setRestoreEmail("");
+    setRestoreCode("");
+    setRestoreError(null);
+    setRestoreExpiresInSec(600);
+    setRestoreResendInSec(30);
+  };
 
   const onSubmit = async () => {
     const cleanIdentifier = identifier.trim();
@@ -66,10 +104,92 @@ export function LoginScreen({ navigation }: Props) {
         password,
       });
     } catch (err) {
+      if (err instanceof AccountPendingDeletionError) {
+        setPendingRestore({ identifier: normalizedIdentifier, password });
+        return;
+      }
       const message = err instanceof Error ? err.message : "Sign in failed.";
       setErrors({ form: message || "Invalid credentials. Please try again." });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const onRequestRestore = async () => {
+    if (!pendingRestore) {
+      return;
+    }
+
+    setIsRestoring(true);
+    setRestoreError(null);
+    try {
+      const result = await requestRestoreAccount(pendingRestore);
+      setRestoreEmail(result.email);
+      setRestoreStep("verify");
+      setRestoreCode("");
+      setRestoreExpiresInSec(600);
+      setRestoreResendInSec(30);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Doğrulama kodu gönderilemedi.";
+      setRestoreError(message);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const onVerifyRestore = async () => {
+    if (!pendingRestore) {
+      return;
+    }
+
+    const cleanCode = restoreCode.replace(/\D+/g, "").slice(0, 6);
+    if (cleanCode.length !== 6) {
+      setRestoreError("6 haneli doğrulama kodunu gir.");
+      return;
+    }
+
+    if (restoreExpiresInSec === 0) {
+      setRestoreError("Kodun süresi doldu. Yeniden kod gönder.");
+      return;
+    }
+
+    setIsRestoring(true);
+    setRestoreError(null);
+    try {
+      await verifyRestoreAccount({
+        ...pendingRestore,
+        code: cleanCode,
+      });
+      closeRestoreModal();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Hesap geri getirilemedi.";
+      setRestoreError(message);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const onResendRestoreCode = async () => {
+    if (!pendingRestore || restoreResendInSec > 0 || isRestoring) {
+      return;
+    }
+
+    setIsRestoring(true);
+    setRestoreError(null);
+    try {
+      await requestRestoreAccount(pendingRestore);
+      setRestoreCode("");
+      setRestoreExpiresInSec(600);
+      setRestoreResendInSec(30);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Kod tekrar gönderilemedi.";
+      if (message.toLowerCase().includes("once per minute") || message.toLowerCase().includes("too many")) {
+        setRestoreError("Çok sık denediniz, biraz bekleyin.");
+      } else {
+        setRestoreError(message);
+      }
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -145,6 +265,120 @@ export function LoginScreen({ navigation }: Props) {
           </AppText>
         </Pressable>
       </View>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={closeRestoreModal}
+        transparent
+        visible={pendingRestore !== null}
+      >
+        <View style={styles.restoreBackdrop}>
+          <View style={styles.restoreCard}>
+            {restoreStep === "confirm" ? (
+              <>
+                <AppText style={styles.restoreTitle} variant="sectionTitle">
+                  Hesabın silinmek üzere
+                </AppText>
+                <AppText style={styles.restoreMessage} variant="bodyMuted">
+                  30 gün içinde geri getirebilirsin. Hesabını yeniden açmak ister misin?
+                </AppText>
+                {restoreError ? (
+                  <AppText style={styles.restoreError} variant="caption">
+                    {restoreError}
+                  </AppText>
+                ) : null}
+                <View style={styles.restoreActions}>
+                  <Pressable disabled={isRestoring} onPress={closeRestoreModal} style={styles.restoreCancelButton}>
+                    <AppText style={styles.restoreCancelText} variant="label">
+                      Hayır
+                    </AppText>
+                  </Pressable>
+                  <Pressable
+                    disabled={isRestoring}
+                    onPress={() => void onRequestRestore()}
+                    style={styles.restoreConfirmButton}
+                  >
+                    <AppText style={styles.restoreConfirmText} variant="label">
+                      {isRestoring ? "Gönderiliyor..." : "Evet, geri getir"}
+                    </AppText>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <AppText style={styles.restoreTitle} variant="sectionTitle">
+                  E-posta doğrulama
+                </AppText>
+                <AppText style={styles.restoreMessage} variant="bodyMuted">
+                  Hesabını geri getirmek için {restoreEmail || "e-posta adresine"} kod gönderdik.
+                </AppText>
+                <AppInput
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  onChangeText={(value) => {
+                    setRestoreCode(value.replace(/\D+/g, "").slice(0, 6));
+                    if (restoreError) {
+                      setRestoreError(null);
+                    }
+                  }}
+                  placeholder="6 haneli kod"
+                  value={restoreCode}
+                />
+                <View style={styles.restoreMetaRow}>
+                  <AppText muted variant="caption">
+                    Kod geçerliliği: {restoreExpireLabel}
+                  </AppText>
+                  <AppButton
+                    containerStyle={[
+                      styles.restoreResendButton,
+                      restoreResendInSec > 0 && styles.restoreResendButtonDisabled,
+                    ]}
+                    disabled={restoreResendInSec > 0 || isRestoring}
+                    label={
+                      restoreResendInSec > 0
+                        ? `${restoreResendInSec} sn sonra tekrar gönder`
+                        : isRestoring
+                          ? "Gönderiliyor..."
+                          : "Kodu tekrar gönder"
+                    }
+                    onPress={() => void onResendRestoreCode()}
+                    variant="secondary"
+                  />
+                </View>
+                {restoreError ? (
+                  <AppText style={styles.restoreError} variant="caption">
+                    {restoreError}
+                  </AppText>
+                ) : null}
+                <View style={styles.restoreActions}>
+                  <Pressable
+                    disabled={isRestoring}
+                    onPress={() => {
+                      setRestoreStep("confirm");
+                      setRestoreCode("");
+                      setRestoreError(null);
+                    }}
+                    style={styles.restoreCancelButton}
+                  >
+                    <AppText style={styles.restoreCancelText} variant="label">
+                      Geri
+                    </AppText>
+                  </Pressable>
+                  <Pressable
+                    disabled={isRestoring}
+                    onPress={() => void onVerifyRestore()}
+                    style={styles.restoreConfirmButton}
+                  >
+                    <AppText style={styles.restoreConfirmText} variant="label">
+                      {isRestoring ? "Doğrulanıyor..." : "Doğrula"}
+                    </AppText>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -232,5 +466,72 @@ const styles = StyleSheet.create({
   link: {
     marginTop: 12,
     textAlign: "center",
+  },
+  restoreBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.45)",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+  },
+  restoreCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    gap: theme.spacing.md,
+    maxWidth: 360,
+    padding: theme.spacing.lg,
+    width: "100%",
+  },
+  restoreTitle: {
+    textAlign: "center",
+  },
+  restoreMessage: {
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  restoreActions: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  restoreCancelButton: {
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  restoreCancelText: {
+    color: theme.colors.textPrimary,
+  },
+  restoreConfirmButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  restoreConfirmText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  restoreError: {
+    color: theme.colors.danger,
+    textAlign: "center",
+  },
+  restoreMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  restoreResendButton: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  restoreResendButtonDisabled: {
+    opacity: 0.7,
   },
 });

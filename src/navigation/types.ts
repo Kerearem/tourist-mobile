@@ -61,8 +61,10 @@ export type EventsStackParamList = {
 export type ProfileStackParamList = {
   ProfileScreen: undefined;
   SettingsScreen: undefined;
+  AccountManagementScreen: undefined;
   BlockedUsersScreen: undefined;
   ReportProblemScreen: undefined;
+  DeleteAccountScreen: undefined;
   CreateEventScreen: undefined;
   MyOrganizerEventsScreen: undefined;
   OrganizerApplicationScreen: undefined;

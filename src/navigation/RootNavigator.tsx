@@ -10,21 +10,22 @@ import { MainTabs } from "./tabs/MainTabs";
 export function RootNavigator() {
   const { gateStatus } = useAuth();
 
-  // Tourist mobile handles end-user flows only.
-  // Admin dashboard is planned as a separate web client.
   if (gateStatus === "booting") {
     return <FullScreenLoader label="Booting Tourist..." />;
   }
 
+  const showMainApp = gateStatus === "ready";
+  const showOnboarding = gateStatus === "needs_onboarding";
+  const showAuth =
+    gateStatus === "signed_out" ||
+    gateStatus === "needs_phone_verification" ||
+    gateStatus === "needs_email_verification";
+
   return (
-    <NavigationContainer>
-      {gateStatus === "signed_out" || gateStatus === "needs_phone_verification" || gateStatus === "needs_email_verification" ? (
-        <AuthStack />
-      ) : null}
-
-      {gateStatus === "needs_onboarding" ? <OnboardingStack /> : null}
-
-      {gateStatus === "ready" ? <MainTabs /> : null}
+    <NavigationContainer key={showMainApp ? "main" : showOnboarding ? "onboarding" : "auth"}>
+      {showMainApp ? <MainTabs /> : null}
+      {showOnboarding ? <OnboardingStack /> : null}
+      {showAuth || (!showMainApp && !showOnboarding) ? <AuthStack /> : null}
     </NavigationContainer>
   );
 }

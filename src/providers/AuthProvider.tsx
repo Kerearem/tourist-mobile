@@ -6,9 +6,11 @@ import {
   hydrateAuthState,
   resendEmailCode as resendEmailCodeService,
   resendPhoneCode as resendPhoneCodeService,
+  requestRestoreAccount as requestRestoreAccountService,
   signInWithEmail,
   signOutSession,
   signUpWithEmail,
+  verifyRestoreAccount as verifyRestoreAccountService,
 } from "../features/auth/services/auth.service";
 import { completeOnboarding as completeOnboardingService } from "../features/onboarding/services/onboarding.service";
 import type { AuthGateStatus, AuthSession } from "../models/auth";
@@ -34,7 +36,9 @@ type AuthContextValue = {
     birthDate: string;
     consentAccepted: boolean;
   }) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (options?: { skipRemote?: boolean }) => Promise<void>;
+  requestRestoreAccount: (payload: { identifier: string; password: string }) => Promise<{ email: string }>;
+  verifyRestoreAccount: (payload: { identifier: string; password: string; code: string }) => Promise<void>;
   completePhoneVerification: (code: string) => Promise<void>;
   completeEmailVerification: (code: string) => Promise<void>;
   resendPhoneCode: () => Promise<void>;
@@ -158,11 +162,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const signOut = useCallback(async () => {
-    await signOutSession();
+  const signOut = useCallback(async (options?: { skipRemote?: boolean }) => {
+    await signOutSession(options);
     setSession(null);
     setUser(null);
   }, []);
+
+  const requestRestoreAccount = useCallback(async ({ identifier, password }: { identifier: string; password: string }) => {
+    return requestRestoreAccountService({ identifier, password });
+  }, []);
+
+  const verifyRestoreAccount = useCallback(
+    async ({ identifier, password, code }: { identifier: string; password: string; code: string }) => {
+      const authState = await verifyRestoreAccountService({ identifier, password, code });
+      setSession(authState.session);
+      setUser(authState.user);
+    },
+    [],
+  );
 
   const completePhoneVerification = useCallback(
     async (code: string) => {
@@ -314,6 +331,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      requestRestoreAccount,
+      verifyRestoreAccount,
       completePhoneVerification,
       completeEmailVerification,
       resendPhoneCode,
@@ -330,6 +349,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      requestRestoreAccount,
+      verifyRestoreAccount,
       completePhoneVerification,
       completeEmailVerification,
       resendPhoneCode,

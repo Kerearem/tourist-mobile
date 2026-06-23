@@ -4,6 +4,9 @@ export const API_ENDPOINTS = {
     signUp: "/auth/sign-up",
     signOut: "/auth/sign-out",
     refresh: "/auth/refresh",
+    restoreAccount: "/auth/restore-account",
+    restoreAccountRequest: "/auth/restore-account/request",
+    restoreAccountVerify: "/auth/restore-account/verify",
     me: "/auth/me",
     verifyPhone: "/auth/verify-phone",
     verifyEmail: "/auth/verify-email",
@@ -49,6 +52,7 @@ export const API_ENDPOINTS = {
   },
   profile: {
     updateAvatar: "/profile/avatar",
+    deleteAccount: "/profile/delete-account",
   },
   users: {
     search: "/users/search",

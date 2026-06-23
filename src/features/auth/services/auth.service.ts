@@ -10,7 +10,6 @@ import {
   saveAuthState,
   saveCanonicalUser,
 } from "../../../services/api/authSession";
-import { getSecureItem, setSecureItem } from "../../../services/storage/secureStorage";
 import type { SessionTokens } from "../../../services/api/types";
 
 export type AuthPayload = {
@@ -18,6 +17,20 @@ export type AuthPayload = {
   user: AppUser;
   tokens: SessionTokens;
 };
+
+export const ACCOUNT_PENDING_DELETION_CODE = "ACCOUNT_PENDING_DELETION";
+
+export class AccountPendingDeletionError extends Error {
+  readonly identifier: string;
+  readonly password: string;
+
+  constructor(identifier: string, password: string) {
+    super("Hesabın silinmek üzere. Geri getirmek ister misin?");
+    this.name = "AccountPendingDeletionError";
+    this.identifier = identifier;
+    this.password = password;
+  }
+}
 
 const parseAuthPayload = (payload: AuthPayload): AuthPayload => {
   if (!payload?.user?.id || !payload?.session?.sessionId || !payload?.tokens?.accessToken) {
@@ -258,12 +271,58 @@ export async function signInWithEmail(input: SignInInput): Promise<HydratedAuthS
     throw new Error("Invalid email/username or password.");
   }
 
+  try {
+    const payload = parseAuthPayload(
+      await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signIn, {
+        method: "POST",
+        body: {
+          identifier: input.identifier,
+          password: input.password,
+        },
+      }),
+    );
+
+    return persistAuthPayload(payload);
+  } catch (error) {
+    if (
+      error instanceof ApiRequestError &&
+      error.status === 409 &&
+      error.code === ACCOUNT_PENDING_DELETION_CODE
+    ) {
+      throw new AccountPendingDeletionError(input.identifier, input.password);
+    }
+    throw error;
+  }
+}
+
+export async function requestRestoreAccount(input: SignInInput): Promise<{ email: string }> {
+  if (USE_MOCK_BACKEND) {
+    return { email: "t***@tourist.com" };
+  }
+
+  const result = await apiRequest<{ success: boolean; email: string }>(API_ENDPOINTS.auth.restoreAccountRequest, {
+    method: "POST",
+    body: {
+      identifier: input.identifier,
+      password: input.password,
+    },
+  });
+
+  return { email: result.email };
+}
+
+export async function verifyRestoreAccount(input: SignInInput & { code: string }): Promise<HydratedAuthState> {
+  if (USE_MOCK_BACKEND) {
+    return signInWithEmail(input);
+  }
+
   const payload = parseAuthPayload(
-    await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signIn, {
+    await apiRequest<AuthPayload>(API_ENDPOINTS.auth.restoreAccountVerify, {
       method: "POST",
       body: {
         identifier: input.identifier,
         password: input.password,
+        code: input.code,
       },
     }),
   );
@@ -331,11 +390,11 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
   return state;
 }
 
-export async function signOutSession(): Promise<void> {
+export async function signOutSession(options?: { skipRemote?: boolean }): Promise<void> {
   const state = await loadAuthState();
 
   try {
-    if (!USE_MOCK_BACKEND && state?.tokens.refreshToken) {
+    if (!options?.skipRemote && !USE_MOCK_BACKEND && state?.tokens.refreshToken) {
       await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.signOut, {
         method: "POST",
         body: { refreshToken: state.tokens.refreshToken },
