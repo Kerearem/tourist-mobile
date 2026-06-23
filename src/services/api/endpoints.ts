@@ -49,6 +49,12 @@ export const API_ENDPOINTS = {
   },
   users: {
     search: "/users/search",
+    blocked: "/users/blocked",
+    block: "/users/:userId/block",
+    blockStatus: "/users/:userId/block-status",
+  },
+  complaints: {
+    create: "/complaints",
   },
   organizer: {
     apply: "/organizer/apply",

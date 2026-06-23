@@ -1,10 +1,11 @@
 import React, { useCallback } from "react";
-import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppText } from "../../../components/ui/AppText";
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { ProfileRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
@@ -25,19 +26,20 @@ type SettingsRowProps = {
 type AccountMenuRowProps = {
   title: string;
   subtitle?: string;
+  danger?: boolean;
   onPress?: () => void;
 };
 
 function SettingsRow({ icon, title, subtitle, rightText, danger, onPress }: SettingsRowProps) {
   return (
-    <Pressable onPress={onPress} style={styles.row}>
+    <Pressable disabled={!onPress} onPress={onPress} style={styles.row}>
       <Ionicons color={danger ? theme.colors.danger : theme.colors.textPrimary} name={icon} size={24} />
       <View style={styles.rowCenter}>
         <AppText style={[styles.rowTitle, danger && styles.dangerText]} variant="body">
           {title}
         </AppText>
         {subtitle ? (
-          <AppText style={styles.rowSubtitle} numberOfLines={2} variant="caption">
+          <AppText numberOfLines={2} style={styles.rowSubtitle} variant="caption">
             {subtitle}
           </AppText>
         ) : null}
@@ -46,27 +48,29 @@ function SettingsRow({ icon, title, subtitle, rightText, danger, onPress }: Sett
         <AppText style={styles.rightText} variant="caption">
           {rightText}
         </AppText>
-      ) : (
+      ) : onPress ? (
         <Ionicons color={theme.colors.muted} name="chevron-forward" size={20} />
-      )}
+      ) : null}
     </Pressable>
   );
 }
 
-function AccountMenuRow({ title, subtitle, onPress }: AccountMenuRowProps) {
+function AccountMenuRow({ title, subtitle, danger, onPress }: AccountMenuRowProps) {
   return (
-    <Pressable onPress={onPress} style={styles.accountMenuRow}>
+    <Pressable disabled={!onPress} onPress={onPress} style={styles.accountMenuRow}>
       <View style={styles.accountMenuCenter}>
-        <AppText style={styles.accountMenuTitle} variant="body">
+        <AppText style={[styles.accountMenuTitle, danger && styles.dangerText]} variant="body">
           {title}
         </AppText>
         {subtitle ? (
-          <AppText style={styles.accountMenuSubtitle} variant="caption">
+          <AppText style={[styles.accountMenuSubtitle, danger && styles.dangerSubtitle]} variant="caption">
             {subtitle}
           </AppText>
         ) : null}
       </View>
-      <Ionicons color={theme.colors.muted} name="chevron-forward" size={22} />
+      {onPress ? (
+        <Ionicons color={danger ? theme.colors.danger : theme.colors.muted} name="chevron-forward" size={22} />
+      ) : null}
     </Pressable>
   );
 }
@@ -80,7 +84,7 @@ type AccountInfoRowProps = {
 
 function AccountInfoRow({ title, subtitle, rightText, warning }: AccountInfoRowProps) {
   return (
-    <Pressable style={styles.accountMenuRow}>
+    <View style={styles.accountMenuRow}>
       <View style={styles.accountMenuCenter}>
         <AppText style={styles.accountMenuTitle} variant="body">
           {title}
@@ -102,9 +106,36 @@ function AccountInfoRow({ title, subtitle, rightText, warning }: AccountInfoRowP
             {rightText}
           </AppText>
         ) : null}
-        <Ionicons color={theme.colors.muted} name="chevron-forward" size={22} />
       </View>
-    </Pressable>
+    </View>
+  );
+}
+
+type PlaceholderSheetProps = {
+  visible: boolean;
+  title: string;
+  description: string;
+  onClose: () => void;
+};
+
+function PlaceholderSheet({ visible, title, description, onClose }: PlaceholderSheetProps) {
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+      <SafeAreaView style={styles.sheetSafeArea}>
+        <View style={styles.sheetTopBar}>
+          <Pressable onPress={onClose} style={styles.backButton}>
+            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={26} />
+          </Pressable>
+          <AppText style={styles.topTitle} variant="label">
+            {title}
+          </AppText>
+          <View style={styles.topSpacer} />
+        </View>
+        <View style={styles.sheetBody}>
+          <EmptyState description={description} title="Yakında" />
+        </View>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
@@ -114,6 +145,10 @@ export function SettingsScreen({ navigation }: Props) {
   const [accountManagementView, setAccountManagementView] = React.useState<"management" | "info">("management");
   const [hasActiveEvent, setHasActiveEvent] = React.useState(false);
   const [activeEventTitle, setActiveEventTitle] = React.useState<string | null>(null);
+  const [isLikesOpen, setIsLikesOpen] = React.useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+  const [isHelpOpen, setIsHelpOpen] = React.useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = React.useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -133,6 +168,10 @@ export function SettingsScreen({ navigation }: Props) {
 
   const organizerStatus = user?.organizerStatus ?? "not_applied";
 
+  const onConfirmDeleteAccount = () => {
+    setIsDeleteAccountOpen(false);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
@@ -141,14 +180,9 @@ export function SettingsScreen({ navigation }: Props) {
             <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={26} />
           </Pressable>
           <AppText style={styles.topTitle} variant="label">
-            Ayarlar ve hareketler
+            Ayarlar
           </AppText>
           <View style={styles.topSpacer} />
-        </View>
-
-        <View style={styles.searchWrap}>
-          <Ionicons color={theme.colors.muted} name="search" size={20} />
-          <TextInput placeholder="Ara" placeholderTextColor={theme.colors.muted} style={styles.searchInput} />
         </View>
 
         <AppText style={styles.sectionTitle} variant="label">
@@ -160,7 +194,7 @@ export function SettingsScreen({ navigation }: Props) {
             setAccountManagementView("management");
             setIsAccountManagementOpen(true);
           }}
-          subtitle="Şifre, güvenlik, kişisel detaylar, bağlı deneyimler, reklam tercihleri"
+          subtitle="Şifre, güvenlik ve kişisel bilgiler"
           title="Hesap Yönetimi"
         />
 
@@ -216,38 +250,45 @@ export function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">
-          Tourist'i nasıl kullanıyorsun?
+          Tercihler
         </AppText>
-        <SettingsRow icon="heart-outline" title="Beğenmeler" />
-        <SettingsRow icon="archive-outline" title="Arşiv" />
-        <SettingsRow icon="images-outline" title="Hareketlerin" />
-        <SettingsRow icon="notifications-outline" title="Bildirimler" />
-        <SettingsRow icon="time-outline" title="Zaman yönetimi" />
-
-        <View style={styles.sectionDivider} />
-        <AppText style={styles.sectionTitle} variant="label">
-          İçeriklerini kimler görebilir?
-        </AppText>
-        <SettingsRow icon="lock-closed-outline" rightText="Gizli" title="Hesap gizliliği" />
+        <SettingsRow
+          icon="heart-outline"
+          onPress={() => setIsLikesOpen(true)}
+          subtitle="Snap ve moment beğenilerin"
+          title="Beğenmeler"
+        />
+        <SettingsRow
+          icon="notifications-outline"
+          onPress={() => setIsNotificationsOpen(true)}
+          subtitle="Mesaj, etkinlik ve yardım bildirimleri"
+          title="Bildirimler"
+        />
         <SettingsRow
           icon="ban-outline"
           onPress={() => navigation.navigate(ProfileRoutes.BlockedUsersScreen)}
-          rightText="0"
           title="Engellenenler"
         />
-        <SettingsRow icon="eye-off-outline" title="Hikaye, canlı yayın ve konum" />
 
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">
-          Daha fazla bilgi ve destek
+          Destek
         </AppText>
-        <SettingsRow icon="help-circle-outline" title="Yardım" />
-        <SettingsRow icon="person-outline" title="Hesap Durumu" />
-        <SettingsRow icon="alert-circle-outline" onPress={() => navigation.navigate(ProfileRoutes.ReportProblemScreen)} title="Sorun bildir" />
+        <SettingsRow
+          icon="help-circle-outline"
+          onPress={() => setIsHelpOpen(true)}
+          subtitle="Yardım istekleri ve topluluk desteği"
+          title="Yardım"
+        />
+        <SettingsRow
+          icon="alert-circle-outline"
+          onPress={() => navigation.navigate(ProfileRoutes.ReportProblemScreen)}
+          title="Sorun bildir"
+        />
 
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">
-          Giriş yap
+          Hesap işlemleri
         </AppText>
         <SettingsRow danger icon="log-out-outline" onPress={() => void signOut()} title="Çıkış yap" />
       </ScrollView>
@@ -276,39 +317,94 @@ export function SettingsScreen({ navigation }: Props) {
           {accountManagementView === "management" ? (
             <ScrollView contentContainerStyle={styles.accountContent} showsVerticalScrollIndicator={false}>
               <AccountMenuRow onPress={() => setAccountManagementView("info")} title="Hesap Bilgileri" />
-              <AccountMenuRow title="Şifre" />
+              <AccountMenuRow subtitle="Yakında" title="Şifre" />
+              <AccountMenuRow subtitle="Yakında" title="Doğrulama" />
+              <View style={styles.accountSectionDivider} />
               <AccountMenuRow
-                subtitle="Face ID veya Touch ID ile Tourist'e giriş yapmak için bir geçiş anahtarı oluşturun. Geçiş anahtarı, şifreden daha güvenlidir."
-                title="Geçiş Anahtarı"
+                danger
+                onPress={() => setIsDeleteAccountOpen(true)}
+                subtitle="Hesabını geçici olarak dondurabilir veya kalıcı olarak silebilirsin."
+                title="Hesabı dondur veya sil"
               />
-              <AccountMenuRow title="Doğrulama" />
-              <AccountMenuRow
-                subtitle="İzleyicilerle daha iyi bağlantı kuran pazarlama araçlarına ve özel özelliklere erişmek için işletmenizi doğrulayın."
-                title="Business verification"
-              />
-              <AccountMenuRow
-                subtitle="Kullandığınız tüm Tourist uygulamalarından verilerinizin kopyasını alın."
-                title="Verilerinizi indirin"
-              />
-              <AccountMenuRow title="Hesabı devre dışı bırakın veya silin" />
             </ScrollView>
           ) : (
             <ScrollView contentContainerStyle={styles.accountContent} showsVerticalScrollIndicator={false}>
-              <AccountInfoRow title="Telefon numarası" />
               <AccountInfoRow
-                subtitle="t***l@gmail.com e-posta adresiniz doğrulanmadı."
-                title="E-posta"
-                warning
+                rightText={user?.privateProfile.phoneNumber ? "Kayıtlı" : undefined}
+                subtitle="Telefon numaran profilinde görüntülenir."
+                title="Telefon numarası"
               />
-              <AccountInfoRow rightText="21 Eyl 2002" title="Doğum tarihi" />
               <AccountInfoRow
-                rightText="Türkiye"
-                subtitle="Hesap bölgeniz, ilk başta kaydınızın zamanına ve yerine göre belirlenir."
-                title="Hesap bölgesi"
+                rightText={user?.privateProfile.email ?? undefined}
+                subtitle={
+                  user?.hasEmailVerification
+                    ? "E-posta adresin doğrulandı."
+                    : "E-posta adresin henüz doğrulanmadı."
+                }
+                title="E-posta"
+                warning={!user?.hasEmailVerification}
+              />
+              <AccountInfoRow
+                rightText={user?.privateProfile.birthDate || undefined}
+                title="Doğum tarihi"
+              />
+              <AccountInfoRow
+                rightText={user?.publicProfile.currentCity || undefined}
+                subtitle="Yaşadığın şehir onboarding sırasında belirlenir."
+                title="Şehir"
               />
             </ScrollView>
           )}
         </SafeAreaView>
+      </Modal>
+
+      <PlaceholderSheet
+        description="Snap ve moment beğenilerin burada listelenecek."
+        onClose={() => setIsLikesOpen(false)}
+        title="Beğenmeler"
+        visible={isLikesOpen}
+      />
+
+      <PlaceholderSheet
+        description="Push bildirim tercihleri yakında eklenecek."
+        onClose={() => setIsNotificationsOpen(false)}
+        title="Bildirimler"
+        visible={isNotificationsOpen}
+      />
+
+      <PlaceholderSheet
+        description="Yardım sekmesinden topluluk desteği alabilirsin. Detaylı yardım merkezi yakında."
+        onClose={() => setIsHelpOpen(false)}
+        title="Yardım"
+        visible={isHelpOpen}
+      />
+
+      <Modal animationType="fade" onRequestClose={() => setIsDeleteAccountOpen(false)} transparent visible={isDeleteAccountOpen}>
+        <View style={styles.deleteBackdrop}>
+          <View style={styles.deleteCard}>
+            <AppText style={styles.deleteTitle} variant="sectionTitle">
+              Hesabı dondur veya sil
+            </AppText>
+            <AppText style={styles.deleteMessage} variant="bodyMuted">
+              Hesabını silmek istediğine emin misin? Bu işlem geri alınamaz.
+            </AppText>
+            <View style={styles.deleteActions}>
+              <Pressable onPress={() => setIsDeleteAccountOpen(false)} style={styles.deleteCancelButton}>
+                <AppText style={styles.deleteCancelText} variant="label">
+                  Vazgeç
+                </AppText>
+              </Pressable>
+              <Pressable onPress={onConfirmDeleteAccount} style={styles.deleteConfirmButton}>
+                <AppText style={styles.deleteConfirmText} variant="label">
+                  Sil
+                </AppText>
+              </Pressable>
+            </View>
+            <AppText style={styles.deleteHint} variant="caption">
+              Hesap silme işlemi yakında aktif olacak.
+            </AppText>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -339,27 +435,11 @@ const styles = StyleSheet.create({
   topSpacer: {
     width: 26,
   },
-  searchWrap: {
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.sm,
-    minHeight: 42,
-    paddingHorizontal: theme.spacing.md,
-  },
-  searchInput: {
-    color: theme.colors.textPrimary,
-    flex: 1,
-    ...theme.typography.body,
-  },
   sectionDivider: {
     backgroundColor: "#ECEEF2",
     height: 1,
-    marginTop: theme.spacing.md,
     marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.md,
   },
   sectionTitle: {
     color: "#6B7280",
@@ -393,6 +473,10 @@ const styles = StyleSheet.create({
   dangerText: {
     color: theme.colors.danger,
   },
+  dangerSubtitle: {
+    color: theme.colors.danger,
+    opacity: 0.85,
+  },
   accountSafeArea: {
     backgroundColor: "#FFFFFF",
     flex: 1,
@@ -409,6 +493,12 @@ const styles = StyleSheet.create({
   },
   accountContent: {
     paddingBottom: theme.spacing.xxl,
+  },
+  accountSectionDivider: {
+    backgroundColor: "#ECEEF2",
+    height: 1,
+    marginHorizontal: theme.spacing.lg,
+    marginVertical: theme.spacing.sm,
   },
   accountMenuRow: {
     alignItems: "center",
@@ -446,5 +536,79 @@ const styles = StyleSheet.create({
     height: 22,
     justifyContent: "center",
     width: 22,
+  },
+  sheetSafeArea: {
+    backgroundColor: "#FFFFFF",
+    flex: 1,
+  },
+  sheetTopBar: {
+    alignItems: "center",
+    borderBottomColor: "#ECEEF2",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+  },
+  sheetBody: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+  },
+  deleteBackdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.45)",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+  },
+  deleteCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    gap: theme.spacing.md,
+    maxWidth: 360,
+    padding: theme.spacing.lg,
+    width: "100%",
+  },
+  deleteTitle: {
+    color: theme.colors.textPrimary,
+    textAlign: "center",
+  },
+  deleteMessage: {
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  deleteActions: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  deleteCancelButton: {
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  deleteCancelText: {
+    color: theme.colors.textPrimary,
+  },
+  deleteConfirmButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.danger,
+    borderRadius: 12,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  deleteConfirmText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  deleteHint: {
+    color: theme.colors.textSecondary,
+    textAlign: "center",
   },
 });

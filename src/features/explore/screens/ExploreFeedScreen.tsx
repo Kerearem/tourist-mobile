@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, Animated, FlatList, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, FlatList, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 
@@ -14,6 +14,12 @@ import { ProfileAvatarRing } from "../../profile/components/ProfileAvatarRing";
 import { ProfileHighlightRow } from "../../profile/components/ProfileHighlightRow";
 import type { StoryHighlightItem } from "../../profile/components/ProfileEventHighlights";
 import { ProfileStatsRow } from "../../profile/components/ProfileStatsRow";
+import { blockUser, getUserBlockStatus, unblockUser, type UserBlockStatus } from "../../profile/services/block.service";
+import {
+  COMPLAINT_REASON_OPTIONS,
+  createUserComplaint,
+  type ComplaintReason,
+} from "../../profile/services/complaints.service";
 import { getOrCreateDirectConversation } from "../../messages/services/messages.service";
 import { ExplorePostCard } from "../components/ExplorePostCard";
 import type { AudienceMode } from "../services/audienceMode";
@@ -143,7 +149,27 @@ export function ExploreFeedScreen() {
   const [selectedSearchUser, setSelectedSearchUser] = useState<ExploreSearchUser | null>(null);
   const [followedUserIds, setFollowedUserIds] = useState<string[]>([]);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [selectedReportReason, setSelectedReportReason] = useState<ComplaintReason | null>(null);
+  const [profileBlockStatus, setProfileBlockStatus] = useState<UserBlockStatus | null>(null);
+  const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
   const audienceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!selectedSearchUser?.id) {
+      setProfileBlockStatus(null);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const status = await getUserBlockStatus(selectedSearchUser.id);
+        setProfileBlockStatus(status);
+      } catch {
+        setProfileBlockStatus(null);
+      }
+    })();
+  }, [selectedSearchUser?.id]);
 
   const openSearchUserProfile = (searchUser: ExploreSearchUser) => {
     setIsSearchOpen(false);
@@ -157,6 +183,15 @@ export function ExploreFeedScreen() {
   };
   const openDirectMessage = async (targetUser: ExploreSearchUser) => {
     if (!user?.id) {
+      return;
+    }
+    if (profileBlockStatus?.isBlocked) {
+      Alert.alert(
+        "Mesaj gönderilemiyor",
+        profileBlockStatus.blockedByMe
+          ? "Bu kullanıcıyı engellediniz."
+          : "Bu kullanıcıyla mesajlaşamazsın.",
+      );
       return;
     }
     try {
@@ -176,8 +211,54 @@ export function ExploreFeedScreen() {
         screen: MessagesRoutes.MessageThreadScreen,
         params: { threadId: conversation.id },
       });
-    } catch {
-      // Keep silent for now; we can add a toast/message layer later.
+    } catch (err) {
+      Alert.alert("Mesaj gönderilemiyor", err instanceof Error ? err.message : "Bu kullanıcıyla mesajlaşamazsın.");
+    }
+  };
+
+  const onToggleBlockUser = async () => {
+    if (!selectedSearchUser || isProfileActionLoading) {
+      return;
+    }
+
+    setIsProfileActionLoading(true);
+    try {
+      if (profileBlockStatus?.blockedByMe) {
+        await unblockUser(selectedSearchUser.id);
+        setProfileBlockStatus({ blockedByMe: false, blockedMe: false, isBlocked: false });
+        Alert.alert("Engel kaldırıldı", `${selectedSearchUser.displayName} kullanıcısının engeli kaldırıldı.`);
+      } else {
+        await blockUser(selectedSearchUser.id);
+        setProfileBlockStatus({ blockedByMe: true, blockedMe: false, isBlocked: true });
+        Alert.alert("Engellendi", `${selectedSearchUser.displayName} kullanıcısını engellediniz.`);
+      }
+      setIsProfileMenuOpen(false);
+    } catch (err) {
+      Alert.alert("Hata", err instanceof Error ? err.message : "İşlem tamamlanamadı.");
+    } finally {
+      setIsProfileActionLoading(false);
+    }
+  };
+
+  const onSubmitReport = async () => {
+    if (!selectedSearchUser || !selectedReportReason || isProfileActionLoading) {
+      return;
+    }
+
+    setIsProfileActionLoading(true);
+    try {
+      await createUserComplaint({
+        targetUserId: selectedSearchUser.id,
+        reason: selectedReportReason,
+      });
+      setIsReportModalOpen(false);
+      setSelectedReportReason(null);
+      setIsProfileMenuOpen(false);
+      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
+    } catch (err) {
+      Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
+    } finally {
+      setIsProfileActionLoading(false);
     }
   };
 
@@ -614,57 +695,77 @@ export function ExploreFeedScreen() {
                 <AppText muted style={styles.searchProfileUsername} variant="bodyMuted">
                   @{selectedSearchUser.username}
                 </AppText>
-                <View style={styles.searchProfileLocationRow}>
-                  <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
-                  <AppText style={styles.searchProfileLocation} variant="bodyMuted">
-                    {`${selectedSearchUser.city || "City"}, ${selectedSearchUser.countryCode || "Country"}`}
-                  </AppText>
-                </View>
-                <AppText style={styles.searchProfileBio} variant="body">
-                  {selectedSearchUser.bio ?? `${selectedSearchUser.displayName} is part of the Tourist community.`}
-                </AppText>
+                {profileBlockStatus?.isBlocked ? (
+                  <View style={styles.searchProfileRestricted}>
+                    <Ionicons color={theme.colors.textSecondary} name="eye-off-outline" size={28} />
+                    <AppText style={styles.searchProfileRestrictedTitle} variant="label">
+                      {profileBlockStatus.blockedByMe ? "Bu kullanıcıyı engellediniz" : "Profil görüntülenemiyor"}
+                    </AppText>
+                    <AppText style={styles.searchProfileRestrictedText} variant="bodyMuted">
+                      {profileBlockStatus.blockedByMe
+                        ? "Engeli kaldırmak için menüden Engeli Kaldır seçeneğini kullanabilirsin."
+                        : "Bu kullanıcıyla etkileşim kuramazsın."}
+                    </AppText>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.searchProfileLocationRow}>
+                      <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
+                      <AppText style={styles.searchProfileLocation} variant="bodyMuted">
+                        {`${selectedSearchUser.city || "City"}, ${selectedSearchUser.countryCode || "Country"}`}
+                      </AppText>
+                    </View>
+                    <AppText style={styles.searchProfileBio} variant="body">
+                      {selectedSearchUser.bio ?? `${selectedSearchUser.displayName} is part of the Tourist community.`}
+                    </AppText>
+                  </>
+                )}
               </View>
 
-              <ProfileStatsRow events={14} helped={23} organized={5} />
+              {!profileBlockStatus?.isBlocked ? (
+                <>
+                  <ProfileStatsRow events={14} helped={23} organized={5} />
 
-              <Pressable style={styles.searchProfileInstagramButton}>
-                <Ionicons color={theme.colors.textPrimary} name="logo-instagram" size={22} />
-                <AppText style={styles.searchProfileInstagramText} variant="label">
-                  Instagram Profile
-                </AppText>
-              </Pressable>
-              <View style={styles.searchProfilePrimaryActions}>
-                <Pressable
-                  onPress={() => toggleFollowUser(selectedSearchUser.id)}
-                  style={[
-                    styles.followButton,
-                    styles.searchProfilePrimaryActionButton,
-                    followedUserIds.includes(selectedSearchUser.id) && styles.followButtonActive,
-                  ]}
-                >
-                  <AppText
-                    style={[
-                      styles.followButtonText,
-                      followedUserIds.includes(selectedSearchUser.id) && styles.followButtonTextActive,
-                    ]}
-                    variant="caption"
-                  >
-                    {followedUserIds.includes(selectedSearchUser.id) ? "Takiptesin" : "Takip Et"}
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => void openDirectMessage(selectedSearchUser)}
-                  style={[styles.messageButton, styles.searchProfilePrimaryActionButton]}
-                >
-                  <AppText style={styles.messageButtonText} variant="caption">
-                    Mesaj
-                  </AppText>
-                </Pressable>
-              </View>
+                  <Pressable style={styles.searchProfileInstagramButton}>
+                    <Ionicons color={theme.colors.textPrimary} name="logo-instagram" size={22} />
+                    <AppText style={styles.searchProfileInstagramText} variant="label">
+                      Instagram Profile
+                    </AppText>
+                  </Pressable>
+                  <View style={styles.searchProfilePrimaryActions}>
+                    <Pressable
+                      onPress={() => toggleFollowUser(selectedSearchUser.id)}
+                      style={[
+                        styles.followButton,
+                        styles.searchProfilePrimaryActionButton,
+                        followedUserIds.includes(selectedSearchUser.id) && styles.followButtonActive,
+                      ]}
+                    >
+                      <AppText
+                        style={[
+                          styles.followButtonText,
+                          followedUserIds.includes(selectedSearchUser.id) && styles.followButtonTextActive,
+                        ]}
+                        variant="caption"
+                      >
+                        {followedUserIds.includes(selectedSearchUser.id) ? "Takiptesin" : "Takip Et"}
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void openDirectMessage(selectedSearchUser)}
+                      style={[styles.messageButton, styles.searchProfilePrimaryActionButton]}
+                    >
+                      <AppText style={styles.messageButtonText} variant="caption">
+                        Mesaj
+                      </AppText>
+                    </Pressable>
+                  </View>
 
-              <ProfileHighlightRow highlights={SEARCH_PROFILE_STORY_HIGHLIGHTS} />
+                  <ProfileHighlightRow highlights={SEARCH_PROFILE_STORY_HIGHLIGHTS} />
 
-              <ProfileContentTabs />
+                  <ProfileContentTabs />
+                </>
+              ) : null}
             </View>
           </ScrollView>
         ) : (
@@ -851,21 +952,87 @@ export function ExploreFeedScreen() {
         <Pressable onPress={() => setIsProfileMenuOpen(false)} style={styles.profileMenuBackdrop}>
           <View style={styles.profileMenuWrap}>
             <Pressable style={styles.profileMenuSheet}>
-              {[
-                { label: "Şikayet Et", danger: true },
-                { label: "Engelle" },
-                { label: "Bu hesap hakkında" },
-                { label: "Profilin URL'sini kopyala" },
-                { label: "Bu profili paylaş" },
-              ].map((item) => (
-                <Pressable key={item.label} style={styles.profileMenuItem}>
-                  <AppText style={[styles.profileMenuItemText, item.danger ? styles.profileMenuItemTextDanger : null]} variant="body">
+              <Pressable
+                onPress={() => {
+                  setIsProfileMenuOpen(false);
+                  setSelectedReportReason(null);
+                  setIsReportModalOpen(true);
+                }}
+                style={styles.profileMenuItem}
+              >
+                <AppText style={[styles.profileMenuItemText, styles.profileMenuItemTextDanger]} variant="body">
+                  Şikayet Et
+                </AppText>
+              </Pressable>
+              <Pressable disabled={isProfileActionLoading} onPress={() => void onToggleBlockUser()} style={styles.profileMenuItem}>
+                <AppText style={styles.profileMenuItemText} variant="body">
+                  {profileBlockStatus?.blockedByMe ? "Engeli Kaldır" : "Engelle"}
+                </AppText>
+              </Pressable>
+            </Pressable>
+            <Pressable onPress={() => setIsProfileMenuOpen(false)} style={styles.profileMenuCancel}>
+              <AppText style={styles.profileMenuCancelText} variant="body">
+                İptal
+              </AppText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          setIsReportModalOpen(false);
+          setSelectedReportReason(null);
+        }}
+        transparent
+        visible={Boolean(selectedSearchUser) && isReportModalOpen}
+      >
+        <Pressable
+          onPress={() => {
+            setIsReportModalOpen(false);
+            setSelectedReportReason(null);
+          }}
+          style={styles.profileMenuBackdrop}
+        >
+          <View style={styles.profileMenuWrap}>
+            <Pressable style={styles.profileMenuSheet}>
+              <AppText style={styles.reportModalTitle} variant="label">
+                Şikayet sebebi
+              </AppText>
+              {COMPLAINT_REASON_OPTIONS.map((item) => (
+                <Pressable
+                  key={item.value}
+                  onPress={() => setSelectedReportReason(item.value)}
+                  style={styles.profileMenuItem}
+                >
+                  <AppText
+                    style={[
+                      styles.profileMenuItemText,
+                      selectedReportReason === item.value && styles.reportReasonSelected,
+                    ]}
+                    variant="body"
+                  >
                     {item.label}
                   </AppText>
                 </Pressable>
               ))}
+              <Pressable
+                disabled={!selectedReportReason || isProfileActionLoading}
+                onPress={() => void onSubmitReport()}
+                style={[styles.reportSubmitButton, !selectedReportReason && styles.reportSubmitButtonDisabled]}
+              >
+                <AppText style={styles.reportSubmitButtonText} variant="label">
+                  {isProfileActionLoading ? "Gönderiliyor..." : "Şikayeti Gönder"}
+                </AppText>
+              </Pressable>
             </Pressable>
-            <Pressable onPress={() => setIsProfileMenuOpen(false)} style={styles.profileMenuCancel}>
+            <Pressable
+              onPress={() => {
+                setIsReportModalOpen(false);
+                setSelectedReportReason(null);
+              }}
+              style={styles.profileMenuCancel}
+            >
               <AppText style={styles.profileMenuCancelText} variant="body">
                 İptal
               </AppText>
@@ -1233,6 +1400,51 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 20,
     fontWeight: "600",
+  },
+  searchProfileRestricted: {
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  searchProfileRestrictedTitle: {
+    color: theme.colors.textPrimary,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  searchProfileRestrictedText: {
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  reportModalTitle: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "700",
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    textTransform: "uppercase",
+  },
+  reportReasonSelected: {
+    color: theme.colors.danger,
+    fontWeight: "700",
+  },
+  reportSubmitButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.danger,
+    borderRadius: 12,
+    justifyContent: "center",
+    marginBottom: theme.spacing.sm,
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.sm,
+    minHeight: 48,
+  },
+  reportSubmitButtonDisabled: {
+    opacity: 0.45,
+  },
+  reportSubmitButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   searchProfileIdentity: {
     alignItems: "center",
