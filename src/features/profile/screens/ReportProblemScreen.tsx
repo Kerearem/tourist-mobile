@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
@@ -8,46 +8,90 @@ import { Card } from "../../../components/ui/Card";
 import { ListItem } from "../../../components/ui/ListItem";
 import { Screen } from "../../../components/ui/Screen";
 import { theme } from "../../../constants/theme";
-
-const supportTopics = [
-  "Login and account access",
-  "Messages and conversations",
-  "Events participation",
-  "Help requests",
-] as const;
+import {
+  SUPPORT_TOPIC_OPTIONS,
+  submitSupportReport,
+  type SupportTopic,
+} from "../services/support.service";
 
 export function ReportProblemScreen() {
+  const [selectedTopic, setSelectedTopic] = useState<SupportTopic | null>(null);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const onSubmit = async () => {
+    if (!selectedTopic) {
+      Alert.alert("Konu seçin", "Lütfen bir destek konusu seçin.");
+      return;
+    }
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+      Alert.alert("Açıklama gerekli", "Lütfen sorununuzu kısaca açıklayın.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitSupportReport({ topic: selectedTopic, message: trimmed });
+      Alert.alert("Bildiriminiz alındı", "Teşekkürler, en kısa sürede inceleyeceğiz.");
+      setSelectedTopic(null);
+      setMessage("");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Bildirim gönderilemedi.";
+      Alert.alert("Hata", errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Screen scroll>
       <View style={styles.container}>
         <Card>
-          <AppText variant="sectionTitle">Report a Problem</AppText>
+          <AppText variant="sectionTitle">Sorun Bildir</AppText>
           <AppText variant="bodyMuted">
-            Share what went wrong and the support team will review it. This form is UI-only in this phase.
+            Yaşadığınız sorunu paylaşın; destek ekibimiz inceleyecektir.
           </AppText>
         </Card>
 
         <Card>
           <AppText style={styles.topicTitle} variant="label">
-            Popular Support Topics
+            Konu
           </AppText>
-          {supportTopics.map((topic) => (
-            <ListItem key={topic} title={topic} />
-          ))}
+          {SUPPORT_TOPIC_OPTIONS.map((topic) => {
+            const isSelected = selectedTopic === topic.value;
+            return (
+              <Pressable key={topic.value} onPress={() => setSelectedTopic(topic.value)}>
+                <ListItem
+                  right={
+                    isSelected ? (
+                      <AppText style={styles.selectedMark} variant="label">
+                        ✓
+                      </AppText>
+                    ) : null
+                  }
+                  title={topic.label}
+                />
+              </Pressable>
+            );
+          })}
         </Card>
 
         <Card>
           <AppInput
-            label="Describe your issue"
+            label="Sorununuzu açıklayın"
             multiline
             onChangeText={setMessage}
-            placeholder="Tell us what happened..."
+            placeholder="Ne olduğunu kısaca yazın..."
             style={styles.input}
             value={message}
           />
-          <AppButton label="Submit Report" onPress={() => {}} />
+          <AppButton
+            disabled={isSubmitting}
+            label={isSubmitting ? "Gönderiliyor..." : "Gönder"}
+            onPress={() => void onSubmit()}
+          />
         </Card>
       </View>
     </Screen>
@@ -61,6 +105,9 @@ const styles = StyleSheet.create({
   },
   topicTitle: {
     marginBottom: theme.spacing.sm,
+  },
+  selectedMark: {
+    color: theme.colors.primary,
   },
   input: {
     marginBottom: theme.spacing.md,

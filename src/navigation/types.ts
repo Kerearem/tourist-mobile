@@ -44,6 +44,7 @@ export type HelpStackParamList = {
 
 export type MessagesStackParamList = {
   MessagesInboxScreen: undefined;
+  MessageRequestsScreen: { hideThreadId?: string } | undefined;
   MessageThreadScreen: { threadId: string };
   GroupDetailScreen: { eventId: string; conversationId?: string };
   GroupInfoScreen: { eventId: string };

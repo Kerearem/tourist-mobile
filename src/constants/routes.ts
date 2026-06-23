@@ -28,6 +28,7 @@ export const HelpRoutes = {
 
 export const MessagesRoutes = {
   MessagesInboxScreen: "MessagesInboxScreen",
+  MessageRequestsScreen: "MessageRequestsScreen",
   MessageThreadScreen: "MessageThreadScreen",
   GroupDetailScreen: "GroupDetailScreen",
   GroupInfoScreen: "GroupInfoScreen",

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, StyleSheet, TextInput, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -16,7 +16,7 @@ import type { MessagesStackParamList } from "../../../navigation/types";
 import { archiveEventGroup } from "../../events/services/eventGroup.service";
 import { getEventById, toggleEventAttendance } from "../../events/services/events.service";
 import { ConversationListItem } from "../components/ConversationListItem";
-import { getConversations } from "../services/messages.service";
+import { getConversations, getMessageRequests } from "../services/messages.service";
 import type { ConversationThread } from "../types";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessagesInboxScreen">;
@@ -30,6 +30,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
   const [searchText, setSearchText] = useState("");
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
+  const [requestCount, setRequestCount] = useState(0);
 
   const viewerId = user?.id ?? "";
 
@@ -51,8 +52,9 @@ export function MessagesInboxScreen({ navigation }: Props) {
     }
 
     try {
-      const data = await getConversations();
+      const [data, requests] = await Promise.all([getConversations(), getMessageRequests()]);
       setItems(data);
+      setRequestCount(requests.length);
       setError(null);
     } catch {
       setItems([]);
@@ -189,7 +191,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <Loader label="Loading conversations..." />
+          <Loader label="Mesajlar yükleniyor..." />
         </Card>
       </Screen>
     );
@@ -199,7 +201,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <ErrorState onRetry={() => void loadData("initial")} title="Could not load inbox" subtitle={error} />
+          <ErrorState onRetry={() => void loadData("initial")} subtitle={error} title="Mesajlar yüklenemedi" />
         </Card>
       </Screen>
     );
@@ -212,16 +214,28 @@ export function MessagesInboxScreen({ navigation }: Props) {
           <AppText style={styles.title} variant="title">
             Mesajlar
           </AppText>
-          <AppText style={styles.requestsText} variant="label">
-            İstekler
-          </AppText>
+          <Pressable
+            onPress={() => navigation.navigate(MessagesRoutes.MessageRequestsScreen)}
+            style={styles.requestsButton}
+          >
+            <AppText style={styles.requestsText} variant="label">
+              İstekler
+            </AppText>
+            {requestCount > 0 ? (
+              <View style={styles.requestsBadge}>
+                <AppText style={styles.requestsBadgeText} variant="caption">
+                  {requestCount > 99 ? "99+" : String(requestCount)}
+                </AppText>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
         <View style={styles.searchBar}>
           <Ionicons color={theme.colors.muted} name="search" size={22} />
           <TextInput
             onChangeText={setSearchText}
-            placeholder="Search messages..."
+            placeholder="Mesajlarda ara..."
             placeholderTextColor={theme.colors.muted}
             style={styles.searchInput}
             value={searchText}
@@ -240,7 +254,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
                 <View style={styles.refreshHintWrap}>
                   <Ionicons color={theme.colors.muted} name="refresh-outline" size={56} />
                   <AppText muted style={styles.refreshHintText} variant="bodyMuted">
-                    Swipe down to refresh
+                    Yenilemek için aşağı kaydırın
                   </AppText>
                 </View>
               </View>
@@ -290,9 +304,28 @@ const styles = StyleSheet.create({
   title: {
     color: theme.colors.textPrimary,
   },
+  requestsButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+  },
   requestsText: {
     color: theme.colors.textSecondary,
     fontSize: 17,
+  },
+  requestsBadge: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: 10,
+    justifyContent: "center",
+    minHeight: 20,
+    minWidth: 20,
+    paddingHorizontal: 6,
+  },
+  requestsBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
   },
   searchBar: {
     alignItems: "center",

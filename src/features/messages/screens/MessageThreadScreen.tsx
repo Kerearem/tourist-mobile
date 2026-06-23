@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, SafeAreaView, StyleSheet, View } from "react-native";
+import { Alert, FlatList, Pressable, SafeAreaView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -14,6 +14,7 @@ import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { MessagesStackParamList } from "../../../navigation/types";
+import { blockUser } from "../../profile/services/block.service";
 import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
 import { getConversationById, getMessages, markConversationRead, sendMessage } from "../services/messages.service";
@@ -88,7 +89,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     } catch {
       setConversation(null);
       setMessages([]);
-      setError("Failed to load thread.");
+      setError("Sohbet yüklenemedi.");
     } finally {
       setIsLoading(false);
     }
@@ -135,15 +136,60 @@ export function MessageThreadScreen({ route, navigation }: Props) {
 
   const title = useMemo(() => threadTitle(conversation, viewerId), [conversation, viewerId]);
   const isSystemInbox = conversation?.metadata?.isSystemInbox === "true";
+  const isRequestPending = conversation?.metadata?.isRequestPending === "true";
   const participant = useMemo(() => otherParticipant(conversation, viewerId), [conversation, viewerId]);
   const initials = isSystemInbox ? "T" : (participant?.displayName || title).slice(0, 2).toUpperCase();
   const timeLabel = useMemo(() => formatThreadTime(messages), [messages]);
+
+  const hideRequestAndGoBack = () => {
+    navigation.navigate(MessagesRoutes.MessageRequestsScreen, { hideThreadId: route.params.threadId });
+  };
+
+  const confirmDeleteRequest = () => {
+    Alert.alert("İsteği sil", "Bu mesaj isteği listeden kaldırılacak.", [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Sil",
+        style: "destructive",
+        onPress: hideRequestAndGoBack,
+      },
+    ]);
+  };
+
+  const confirmBlockRequester = () => {
+    if (!participant) {
+      return;
+    }
+
+    Alert.alert(
+      "Kullanıcıyı engelle",
+      `${participant.displayName} engellensin mi? Bu kişiyle mesajlaşamazsınız.`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Engelle",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                await blockUser(participant.id);
+                navigation.navigate(MessagesRoutes.MessagesInboxScreen);
+              } catch (blockError) {
+                const message = blockError instanceof Error ? blockError.message : "Engelleme başarısız.";
+                Alert.alert("Hata", message);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
 
   if (isLoading) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <Loader label="Loading thread..." />
+          <Loader label="Sohbet yükleniyor..." />
         </Card>
       </Screen>
     );
@@ -153,7 +199,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <ErrorState onRetry={() => void loadThread()} title="Could not load thread" subtitle={error} />
+          <ErrorState onRetry={() => void loadThread()} subtitle={error} title="Sohbet yüklenemedi" />
         </Card>
       </Screen>
     );
@@ -163,7 +209,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <EmptyState title="Thread not found" subtitle="This conversation may no longer exist." />
+          <EmptyState subtitle="Bu sohbet artık mevcut olmayabilir." title="Sohbet bulunamadı" />
         </Card>
       </Screen>
     );
@@ -198,6 +244,26 @@ export function MessageThreadScreen({ route, navigation }: Props) {
             </Pressable>
           </View>
         </View>
+
+        {isRequestPending && participant ? (
+          <View style={styles.requestBanner}>
+            <AppText style={styles.requestBannerText} variant="caption">
+              {participant.displayName} sana mesaj göndermek istiyor
+            </AppText>
+            <View style={styles.requestActions}>
+              <Pressable onPress={confirmDeleteRequest} style={styles.requestActionButton}>
+                <AppText style={styles.requestDeleteText} variant="label">
+                  Sil
+                </AppText>
+              </Pressable>
+              <Pressable onPress={confirmBlockRequester} style={styles.requestActionButton}>
+                <AppText style={styles.requestBlockText} variant="label">
+                  Engelle
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.messagesArea}>
           {messages.length === 0 ? (
@@ -304,6 +370,34 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: "center",
     width: 30,
+  },
+  requestBanner: {
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    borderBottomColor: "#FDE68A",
+    borderBottomWidth: 1,
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  requestBannerText: {
+    color: theme.colors.textPrimary,
+    textAlign: "center",
+  },
+  requestActions: {
+    flexDirection: "row",
+    gap: theme.spacing.lg,
+  },
+  requestActionButton: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
+  requestDeleteText: {
+    color: theme.colors.textSecondary,
+  },
+  requestBlockText: {
+    color: "#DC2626",
+    fontWeight: "600",
   },
   messagesArea: {
     flex: 1,

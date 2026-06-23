@@ -35,11 +35,13 @@ export const API_ENDPOINTS = {
   },
   messages: {
     conversations: "/messages/conversations",
+    requests: "/messages/requests",
     conversationDetail: "/messages/conversations/:threadId",
     messages: "/messages/conversations/:threadId/messages",
     sendMessage: "/messages/conversations/:threadId/messages",
     directConversation: "/messages/conversations/direct",
     markRead: "/messages/conversations/:threadId/read",
+    acceptConversation: "/messages/conversations/:threadId/accept",
     pinMessage: "/messages/conversations/:threadId/pin",
     unpinMessage: "/messages/conversations/:threadId/pin",
     helpConversation: "/messages/help-conversations",
@@ -55,6 +57,9 @@ export const API_ENDPOINTS = {
   },
   complaints: {
     create: "/complaints",
+  },
+  support: {
+    report: "/support/report",
   },
   organizer: {
     apply: "/organizer/apply",

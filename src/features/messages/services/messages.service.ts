@@ -129,6 +129,30 @@ export async function getConversations(): Promise<ConversationThread[]> {
   return [...directThreads, ...mockHelpThreads()];
 }
 
+export async function getMessageRequests(): Promise<ConversationThread[]> {
+  if (USE_MOCK_BACKEND) {
+    return [];
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationThread[]>(API_ENDPOINTS.messages.requests, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function acceptConversation(threadId: string): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  await apiRequest<{ success: boolean }>(withThreadId(API_ENDPOINTS.messages.acceptConversation, threadId), {
+    method: "POST",
+    token,
+  });
+}
+
 export async function getConversationById(threadId: string): Promise<ConversationThread | null> {
   if (USE_MOCK_BACKEND) {
     return mockThreads.find((thread) => thread.id === threadId) ?? null;

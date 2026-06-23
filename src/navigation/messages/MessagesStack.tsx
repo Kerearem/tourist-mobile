@@ -5,6 +5,7 @@ import { MessagesRoutes } from "../../constants/routes";
 import { MessageThreadScreen } from "../../features/messages/screens/MessageThreadScreen";
 import { GroupDetailScreen } from "../../features/messages/screens/GroupDetailScreen";
 import { GroupInfoScreen } from "../../features/messages/screens/GroupInfoScreen";
+import { MessageRequestsScreen } from "../../features/messages/screens/MessageRequestsScreen";
 import { MessagesInboxScreen } from "../../features/messages/screens/MessagesInboxScreen";
 import type { MessagesStackParamList } from "../types";
 
@@ -14,6 +15,7 @@ export function MessagesStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={MessagesInboxScreen} name={MessagesRoutes.MessagesInboxScreen} />
+      <Stack.Screen component={MessageRequestsScreen} name={MessagesRoutes.MessageRequestsScreen} />
       <Stack.Screen component={MessageThreadScreen} name={MessagesRoutes.MessageThreadScreen} />
       <Stack.Screen component={GroupDetailScreen} name={MessagesRoutes.GroupDetailScreen} />
       <Stack.Screen component={GroupInfoScreen} name={MessagesRoutes.GroupInfoScreen} />
