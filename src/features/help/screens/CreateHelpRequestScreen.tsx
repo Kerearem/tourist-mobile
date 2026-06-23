@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as ImagePicker from "expo-image-picker";
@@ -7,13 +7,13 @@ import * as ImagePicker from "expo-image-picker";
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
-import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
-import { Screen } from "../../../components/ui/Screen";
 import { HelpRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { HelpStackParamList } from "../../../navigation/types";
+import { uploadImage } from "../../../services/media/cloudinary";
+import { HELP_CATEGORIES, type HelpCategoryValue } from "../constants/helpCategories";
 import { createHelpRequest } from "../services/help.service";
 
 type Props = NativeStackScreenProps<HelpStackParamList, "CreateHelpRequestScreen">;
@@ -22,171 +22,172 @@ export function CreateHelpRequestScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [attachments, setAttachments] = useState<
-    Array<{ id: string; uri: string; name: string; previewType: "image" | "video" | "file" }>
-  >([]);
+  const [category, setCategory] = useState<HelpCategoryValue | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const locationSummary = useMemo(() => {
+    if (!user) {
+      return "";
+    }
+    const city = user.publicProfile.currentCity || user.privateProfile.destinationCity;
+    const country = user.privateProfile.destinationCountryCode;
+    const community = user.publicProfile.homeCommunity;
+    return `${community} · ${city}, ${country}`;
+  }, [user]);
 
   const pickFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Gallery permission is required to select photos/videos.");
+      setError("Galeri izni gerekli.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      selectionLimit: 8,
+      mediaTypes: ["images"],
+      allowsMultipleSelection: false,
+      quality: 0.85,
     });
 
-    if (result.canceled || !result.assets?.length) {
+    if (result.canceled || !result.assets?.[0]) {
       return;
     }
 
-    setAttachments((prev) => [
-      ...prev,
-      ...result.assets.map((asset) => ({
-        id: `${asset.assetId ?? asset.uri}_${Date.now()}`,
-        uri: asset.uri,
-        name: asset.fileName ?? "Media",
-        previewType: asset.type === "video" ? "video" : "image",
-      })),
-    ]);
+    setPhotoUri(result.assets[0].uri);
     setError("");
   };
 
-  const pickFromFiles = async () => {
-    try {
-      const DocumentPicker = await import("expo-document-picker");
-      const result = await DocumentPicker.getDocumentAsync({
-        multiple: true,
-        type: ["image/*", "video/*"],
-      });
-      if (result.canceled || !result.assets?.length) {
-        return;
-      }
-
-      setAttachments((prev) => [
-        ...prev,
-        ...result.assets.map((asset) => ({
-          id: `${asset.uri}_${Date.now()}`,
-          uri: asset.uri,
-          name: asset.name ?? "File",
-          previewType: asset.mimeType?.startsWith("video/") ? "video" : asset.mimeType?.startsWith("image/") ? "image" : "file",
-        })),
-      ]);
-      setError("");
-    } catch {
-      setError("Files picker is unavailable. Rebuild the iOS app and try again.");
-    }
-  };
-
-  const removeAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((item) => item.id !== id));
+  const removePhoto = () => {
+    setPhotoUri(null);
   };
 
   const onSubmit = async () => {
     if (!title.trim() || !description.trim()) {
-      setError("Title and description are required.");
+      setError("Başlık ve açıklama zorunludur.");
+      return;
+    }
+
+    if (!category) {
+      setError("Lütfen bir kategori seçin.");
       return;
     }
 
     if (!user) {
-      setError("No active user.");
+      setError("Oturum bulunamadı.");
+      return;
+    }
+
+    const community = user.publicProfile.homeCommunity.trim();
+    const countryCode = user.privateProfile.destinationCountryCode.trim().toUpperCase();
+    const city = (user.publicProfile.currentCity || user.privateProfile.destinationCity).trim();
+
+    if (!community || countryCode.length < 2 || !city) {
+      setError("Profil bilgilerin eksik (topluluk, şehir veya ülke). Onboarding adımlarını tamamla.");
       return;
     }
 
     setError("");
     setIsSubmitting(true);
-    await createHelpRequest({
-      author: {
-        id: user.id,
-        displayName: user.displayName,
-      },
-      community: user.community,
-      countryCode: user.currentCountryCode,
-      city: user.currentCity,
-      title,
-      description,
-    });
-    setIsSubmitting(false);
 
-    navigation.navigate(HelpRoutes.HelpListScreen, {
-      refreshToken: `${Date.now()}`,
-    });
+    try {
+      let photoUrl: string | undefined;
+      if (photoUri) {
+        try {
+          photoUrl = await uploadImage(photoUri, { folder: "help-requests" });
+        } catch {
+          // Fotoğraf (Cloudinary) başarısız olsa bile isteği fotoğrafsız gönder.
+          photoUrl = undefined;
+        }
+      }
+
+      await createHelpRequest({
+        community,
+        countryCode,
+        city,
+        title,
+        description,
+        category,
+        photoUrl,
+      });
+
+      navigation.navigate(HelpRoutes.HelpListScreen, {
+        refreshToken: `${Date.now()}`,
+      });
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "İstek oluşturulamadı.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Screen scroll>
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.container}>
         <Card>
           <AppText style={styles.title} variant="title">
-            Create Help Request
+            Yardım İsteği Oluştur
           </AppText>
           <AppText style={styles.subtitle} variant="bodyMuted">
-            Share your request clearly so nearby community members can support you faster.
+            İhtiyacını net yaz; yakındaki topluluk üyeleri sana ulaşabilsin.
           </AppText>
-          <View style={styles.badgeRow}>
-            <Badge label="Community Support" />
-            <Badge label="UI-only form" />
-          </View>
+          {locationSummary ? (
+            <AppText style={styles.locationSummary} variant="caption">
+              Konum: {locationSummary}
+            </AppText>
+          ) : null}
         </Card>
 
         <Card>
-          <AppInput label="Request Title" onChangeText={setTitle} placeholder="e.g. Need guidance for rental documents" value={title} />
+          <AppText style={styles.sectionLabel} variant="label">
+            Kategori *
+          </AppText>
+          <View style={styles.categoryGrid}>
+            {HELP_CATEGORIES.map((item) => {
+              const selected = category === item.value;
+              return (
+                <Pressable
+                  key={item.value}
+                  onPress={() => setCategory(item.value)}
+                  style={[styles.categoryChip, selected && styles.categoryChipSelected]}
+                >
+                  <AppText style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]} variant="caption">
+                    {item.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <AppInput label="Başlık *" onChangeText={setTitle} placeholder="Örn. Kira sözleşmesi için rehberlik" value={title} />
           <AppInput
-            error={error || undefined}
-            label="Describe Your Situation"
+            label="Durumunu Anlat *"
             multiline
             onChangeText={setDescription}
-            placeholder="Add important details so helpers can respond effectively..."
+            placeholder="Yardımcı olacak kişinin bilmesi gereken detayları yaz..."
             style={styles.descriptionInput}
             value={description}
           />
 
-          <View style={styles.attachmentsSection}>
-            <AppText style={styles.attachmentsLabel} variant="label">
-              Add photos or videos
+          <View style={styles.photoSection}>
+            <AppText style={styles.sectionLabel} variant="label">
+              Fotoğraf (isteğe bağlı)
             </AppText>
-            <View style={styles.attachmentsActions}>
-              <Pressable onPress={() => void pickFromGallery()} style={styles.attachmentsActionButton}>
-                <Ionicons color="#0F172A" name="images-outline" size={16} />
-                <AppText style={styles.attachmentsActionText} variant="caption">
-                  Gallery
-                </AppText>
-              </Pressable>
-              <Pressable onPress={() => void pickFromFiles()} style={styles.attachmentsActionButton}>
-                <Ionicons color="#0F172A" name="document-outline" size={16} />
-                <AppText style={styles.attachmentsActionText} variant="caption">
-                  Files
-                </AppText>
-              </Pressable>
-            </View>
-
-            {attachments.length > 0 ? (
-              <View style={styles.attachmentsGrid}>
-                {attachments.map((item) => (
-                  <View key={item.id} style={styles.attachmentTile}>
-                    {item.previewType === "image" ? (
-                      <Image source={{ uri: item.uri }} style={styles.attachmentImage} />
-                    ) : (
-                      <View style={styles.attachmentFallback}>
-                        <Ionicons color="#1F2937" name={item.previewType === "video" ? "videocam-outline" : "document-outline"} size={18} />
-                        <AppText style={styles.attachmentName} numberOfLines={1} variant="caption">
-                          {item.name}
-                        </AppText>
-                      </View>
-                    )}
-                    <Pressable onPress={() => removeAttachment(item.id)} style={styles.removeAttachmentButton}>
-                      <Ionicons color="#FFFFFF" name="close" size={12} />
-                    </Pressable>
-                  </View>
-                ))}
+            {photoUri ? (
+              <View style={styles.photoPreviewWrap}>
+                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+                <Pressable onPress={removePhoto} style={styles.removePhotoButton}>
+                  <Ionicons color="#FFFFFF" name="close" size={14} />
+                </Pressable>
               </View>
-            ) : null}
+            ) : (
+              <Pressable onPress={() => void pickFromGallery()} style={styles.galleryButton}>
+                <Ionicons color="#059669" name="images-outline" size={20} />
+                <AppText style={styles.galleryButtonText} variant="label">
+                  Galeriden fotoğraf seç
+                </AppText>
+              </Pressable>
+            )}
           </View>
 
           {error ? (
@@ -197,25 +198,24 @@ export function CreateHelpRequestScreen({ navigation }: Props) {
 
           <AppButton
             containerStyle={styles.submitButton}
-            label={isSubmitting ? "Submitting..." : "Submit Request"}
+            label={isSubmitting ? "Gönderiliyor..." : "İsteği Yayınla"}
             loading={isSubmitting}
             onPress={() => void onSubmit()}
           />
         </Card>
       </View>
-    </Screen>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: theme.spacing.lg,
+  scrollContent: {
     paddingBottom: theme.spacing.xxl,
   },
-  badgeRow: {
-    flexDirection: "row",
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.sm,
+  container: {
+    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
   },
   title: {
     marginBottom: theme.spacing.xs,
@@ -223,80 +223,83 @@ const styles = StyleSheet.create({
   subtitle: {
     marginBottom: theme.spacing.sm,
   },
+  locationSummary: {
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs,
+  },
+  sectionLabel: {
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.sm,
+  },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  categoryChip: {
+    backgroundColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  categoryChipSelected: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#059669",
+  },
+  categoryChipText: {
+    color: "#374151",
+    fontWeight: "600",
+  },
+  categoryChipTextSelected: {
+    color: "#047857",
+  },
   descriptionInput: {
     marginTop: theme.spacing.md,
     minHeight: 120,
     textAlignVertical: "top",
   },
-  attachmentsInput: {
+  photoSection: {
+    gap: theme.spacing.sm,
     marginTop: theme.spacing.md,
   },
-  attachmentsSection: {
-    marginTop: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  attachmentsLabel: {
-    color: theme.colors.textPrimary,
-  },
-  attachmentsActions: {
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-  },
-  attachmentsActionButton: {
+  galleryButton: {
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderColor: "#E5E7EB",
-    borderRadius: 999,
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  attachmentsActionText: {
-    color: "#0F172A",
-    fontWeight: "600",
-  },
-  attachmentsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: theme.spacing.sm,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
   },
-  attachmentTile: {
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    borderWidth: 1,
-    height: 82,
+  galleryButtonText: {
+    color: "#047857",
+  },
+  photoPreviewWrap: {
+    alignSelf: "flex-start",
+    borderRadius: 16,
     overflow: "hidden",
     position: "relative",
-    width: 82,
   },
-  attachmentImage: {
-    height: "100%",
-    width: "100%",
+  photoPreview: {
+    height: 160,
+    width: 160,
   },
-  attachmentFallback: {
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    flex: 1,
-    gap: 4,
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  attachmentName: {
-    color: "#374151",
-    textAlign: "center",
-  },
-  removeAttachmentButton: {
+  removePhotoButton: {
     alignItems: "center",
     backgroundColor: "rgba(15, 23, 42, 0.88)",
-    borderRadius: 10,
-    height: 20,
+    borderRadius: 12,
+    height: 24,
     justifyContent: "center",
     position: "absolute",
-    right: 4,
-    top: 4,
-    width: 20,
+    right: 8,
+    top: 8,
+    width: 24,
   },
   submitButton: {
     backgroundColor: "#16A34A",
@@ -305,6 +308,5 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
   },
 });

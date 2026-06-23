@@ -21,28 +21,43 @@ export type HelpRequest = {
   description: string;
   category?: string;
   status: HelpRequestStatus;
+  photoUrl?: string;
   responsesCount: number;
   viewerState: HelpRequestViewerState;
 };
 
+export type HelpLocationScope = "city" | "country";
+export type HelpIdentityScope = "nationality" | "everyone";
+
 export type GetHelpRequestsInput = {
   viewerId: string;
-  community?: string;
-  countryCode?: string;
-  city?: string;
+  locationScope?: HelpLocationScope;
+  identityScope?: HelpIdentityScope;
+  category?: string;
+  search?: string;
 };
 
 export type CreateHelpRequestInput = {
-  author: HelpRequestAuthor;
   community: string;
   countryCode: string;
   city: string;
   title: string;
   description: string;
-  category?: string;
+  category: string;
+  photoUrl?: string;
 };
 
 export type RespondToHelpRequestInput = {
   requestId: string;
   viewerId: string;
+};
+
+export type RespondToHelpRequestResult = {
+  helpRequest: HelpRequest;
+  conversationId: string;
+};
+
+export type UpdateHelpRequestStatusInput = {
+  requestId: string;
+  status: HelpRequestStatus;
 };

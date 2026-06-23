@@ -1,231 +1,158 @@
 import React, { useEffect, useState } from "react";
 import { ImageBackground, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { NavigationProp } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
-import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
-import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
+import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
+import { HelpRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { HelpStackParamList, MainTabParamList } from "../../../navigation/types";
-import { getOrCreateHelpConversation } from "../../messages/services/messages.service";
-import { getHelpRequestById } from "../services/help.service";
-import type { HelpRequest } from "../types";
+import { getHelpCategoryLabel, HELP_STATUS_LABELS } from "../constants/helpCategories";
+import { getHelpRequestById, respondToHelpRequest, updateHelpRequestStatus } from "../services/help.service";
+import type { HelpRequest, HelpRequestStatus } from "../types";
 
 type Props = NativeStackScreenProps<HelpStackParamList, "HelpDetailScreen">;
 
-const demoHelpDetails: Record<string, HelpRequest> = {
-  help_demo_home: {
-    id: "help_demo_home",
-    author: { id: "user_demo_1", displayName: "Merve Y." },
-    community: "Turkish",
-    countryCode: "DE",
-    city: "Kreuzberg",
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    title: "Need help moving a sofa",
-    description: "I just bought a sofa from IKEA but it does not fit in my car. Can anyone with a van help me?",
-    category: "Home",
-    status: "open",
-    responsesCount: 0,
-    viewerState: { hasResponded: false },
-  },
-  help_demo_visa: {
-    id: "help_demo_visa",
-    author: { id: "user_demo_2", displayName: "Ayse Y." },
-    community: "Turkish",
-    countryCode: "DE",
-    city: "Berlin",
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    title: "Student Visa extension question",
-    description: "Has anyone recently renewed their student visa? I have a specific question about the finance proof.",
-    category: "Visa",
-    status: "open",
-    responsesCount: 0,
-    viewerState: { hasResponded: false },
-  },
-  help_demo_health: {
-    id: "help_demo_health",
-    author: { id: "user_demo_3", displayName: "Burak A." },
-    community: "Turkish",
-    countryCode: "DE",
-    city: "Mitte",
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    title: "English speaking dentist?",
-    description: "Looking for recommendations for a good English speaking dentist in Mitte area. Just for a checkup.",
-    category: "Health",
-    status: "open",
-    responsesCount: 0,
-    viewerState: { hasResponded: false },
-  },
+const formatRelativeTimeTr = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const minutes = Math.max(1, Math.floor((Date.now() - date.getTime()) / 60000));
+  if (minutes < 60) {
+    return `${minutes} dk önce`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} sa önce`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days} gün önce`;
 };
 
-const isDemoHelpId = (helpId: string) => helpId.startsWith("help_demo_");
-const getDemoHelpDetail = (helpId: string) => demoHelpDetails[helpId] ?? null;
-const isAbortError = (error: unknown) =>
-  error instanceof Error && (error.name === "AbortError" || /abort/i.test(error.message));
-
 const getCategoryCover = (category?: string) => {
-  const normalized = category?.trim().toLowerCase();
-  if (normalized === "visa") {
+  const normalized = category?.trim().toUpperCase();
+  if (normalized === "VISA_LEGAL" || normalized === "BUREAUCRACY_BANKING") {
     return "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1400&q=80";
   }
-  if (normalized === "home") {
-    return "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1400&q=80";
-  }
-  if (normalized === "health") {
+  if (normalized === "HEALTH") {
     return "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1400&q=80";
+  }
+  if (normalized === "ACCOMMODATION" || normalized === "DAILY_LIFE") {
+    return "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1400&q=80";
   }
   return "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1400&q=80";
 };
 
-const formatRelativeTime = (iso: string) => {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "Time unknown";
-  }
-  const minutes = Math.max(1, Math.floor((Date.now() - date.getTime()) / 60000));
-  if (minutes < 60) {
-    return `${minutes} min ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours} hours ago`;
-  }
-  const days = Math.floor(hours / 24);
-  return `${days} days ago`;
-};
-
-const mapStatusLabel = (status: HelpRequest["status"]) => {
-  if (status === "in_progress") {
-    return "In Progress";
-  }
-  if (status === "resolved") {
-    return "Resolved";
-  }
-  return "Open";
-};
+const STATUS_ACTIONS: Array<{ status: HelpRequestStatus; label: string }> = [
+  { status: "open", label: "Açık" },
+  { status: "in_progress", label: "Devam Ediyor" },
+  { status: "resolved", label: "Çözüldü" },
+];
 
 export function HelpDetailScreen({ route, navigation }: Props) {
   const { user } = useAuth();
   const [request, setRequest] = useState<HelpRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [isResponding, setIsResponding] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadDetail = async () => {
-      if (!user?.id) {
-        if (isActive) {
-          setError("No active user.");
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      try {
-        const detail = await getHelpRequestById(route.params.helpId, user.id);
-        if (!isActive) {
-          return;
-        }
-
-        if (detail) {
-          setRequest(detail);
-          setError(null);
-          return;
-        }
-
-        if (isDemoHelpId(route.params.helpId)) {
-          setRequest(getDemoHelpDetail(route.params.helpId));
-          setError(null);
-          return;
-        }
-
-        setRequest(null);
-        setError("Request not found.");
-      } catch (error) {
-        if (!isActive) {
-          return;
-        }
-
-        if (isAbortError(error)) {
-          if (isDemoHelpId(route.params.helpId)) {
-            setRequest(getDemoHelpDetail(route.params.helpId));
-            setError(null);
-          } else {
-            setError("Request loading timed out. Please try again.");
-          }
-          return;
-        }
-
-        if (isDemoHelpId(route.params.helpId)) {
-          setRequest(getDemoHelpDetail(route.params.helpId));
-          setError(null);
-          return;
-        }
-
-        setRequest(null);
-        setError("Failed to load request details.");
-      } finally {
-        if (isActive) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadDetail();
-
-    return () => {
-      isActive = false;
-    };
-  }, [route.params.helpId, user?.id]);
-
-  const onHelpPress = async () => {
-    if (!user?.id || !request) {
+  const loadDetail = async () => {
+    if (!user?.id) {
+      setError("Oturum bulunamadı.");
+      setIsLoading(false);
       return;
     }
 
     try {
-      const conversation = await getOrCreateHelpConversation({
-        helpRequestId: request.id,
-        helper: {
-          id: user.id,
-          displayName: user.displayName,
-        },
-        requester: {
-          id: request.author.id,
-          displayName: request.author.displayName,
-          avatarUrl: request.author.avatarUrl,
-        },
-      });
-      setMessage("Opening conversation...");
+      const detail = await getHelpRequestById(route.params.helpId, user.id);
+      if (!detail) {
+        setRequest(null);
+        setError("İstek bulunamadı.");
+        return;
+      }
+      setRequest(detail);
+      setError(null);
+    } catch {
+      setRequest(null);
+      setError("İstek detayı yüklenemedi.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setIsLoading(true);
+    void loadDetail();
+  }, [route.params.helpId, user?.id]);
+
+  const goBackToHelpList = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate(HelpRoutes.HelpListScreen);
+  };
+
+  const onHelpPress = async () => {
+    if (!user?.id || !request || isResponding) {
+      return;
+    }
+
+    setIsResponding(true);
+    setActionMessage(null);
+    try {
+      const result = await respondToHelpRequest({ requestId: request.id, viewerId: user.id });
+      setRequest(result.helpRequest);
       const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
       tabNavigation?.navigate(TabRoutes.MessagesTab, {
         screen: MessagesRoutes.MessageThreadScreen,
-        params: { threadId: conversation.id },
+        params: { threadId: result.conversationId },
       });
-    } catch (error) {
-      if (isAbortError(error)) {
-        setMessage("Connection timed out. Please try again.");
-        return;
-      }
-      setMessage("Could not open conversation. Please try again.");
+    } catch (respondError) {
+      setActionMessage(respondError instanceof Error ? respondError.message : "Sohbet açılamadı.");
+    } finally {
+      setIsResponding(false);
+    }
+  };
+
+  const onStatusChange = async (status: HelpRequestStatus) => {
+    if (!request || isUpdatingStatus) {
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    setActionMessage(null);
+    try {
+      const updated = await updateHelpRequestStatus({ requestId: request.id, status });
+      setRequest(updated);
+      setActionMessage("Durum güncellendi.");
+    } catch (statusError) {
+      setActionMessage(statusError instanceof Error ? statusError.message : "Durum güncellenemedi.");
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Card style={styles.stateCard}>
-          <Loader label="Loading request..." />
-        </Card>
+        <View style={styles.statePage}>
+          <ScreenBackHeader onBack={goBackToHelpList} title="Yardım İsteği" />
+          <Card style={styles.stateCard}>
+            <Loader label="İstek yükleniyor..." />
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }
@@ -233,9 +160,12 @@ export function HelpDetailScreen({ route, navigation }: Props) {
   if (error) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Card style={styles.stateCard}>
-          <ErrorState subtitle={error} title="Could not load request" />
-        </Card>
+        <View style={styles.statePage}>
+          <ScreenBackHeader onBack={goBackToHelpList} title="Yardım İsteği" />
+          <Card style={styles.stateCard}>
+            <ErrorState subtitle={error} title="Yüklenemedi" />
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }
@@ -243,166 +173,329 @@ export function HelpDetailScreen({ route, navigation }: Props) {
   if (!request) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Card style={styles.stateCard}>
-          <EmptyState subtitle="This request may have been removed." title="Request not found" />
-        </Card>
+        <View style={styles.statePage}>
+          <ScreenBackHeader onBack={goBackToHelpList} title="Yardım İsteği" />
+          <Card style={styles.stateCard}>
+            <EmptyState subtitle="Bu istek kaldırılmış olabilir." title="İstek bulunamadı" />
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const categoryLabel = request.category?.trim() || "General";
-  const statusLabel = mapStatusLabel(request.status);
-  const locationLabel = `${request.city}, ${request.countryCode}`;
-  const relativeTime = formatRelativeTime(request.createdAt);
-  const requesterContext = `${request.community} community · ${locationLabel}`;
+  const categoryLabel = getHelpCategoryLabel(request.category);
+  const statusLabel = HELP_STATUS_LABELS[request.status];
+  const relativeTime = formatRelativeTimeTr(request.createdAt);
+  const isOwner = user?.id === request.author.id;
+  const heroImage = request.photoUrl ?? getCategoryCover(request.category);
+  const requesterMeta = [request.community, request.city, relativeTime].filter(Boolean).join(" · ");
+  const canHelp = !isOwner && request.status !== "resolved" && !request.viewerState.hasResponded;
+
+  const renderFooter = () => {
+    if (isOwner) {
+      return (
+        <View style={styles.footerInner}>
+          <AppText style={styles.footerLabel} variant="label">
+            Durumu Güncelle
+          </AppText>
+          <View style={styles.statusActions}>
+            {STATUS_ACTIONS.map((item) => {
+              const active = request.status === item.status;
+              return (
+                <Pressable
+                  key={item.status}
+                  disabled={isUpdatingStatus || active}
+                  onPress={() => void onStatusChange(item.status)}
+                  style={[styles.statusChip, active && styles.statusChipActive]}
+                >
+                  <AppText style={[styles.statusChipText, active && styles.statusChipTextActive]} variant="caption">
+                    {item.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
+
+    if (request.viewerState.hasResponded) {
+      return (
+        <View style={styles.footerInner}>
+          <AppText style={styles.respondedText} variant="body">
+            Bu isteğe zaten yanıt verdin. Mesajlar sekmesinden sohbete devam edebilirsin.
+          </AppText>
+        </View>
+      );
+    }
+
+    if (request.status === "resolved") {
+      return (
+        <View style={styles.footerInner}>
+          <View style={[styles.helpButton, styles.helpButtonDisabled]}>
+            <AppText style={styles.helpButtonLabel} variant="label">
+              Bu istek kapatıldı
+            </AppText>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.footerInner}>
+        <Pressable
+          disabled={isResponding || !canHelp}
+          onPress={() => void onHelpPress()}
+          style={[styles.helpButton, isResponding && styles.helpButtonDisabled]}
+        >
+          <AppText style={styles.helpButtonLabel} variant="label">
+            {isResponding ? "Açılıyor..." : "Yardım Edebilirim"}
+          </AppText>
+        </Pressable>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <Card style={styles.heroCard}>
-          <ImageBackground imageStyle={styles.heroImage} source={{ uri: getCategoryCover(request.category) }} style={styles.heroCover}>
-            <View style={styles.heroTopRow}>
-              <Badge label={categoryLabel} />
-              <Badge label={statusLabel} />
-            </View>
-            <View style={styles.heroBottom}>
-              <AppText style={styles.heroTitle} variant="title">
-                {request.title}
-              </AppText>
-              <AppText style={styles.heroMeta} variant="body">
-                {locationLabel}
-              </AppText>
-              <AppText style={styles.heroMeta} variant="body">
-                {relativeTime}
-              </AppText>
-            </View>
-          </ImageBackground>
-        </Card>
-
-        <Card>
-          <AppText style={styles.sectionTitle} variant="sectionTitle">
-            Requester
-          </AppText>
-          <View style={styles.requesterRow}>
-            <Avatar initials={request.author.displayName.slice(0, 2).toUpperCase()} size="md" uri={request.author.avatarUrl} />
-            <View style={styles.requesterTextWrap}>
-              <AppText variant="label">{request.author.displayName}</AppText>
-              <AppText style={styles.requesterMeta} variant="caption">
-                {requesterContext}
-              </AppText>
-            </View>
+      <View style={styles.page}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroWrap}>
+            <ImageBackground imageStyle={styles.heroImage} source={{ uri: heroImage }} style={styles.heroCover}>
+              <View style={styles.heroOverlay} />
+              <Pressable accessibilityLabel="Geri" onPress={goBackToHelpList} style={styles.backButton}>
+                <Ionicons color="#111827" name="chevron-back" size={24} />
+              </Pressable>
+              <View style={styles.heroBadges}>
+                <View style={styles.heroBadge}>
+                  <AppText style={styles.heroBadgeText} variant="caption">
+                    {categoryLabel}
+                  </AppText>
+                </View>
+                <View style={[styles.heroBadge, styles.heroBadgeMuted]}>
+                  <AppText style={styles.heroBadgeText} variant="caption">
+                    {statusLabel}
+                  </AppText>
+                </View>
+              </View>
+            </ImageBackground>
           </View>
-        </Card>
 
-        <Card>
-          <AppText style={styles.sectionTitle} variant="sectionTitle">
-            Request details
-          </AppText>
-          <AppText style={styles.description} variant="body">
-            {request.description}
-          </AppText>
-          <View style={styles.detailsMeta}>
-            <Badge label={`Category: ${categoryLabel}`} />
-            <Badge label={`Status: ${statusLabel}`} />
-            <Badge label={`${request.responsesCount} responders`} />
-          </View>
-          {message ? (
-            <AppText style={styles.message} variant="caption">
-              {message}
+          <View style={styles.body}>
+            <AppText style={styles.title} variant="title">
+              {request.title}
             </AppText>
-          ) : null}
-        </Card>
 
-        <Pressable onPress={() => void onHelpPress()} style={styles.helpButton}>
-          <AppText style={styles.helpButtonLabel} variant="label">
-            Yardım Et
-          </AppText>
-        </Pressable>
-      </ScrollView>
+            <View style={styles.requesterRow}>
+              <Avatar initials={request.author.displayName.slice(0, 2).toUpperCase()} size={40} uri={request.author.avatarUrl} />
+              <View style={styles.requesterText}>
+                <AppText style={styles.requesterName} variant="label">
+                  {request.author.displayName}
+                </AppText>
+                <AppText style={styles.requesterMeta} variant="caption">
+                  {requesterMeta}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <AppText style={styles.sectionLabel} variant="label">
+                İstek Detayı
+              </AppText>
+              <AppText style={styles.description} variant="body">
+                {request.description}
+              </AppText>
+            </View>
+
+            <AppText style={styles.metaLine} variant="caption">
+              Kategori: {categoryLabel} · Durum: {statusLabel}
+            </AppText>
+
+            {actionMessage ? (
+              <AppText style={styles.actionMessage} variant="caption">
+                {actionMessage}
+              </AppText>
+            ) : null}
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>{renderFooter()}</View>
+      </View>
     </SafeAreaView>
   );
 }
 
+const FOOTER_HEIGHT = 88;
+
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: theme.colors.background,
+    backgroundColor: "#FFFFFF",
     flex: 1,
   },
-  container: {
-    gap: theme.spacing.lg,
+  page: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: FOOTER_HEIGHT + theme.spacing.lg,
+  },
+  statePage: {
+    flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xxl,
-    paddingTop: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
   },
   stateCard: {
     flex: 1,
     justifyContent: "center",
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.md,
   },
-  heroCard: {
-    overflow: "hidden",
-    padding: 0,
+  backButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    borderRadius: 20,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+    zIndex: 2,
+  },
+  heroWrap: {
+    backgroundColor: "#E5E7EB",
+    height: 200,
+    width: "100%",
   },
   heroCover: {
-    height: 230,
-    justifyContent: "space-between",
-    padding: theme.spacing.lg,
+    flex: 1,
+    justifyContent: "flex-start",
+    padding: theme.spacing.md,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.28)",
   },
   heroImage: {
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    resizeMode: "cover",
   },
-  heroTopRow: {
+  heroBadges: {
     flexDirection: "row",
     gap: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
+    zIndex: 1,
   },
-  heroBottom: {
-    gap: 4,
+  heroBadge: {
+    backgroundColor: "rgba(17, 24, 39, 0.72)",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  heroTitle: {
+  heroBadgeMuted: {
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+  },
+  heroBadgeText: {
     color: "#FFFFFF",
+    fontWeight: "700",
   },
-  heroMeta: {
-    color: "rgba(255,255,255,0.9)",
+  body: {
+    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
   },
-  sectionTitle: {
-    marginBottom: theme.spacing.sm,
+  title: {
+    color: theme.colors.textPrimary,
+    fontSize: 24,
+    lineHeight: 30,
   },
   requesterRow: {
     alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing.sm,
   },
-  requesterTextWrap: {
+  requesterText: {
     flex: 1,
     gap: 2,
+  },
+  requesterName: {
+    color: theme.colors.textPrimary,
+    fontWeight: "700",
   },
   requesterMeta: {
     color: theme.colors.textSecondary,
   },
+  section: {
+    gap: theme.spacing.sm,
+  },
+  sectionLabel: {
+    color: theme.colors.textPrimary,
+    fontWeight: "700",
+  },
   description: {
+    color: theme.colors.textPrimary,
     lineHeight: 22,
   },
-  detailsMeta: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.md,
+  metaLine: {
+    color: theme.colors.textSecondary,
   },
-  message: {
-    color: "#16A34A",
-    marginTop: theme.spacing.sm,
+  actionMessage: {
+    color: "#059669",
+    marginTop: -theme.spacing.sm,
+  },
+  footer: {
+    backgroundColor: "#FFFFFF",
+    borderTopColor: "#E5E7EB",
+    borderTopWidth: 1,
+    bottom: 0,
+    left: 0,
+    paddingBottom: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    position: "absolute",
+    right: 0,
+  },
+  footerInner: {
+    gap: theme.spacing.sm,
+  },
+  footerLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+  },
+  statusActions: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+  },
+  statusChip: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 999,
+    flex: 1,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 10,
+  },
+  statusChipActive: {
+    backgroundColor: "#111827",
+  },
+  statusChipText: {
+    color: theme.colors.textSecondary,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  statusChipTextActive: {
+    color: "#FFFFFF",
   },
   helpButton: {
     alignItems: "center",
     backgroundColor: "#059669",
-    borderRadius: theme.radius.md,
+    borderRadius: 14,
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 52,
+  },
+  helpButtonDisabled: {
+    backgroundColor: "#9CA3AF",
+    opacity: 0.85,
   },
   helpButtonLabel: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  respondedText: {
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+    textAlign: "center",
   },
 });

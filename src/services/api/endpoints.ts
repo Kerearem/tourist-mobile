@@ -30,6 +30,8 @@ export const API_ENDPOINTS = {
     detail: "/help/requests/:requestId",
     create: "/help/requests",
     respond: "/help/requests/:requestId/respond",
+    updateStatus: "/help/requests/:requestId/status",
+    delete: "/help/requests/:requestId",
   },
   messages: {
     conversations: "/messages/conversations",

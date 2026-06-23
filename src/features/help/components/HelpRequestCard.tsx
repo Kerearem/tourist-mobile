@@ -5,29 +5,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../components/ui/AppText";
 import { Card } from "../../../components/ui/Card";
 import { theme } from "../../../constants/theme";
+import { getHelpCategoryLabel, HELP_STATUS_LABELS } from "../constants/helpCategories";
 import type { HelpRequest } from "../types";
 
 type HelpRequestCardProps = {
   request: HelpRequest;
   onOpen: () => void;
   onHelp: () => void;
+  isOwnRequest?: boolean;
+  isResponding?: boolean;
 };
 
-const categoryTone = (category: string) => {
-  const normalized = category.trim().toLowerCase();
-  if (normalized === "home") {
-    return { bg: "#FFF7ED", text: "#C2410C" };
-  }
-  if (normalized === "visa") {
-    return { bg: "#F5F3FF", text: "#7C3AED" };
-  }
-  if (normalized === "health") {
-    return { bg: "#FEF2F2", text: "#B91C1C" };
-  }
-  return { bg: "#F3F4F6", text: "#374151" };
-};
-
-const relativeTime = (iso: string) => {
+const relativeTimeTr = (iso: string) => {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -35,38 +24,46 @@ const relativeTime = (iso: string) => {
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.max(1, Math.floor(diffMs / 60000));
   if (diffMin < 60) {
-    return `${diffMin} min ago`;
+    return `${diffMin} dk önce`;
   }
   const diffHours = Math.floor(diffMin / 60);
   if (diffHours < 24) {
-    return `${diffHours} hours ago`;
+    return `${diffHours} sa önce`;
   }
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} days ago`;
+  return `${diffDays} gün önce`;
 };
 
-export function HelpRequestCard({ request, onOpen, onHelp }: HelpRequestCardProps) {
-  const categoryLabel = request.category?.trim() || "General";
-  const tone = categoryTone(categoryLabel);
-  const timeLabel = relativeTime(request.createdAt);
+export function HelpRequestCard({ request, onOpen, onHelp, isOwnRequest = false, isResponding = false }: HelpRequestCardProps) {
+  const categoryLabel = getHelpCategoryLabel(request.category);
+  const statusLabel = HELP_STATUS_LABELS[request.status];
+  const timeLabel = relativeTimeTr(request.createdAt);
+  const canRespond = !isOwnRequest && !request.viewerState.hasResponded && request.status !== "resolved";
 
   return (
     <Pressable onPress={onOpen}>
       <Card style={styles.card}>
         <View style={styles.topRow}>
-          <View style={[styles.categoryBadge, { backgroundColor: tone.bg }]}>
-            <AppText style={[styles.categoryText, { color: tone.text }]} variant="caption">
+          <View style={styles.categoryBadge}>
+            <AppText style={styles.categoryText} variant="caption">
               {categoryLabel.toUpperCase()}
             </AppText>
           </View>
-          {timeLabel ? (
-            <View style={styles.timeRow}>
-              <Ionicons color={theme.colors.textSecondary} name="time-outline" size={15} />
-              <AppText style={styles.timeText} variant="caption">
-                {timeLabel}
+          <View style={styles.metaRow}>
+            <View style={styles.statusPill}>
+              <AppText style={styles.statusText} variant="caption">
+                {statusLabel}
               </AppText>
             </View>
-          ) : null}
+            {timeLabel ? (
+              <View style={styles.timeRow}>
+                <Ionicons color={theme.colors.textSecondary} name="time-outline" size={15} />
+                <AppText style={styles.timeText} variant="caption">
+                  {timeLabel}
+                </AppText>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <AppText style={styles.title} variant="sectionTitle">
@@ -87,12 +84,25 @@ export function HelpRequestCard({ request, onOpen, onHelp }: HelpRequestCardProp
             </AppText>
           </View>
 
-          <Pressable onPress={onHelp} style={styles.helpButton}>
-            <Ionicons color="#059669" name="hand-left-outline" size={18} />
-            <AppText style={styles.helpButtonText} variant="label">
-              Yardım edebilirim
+          {canRespond ? (
+            <Pressable
+              disabled={isResponding}
+              onPress={(event) => {
+                event.stopPropagation?.();
+                onHelp();
+              }}
+              style={[styles.helpButton, isResponding && styles.helpButtonDisabled]}
+            >
+              <Ionicons color="#059669" name="hand-left-outline" size={18} />
+              <AppText style={styles.helpButtonText} variant="label">
+                {isResponding ? "Açılıyor..." : "Yardım edebilirim"}
+              </AppText>
+            </Pressable>
+          ) : request.viewerState.hasResponded ? (
+            <AppText style={styles.respondedText} variant="caption">
+              Yanıtladın
             </AppText>
-          </Pressable>
+          ) : null}
         </View>
       </Card>
     </Pressable>
@@ -107,18 +117,34 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
   },
   topRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     justifyContent: "space-between",
   },
   categoryBadge: {
+    backgroundColor: "#ECFDF5",
     borderRadius: 12,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
   },
   categoryText: {
+    color: "#047857",
     fontWeight: "800",
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
+  },
+  metaRow: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  statusPill: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  statusText: {
+    color: theme.colors.textSecondary,
+    fontWeight: "600",
   },
   timeRow: {
     alignItems: "center",
@@ -134,7 +160,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     color: "#4B5563",
-    lineHeight: 35,
+    lineHeight: 24,
   },
   divider: {
     backgroundColor: "#EEF0F3",
@@ -148,10 +174,12 @@ const styles = StyleSheet.create({
   locationRow: {
     alignItems: "center",
     flexDirection: "row",
+    flex: 1,
     gap: theme.spacing.sm,
   },
   locationText: {
     color: "#6B7280",
+    flexShrink: 1,
   },
   helpButton: {
     alignItems: "center",
@@ -162,8 +190,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
   },
+  helpButtonDisabled: {
+    opacity: 0.6,
+  },
   helpButtonText: {
     color: "#059669",
-    fontSize: 16,
+    fontSize: 15,
+  },
+  respondedText: {
+    color: theme.colors.textSecondary,
+    fontWeight: "600",
   },
 });

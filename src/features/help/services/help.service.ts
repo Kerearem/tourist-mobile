@@ -1,18 +1,59 @@
-import type { CreateHelpRequestInput, GetHelpRequestsInput, HelpRequest, RespondToHelpRequestInput } from "../types";
+import type {
+  CreateHelpRequestInput,
+  GetHelpRequestsInput,
+  HelpRequest,
+  RespondToHelpRequestInput,
+  RespondToHelpRequestResult,
+  UpdateHelpRequestStatusInput,
+} from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
+import { hydrateAuthState } from "../../auth/services/auth.service";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
 import { apiRequest } from "../../../services/api/client";
 
+const formatHelpApiError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "İstek başarısız oldu.";
+  const normalized = message.toLowerCase();
+  if (normalized.includes("unauthorized") || normalized.includes("invalid session")) {
+    return "Oturum süresi doldu. Lütfen çıkış yapıp tekrar giriş yap.";
+  }
+  return message;
+};
+
 const getAccessToken = async () => {
+  if (USE_MOCK_BACKEND) {
+    const state = await loadAuthState();
+    if (!state?.tokens.accessToken) {
+      throw new Error("Oturum bulunamadı.");
+    }
+    return state.tokens.accessToken;
+  }
+
+  const hydrated = await hydrateAuthState();
+  if (!hydrated) {
+    throw new Error("Oturum süresi doldu. Lütfen çıkış yapıp tekrar giriş yap.");
+  }
+
   const state = await loadAuthState();
   if (!state?.tokens.accessToken) {
-    throw new Error("Missing access token.");
+    throw new Error("Oturum bulunamadı.");
   }
   return state.tokens.accessToken;
 };
 
 const withRequestId = (template: string, requestId: string) => template.replace(":requestId", requestId);
+
+const mapStatusToApi = (status: HelpRequest["status"]) => {
+  if (status === "in_progress") {
+    return "IN_PROGRESS";
+  }
+  if (status === "resolved") {
+    return "RESOLVED";
+  }
+  return "OPEN";
+};
+
 const mockHelpRequests: HelpRequest[] = [
   {
     id: "help_demo_home",
@@ -21,9 +62,9 @@ const mockHelpRequests: HelpRequest[] = [
     countryCode: "DE",
     city: "Kreuzberg",
     createdAt: "2026-05-01T18:10:00.000Z",
-    title: "Need help moving a sofa",
-    description: "I just bought a sofa from IKEA but it does not fit in my car. Can anyone with a van help me?",
-    category: "Home",
+    title: "Kanepe taşımada yardım",
+    description: "IKEA'dan aldığım kanepe arabaya sığmıyor. Minibüsü olan var mı?",
+    category: "DAILY_LIFE",
     status: "open",
     responsesCount: 0,
     viewerState: { hasResponded: false },
@@ -35,9 +76,9 @@ const mockHelpRequests: HelpRequest[] = [
     countryCode: "DE",
     city: "Berlin",
     createdAt: "2026-05-01T16:00:00.000Z",
-    title: "Student Visa extension question",
-    description: "Has anyone recently renewed their student visa? I have a specific question about the finance proof.",
-    category: "Visa",
+    title: "Öğrenci vizesi uzatma sorusu",
+    description: "Yakın zamanda öğrenci vizesini uzatan oldu mu? Finans kanıtı hakkında sorum var.",
+    category: "VISA_LEGAL",
     status: "open",
     responsesCount: 0,
     viewerState: { hasResponded: false },
@@ -49,41 +90,57 @@ const mockHelpRequests: HelpRequest[] = [
     countryCode: "DE",
     city: "Mitte",
     createdAt: "2026-05-01T14:00:00.000Z",
-    title: "English speaking dentist?",
-    description: "Looking for recommendations for a good English speaking dentist in Mitte area. Just for a checkup.",
-    category: "Health",
+    title: "İngilizce konuşan diş hekimi?",
+    description: "Mitte bölgesinde İngilizce konuşan diş hekimi önerisi arıyorum.",
+    category: "HEALTH",
     status: "open",
     responsesCount: 0,
     viewerState: { hasResponded: false },
   },
 ];
 
-export async function getHelpRequests({ viewerId, community, countryCode, city }: GetHelpRequestsInput): Promise<HelpRequest[]> {
+export async function getHelpRequests({
+  viewerId,
+  locationScope = "city",
+  identityScope = "everyone",
+  category,
+  search,
+}: GetHelpRequestsInput): Promise<HelpRequest[]> {
   if (USE_MOCK_BACKEND) {
     void viewerId;
+    const mockResidenceCountry = "DE";
+    const mockResidenceCity = "Berlin";
+
     return mockHelpRequests.filter((request) => {
-      const matchesCommunity = !community || request.community.toLowerCase() === community.toLowerCase();
-      const matchesCountry = !countryCode || request.countryCode.toLowerCase() === countryCode.toLowerCase();
-      const matchesCity = !city || request.city.toLowerCase() === city.toLowerCase();
-      return matchesCommunity && matchesCountry && matchesCity;
+      const matchesCountry = request.countryCode.toUpperCase() === mockResidenceCountry;
+      const matchesCity =
+        locationScope === "country" ||
+        request.city.toLowerCase() === mockResidenceCity.toLowerCase();
+      const matchesIdentity =
+        identityScope === "everyone" ||
+        request.community.toLowerCase().includes("turkish");
+      const matchesCategory = !category || request.category === category;
+      const matchesSearch =
+        !search ||
+        request.title.toLowerCase().includes(search.toLowerCase()) ||
+        request.description.toLowerCase().includes(search.toLowerCase());
+      return matchesCountry && matchesCity && matchesIdentity && matchesCategory && matchesSearch;
     });
   }
 
   void viewerId;
   const token = await getAccessToken();
   const params = new URLSearchParams();
-  if (community) {
-    params.set("community", community);
+  params.set("locationScope", locationScope);
+  params.set("identityScope", identityScope);
+  if (category) {
+    params.set("category", category);
   }
-  if (countryCode) {
-    params.set("countryCode", countryCode);
+  if (search?.trim()) {
+    params.set("search", search.trim());
   }
-  if (city) {
-    params.set("city", city);
-  }
-  const query = params.toString();
 
-  return apiRequest<HelpRequest[]>(`${API_ENDPOINTS.help.list}${query ? `?${query}` : ""}`, {
+  return apiRequest<HelpRequest[]>(`${API_ENDPOINTS.help.list}?${params.toString()}`, {
     method: "GET",
     token,
   });
@@ -104,26 +161,105 @@ export async function getHelpRequestById(requestId: string, viewerId: string): P
 }
 
 export async function createHelpRequest(input: CreateHelpRequestInput): Promise<HelpRequest> {
-  const token = await getAccessToken();
-  return apiRequest<HelpRequest>(API_ENDPOINTS.help.create, {
-    method: "POST",
-    token,
-    body: {
-      title: input.title.trim(),
-      description: input.description.trim(),
-      category: input.category?.trim() || undefined,
+  if (USE_MOCK_BACKEND) {
+    const created: HelpRequest = {
+      id: `help_mock_${Date.now()}`,
+      author: { id: "mock_user", displayName: "Mock User" },
       community: input.community,
       countryCode: input.countryCode,
       city: input.city,
-    },
+      createdAt: new Date().toISOString(),
+      title: input.title.trim(),
+      description: input.description.trim(),
+      category: input.category,
+      status: "open",
+      responsesCount: 0,
+      viewerState: { hasResponded: false },
+      ...(input.photoUrl ? { photoUrl: input.photoUrl } : {}),
+    };
+    mockHelpRequests.unshift(created);
+    return created;
+  }
+
+  try {
+    const token = await getAccessToken();
+    return await apiRequest<HelpRequest>(API_ENDPOINTS.help.create, {
+      method: "POST",
+      token,
+      body: {
+        title: input.title.trim(),
+        description: input.description.trim(),
+        category: input.category,
+        community: input.community,
+        countryCode: input.countryCode,
+        city: input.city,
+        ...(input.photoUrl ? { photoUrl: input.photoUrl } : {}),
+      },
+    });
+  } catch (error) {
+    throw new Error(formatHelpApiError(error));
+  }
+}
+
+export async function respondToHelpRequest({
+  requestId,
+  viewerId,
+}: RespondToHelpRequestInput): Promise<RespondToHelpRequestResult> {
+  if (USE_MOCK_BACKEND) {
+    void viewerId;
+    const request = mockHelpRequests.find((item) => item.id === requestId);
+    if (!request) {
+      throw new Error("İstek bulunamadı.");
+    }
+    request.responsesCount += 1;
+    request.viewerState.hasResponded = true;
+    return {
+      helpRequest: request,
+      conversationId: `thread_help_${requestId}`,
+    };
+  }
+
+  void viewerId;
+  const token = await getAccessToken();
+  return apiRequest<RespondToHelpRequestResult>(withRequestId(API_ENDPOINTS.help.respond, requestId), {
+    method: "POST",
+    token,
   });
 }
 
-export async function respondToHelpRequest({ requestId, viewerId }: RespondToHelpRequestInput): Promise<HelpRequest | null> {
-  void viewerId;
+export async function updateHelpRequestStatus({
+  requestId,
+  status,
+}: UpdateHelpRequestStatusInput): Promise<HelpRequest> {
+  if (USE_MOCK_BACKEND) {
+    const request = mockHelpRequests.find((item) => item.id === requestId);
+    if (!request) {
+      throw new Error("İstek bulunamadı.");
+    }
+    request.status = status;
+    return request;
+  }
+
   const token = await getAccessToken();
-  return apiRequest<HelpRequest | null>(withRequestId(API_ENDPOINTS.help.respond, requestId), {
-    method: "POST",
+  return apiRequest<HelpRequest>(withRequestId(API_ENDPOINTS.help.updateStatus, requestId), {
+    method: "PATCH",
+    token,
+    body: { status: mapStatusToApi(status) },
+  });
+}
+
+export async function deleteHelpRequest(requestId: string): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    const index = mockHelpRequests.findIndex((item) => item.id === requestId);
+    if (index >= 0) {
+      mockHelpRequests.splice(index, 1);
+    }
+    return;
+  }
+
+  const token = await getAccessToken();
+  await apiRequest<{ success: boolean }>(withRequestId(API_ENDPOINTS.help.delete, requestId), {
+    method: "DELETE",
     token,
   });
 }
