@@ -156,6 +156,37 @@ export async function clearAuthState(): Promise<void> {
   await removeSecureItem(AUTH_STATE_KEY);
 }
 
+export async function updateAuthTokens(tokens: SessionTokens): Promise<void> {
+  const state = await loadAuthState();
+  if (!state) {
+    return;
+  }
+
+  await saveAuthState({
+    ...state,
+    tokens: {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken ?? state.tokens.refreshToken,
+    },
+  });
+}
+
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+export function onAuthSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+}
+
+export function notifyAuthSessionExpired(): void {
+  sessionExpiredListeners.forEach((listener) => {
+    listener();
+  });
+}
+
 export async function saveCanonicalUser(user: AppUser): Promise<void> {
   const state = await loadAuthState();
   if (!state) {

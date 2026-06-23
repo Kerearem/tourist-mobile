@@ -4,6 +4,7 @@ export type ApiRequestOptions = {
   method?: ApiMethod;
   body?: unknown;
   token?: string;
+  skipAuthRetry?: boolean;
 };
 
 export type ApiError = {

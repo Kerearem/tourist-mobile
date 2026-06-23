@@ -13,6 +13,7 @@ import {
 import { completeOnboarding as completeOnboardingService } from "../features/onboarding/services/onboarding.service";
 import type { AuthGateStatus, AuthSession } from "../models/auth";
 import type { AppUser, RelocationReason, UserLanguage } from "../models/user";
+import { onAuthSessionExpired } from "../services/api/authSession";
 
 type AuthContextValue = {
   user: AppUser | null;
@@ -275,6 +276,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
+
+  useEffect(() => {
+    return onAuthSessionExpired(() => {
+      setSession(null);
+      setUser(null);
+    });
+  }, []);
 
   const gateStatus = useMemo(
     () =>

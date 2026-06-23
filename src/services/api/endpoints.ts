@@ -3,6 +3,7 @@ export const API_ENDPOINTS = {
     signIn: "/auth/sign-in",
     signUp: "/auth/sign-up",
     signOut: "/auth/sign-out",
+    refresh: "/auth/refresh",
     me: "/auth/me",
     verifyPhone: "/auth/verify-phone",
     verifyEmail: "/auth/verify-email",

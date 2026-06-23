@@ -2,7 +2,7 @@ import { USE_MOCK_BACKEND } from "../../../constants/env";
 import type { AuthSession } from "../../../models/auth";
 import type { AppUser } from "../../../models/user";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
-import { apiRequest } from "../../../services/api/client";
+import { ApiRequestError, apiRequest } from "../../../services/api/client";
 import {
   clearAuthState,
   getMockUserRegistryUser,
@@ -381,6 +381,10 @@ export async function hydrateAuthState(): Promise<HydratedAuthState | null> {
       user: payload.user,
     };
   } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 401) {
+      return null;
+    }
+
     const message = error instanceof Error ? error.message.toLowerCase() : "";
     const isAuthFailure =
       message.includes("unauthorized") ||
