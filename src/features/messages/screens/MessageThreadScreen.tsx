@@ -25,6 +25,9 @@ const threadTitle = (conversation: ConversationThread | null, viewerId: string) 
   if (!conversation) {
     return "Conversation";
   }
+  if (conversation.metadata?.isSystemInbox === "true") {
+    return "Tourist";
+  }
   if (conversation.title) {
     return conversation.title;
   }
@@ -131,8 +134,9 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   };
 
   const title = useMemo(() => threadTitle(conversation, viewerId), [conversation, viewerId]);
+  const isSystemInbox = conversation?.metadata?.isSystemInbox === "true";
   const participant = useMemo(() => otherParticipant(conversation, viewerId), [conversation, viewerId]);
-  const initials = (participant?.displayName || title).slice(0, 2).toUpperCase();
+  const initials = isSystemInbox ? "T" : (participant?.displayName || title).slice(0, 2).toUpperCase();
   const timeLabel = useMemo(() => formatThreadTime(messages), [messages]);
 
   if (isLoading) {
@@ -175,15 +179,15 @@ export function MessageThreadScreen({ route, navigation }: Props) {
 
           <View style={styles.identity}>
             <View style={styles.avatarWrap}>
-              <Avatar initials={initials} size={52} uri={participant?.avatarUrl} />
-              <View style={styles.onlineDot} />
+              <Avatar initials={initials} size={52} uri={isSystemInbox ? undefined : participant?.avatarUrl} />
+              {!isSystemInbox ? <View style={styles.onlineDot} /> : null}
             </View>
             <View>
               <AppText style={styles.title} numberOfLines={1} variant="label">
                 {title}
               </AppText>
               <AppText style={styles.onlineText} variant="caption">
-                Online
+                {isSystemInbox ? "Sistem bildirimi" : "Online"}
               </AppText>
             </View>
           </View>
@@ -230,9 +234,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
             />
           )}
         </View>
-        <View style={styles.composerWrap}>
-          <MessageComposer disabled={!user} onSend={onSend} />
-        </View>
+        {!isSystemInbox ? (
+          <View style={styles.composerWrap}>
+            <MessageComposer disabled={!user} onSend={onSend} />
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );

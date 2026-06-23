@@ -18,6 +18,10 @@ type ConversationListItemProps = {
 };
 
 const getTitle = (conversation: ConversationThread, viewerId: string) => {
+  if (conversation.metadata?.isSystemInbox === "true") {
+    return "Tourist";
+  }
+
   if (conversation.title) {
     return conversation.title;
   }
@@ -59,12 +63,13 @@ export function ConversationListItem({
   onArchive,
 }: ConversationListItemProps) {
   const isGroup = conversation.type === "group";
+  const isSystemInbox = conversation.metadata?.isSystemInbox === "true";
   const title = getTitle(conversation, viewerId);
   const firstOther = conversation.participants.find((item) => item.id !== viewerId);
-  const initials = isGroup ? "GR" : (firstOther?.displayName || title).slice(0, 2).toUpperCase();
+  const initials = isGroup ? "GR" : isSystemInbox ? "T" : (firstOther?.displayName || title).slice(0, 2).toUpperCase();
   const time = formatTime(conversation.lastMessageAt);
   const unreadCount = conversation.unreadCount ?? 0;
-  const avatarColor = isGroup ? "#DBEAFE" : avatarColors[Math.abs(title.length) % avatarColors.length];
+  const avatarColor = isGroup ? "#DBEAFE" : isSystemInbox ? "#E0E7FF" : avatarColors[Math.abs(title.length) % avatarColors.length];
   const memberCount = conversation.metadata?.memberCount ?? String(conversation.participants.length);
   const isArchivedGroup = conversation.metadata?.isArchived === "true";
   const previewText =
@@ -164,6 +169,8 @@ export function ConversationListItem({
             <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
               {isGroup ? (
                 <Ionicons color={theme.colors.primary} name="people" size={22} />
+              ) : isSystemInbox ? (
+                <Ionicons color="#4338CA" name="information-circle" size={24} />
               ) : (
                 <AppText style={styles.initials} variant="label">
                   {initials}

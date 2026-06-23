@@ -184,7 +184,7 @@ export function GroupInfoScreen({ navigation, route }: Props) {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.memberRow}>
+          <View style={[styles.memberRow, item.hasBlockRelation && styles.memberRowBlocked]}>
             <Avatar initials={item.displayName.slice(0, 2).toUpperCase()} size={48} uri={item.avatarUrl} />
             <View style={styles.memberText}>
               <AppText variant="label">{item.displayName}</AppText>
@@ -197,6 +197,14 @@ export function GroupInfoScreen({ navigation, route }: Props) {
                     {item.role === "ORGANIZER" ? "Organizatör" : "Üye"}
                   </AppText>
                 </View>
+                {item.hasBlockRelation ? (
+                  <View style={styles.blockBadge}>
+                    <Ionicons color="#B91C1C" name="alert-circle-outline" size={12} />
+                    <AppText style={styles.blockBadgeText} variant="caption">
+                      Engel
+                    </AppText>
+                  </View>
+                ) : null}
               </View>
             </View>
             {isOrganizer && item.role !== "ORGANIZER" && !group.isArchived ? (
@@ -327,12 +335,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
   },
+  memberRowBlocked: {
+    backgroundColor: "rgba(254, 226, 226, 0.55)",
+    borderColor: "#FECACA",
+  },
   memberText: {
     flex: 1,
     gap: 6,
   },
   roleRow: {
+    alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.xs,
+  },
+  blockBadge: {
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  blockBadgeText: {
+    color: "#B91C1C",
+    fontWeight: "700",
   },
   roleBadge: {
     backgroundColor: "#F3F4F6",

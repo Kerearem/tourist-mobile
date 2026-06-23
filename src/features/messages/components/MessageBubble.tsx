@@ -34,6 +34,11 @@ export function MessageBubble({ message, isMine, variant = "dm", onLongPress, on
   if (message.type === "system") {
     return (
       <View style={styles.systemWrap}>
+        <View style={styles.systemBadge}>
+          <AppText style={styles.systemBadgeText} variant="caption">
+            Tourist
+          </AppText>
+        </View>
         <AppText style={styles.systemText} variant="caption">
           {message.text}
         </AppText>
@@ -251,9 +256,23 @@ const styles = StyleSheet.create({
   },
   systemWrap: {
     alignItems: "center",
+    gap: theme.spacing.xs,
     marginBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  systemBadge: {
+    backgroundColor: "#EEF2FF",
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+  },
+  systemBadgeText: {
+    color: "#4338CA",
+    fontWeight: "700",
   },
   systemText: {
     color: theme.colors.textSecondary,
+    lineHeight: 18,
+    textAlign: "center",
   },
 });
