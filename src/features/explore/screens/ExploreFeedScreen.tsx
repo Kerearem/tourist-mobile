@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, FlatList, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import { useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -15,6 +15,13 @@ import { ProfileHighlightRow } from "../../profile/components/ProfileHighlightRo
 import type { StoryHighlightItem } from "../../profile/components/ProfileEventHighlights";
 import { ProfileStatsRow } from "../../profile/components/ProfileStatsRow";
 import { blockUser, getUserBlockStatus, unblockUser, type UserBlockStatus } from "../../profile/services/block.service";
+import {
+  followUser,
+  getFollowButtonLabel,
+  getFollowStatus,
+  unfollowUser,
+  type FollowStatus,
+} from "../../profile/services/follow.service";
 import {
   COMPLAINT_REASON_OPTIONS,
   createUserComplaint,
@@ -122,6 +129,7 @@ function CommentLikeButton({
 export function ExploreFeedScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
+  const route = useRoute<RouteProp<ExploreStackParamList, "ExploreFeedScreen">>();
   const { height } = useWindowDimensions();
   const [viewState, dispatchViewState] = useReducer(reduceExploreViewState, {
     scope: "city" as ExploreFeedScope,
@@ -147,7 +155,8 @@ export function ExploreFeedScreen() {
   const [feedViewportHeight, setFeedViewportHeight] = useState(0);
   const [dismissedSearchUserIds, setDismissedSearchUserIds] = useState<string[]>([]);
   const [selectedSearchUser, setSelectedSearchUser] = useState<ExploreSearchUser | null>(null);
-  const [followedUserIds, setFollowedUserIds] = useState<string[]>([]);
+  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
+  const [isFollowActionLoading, setIsFollowActionLoading] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedReportReason, setSelectedReportReason] = useState<ComplaintReason | null>(null);
@@ -158,18 +167,40 @@ export function ExploreFeedScreen() {
   useEffect(() => {
     if (!selectedSearchUser?.id) {
       setProfileBlockStatus(null);
+      setFollowStatus(null);
       return;
     }
 
     void (async () => {
       try {
-        const status = await getUserBlockStatus(selectedSearchUser.id);
-        setProfileBlockStatus(status);
+        const [blockStatus, nextFollowStatus] = await Promise.all([
+          getUserBlockStatus(selectedSearchUser.id),
+          getFollowStatus(selectedSearchUser.id),
+        ]);
+        setProfileBlockStatus(blockStatus);
+        setFollowStatus(nextFollowStatus);
       } catch {
         setProfileBlockStatus(null);
+        setFollowStatus(null);
       }
     })();
   }, [selectedSearchUser?.id]);
+
+  useEffect(() => {
+    const openUser = route.params?.openUser;
+    if (!openUser) {
+      return;
+    }
+
+    setSelectedSearchUser({
+      id: openUser.id,
+      username: openUser.username,
+      displayName: openUser.displayName,
+      avatarUrl: openUser.avatarUrl,
+      countryCode: "",
+    });
+    navigation.setParams({ openUser: undefined });
+  }, [navigation, route.params?.openUser]);
 
   const openSearchUserProfile = (searchUser: ExploreSearchUser) => {
     setIsSearchOpen(false);
@@ -178,8 +209,27 @@ export function ExploreFeedScreen() {
       setSelectedSearchUser(searchUser);
     }, 120);
   };
-  const toggleFollowUser = (userId: string) => {
-    setFollowedUserIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
+  const toggleFollowUser = () => {
+    if (!selectedSearchUser || isFollowActionLoading || profileBlockStatus?.isBlocked) {
+      return;
+    }
+
+    void (async () => {
+      setIsFollowActionLoading(true);
+      try {
+        if (followStatus?.iFollow) {
+          await unfollowUser(selectedSearchUser.id);
+        } else {
+          await followUser(selectedSearchUser.id);
+        }
+        const nextStatus = await getFollowStatus(selectedSearchUser.id);
+        setFollowStatus(nextStatus);
+      } catch (err) {
+        Alert.alert("Hata", err instanceof Error ? err.message : "Takip işlemi tamamlanamadı.");
+      } finally {
+        setIsFollowActionLoading(false);
+      }
+    })();
   };
   const openDirectMessage = async (targetUser: ExploreSearchUser) => {
     if (!user?.id) {
@@ -230,6 +280,7 @@ export function ExploreFeedScreen() {
       } else {
         await blockUser(selectedSearchUser.id);
         setProfileBlockStatus({ blockedByMe: true, blockedMe: false, isBlocked: true });
+        setFollowStatus({ iFollow: false, followsMe: false, isFriend: false });
         Alert.alert("Engellendi", `${selectedSearchUser.displayName} kullanıcısını engellediniz.`);
       }
       setIsProfileMenuOpen(false);
@@ -280,14 +331,8 @@ export function ExploreFeedScreen() {
   const audienceLabel = audienceMode === "community" ? "Your community" : "Global";
   const trimmedSearchQuery = searchQuery.trim();
   const searchableUsers = useMemo(
-    () =>
-      searchResults
-        .filter((item) => !dismissedSearchUserIds.includes(item.id))
-        .map((item) => ({
-          ...item,
-          isFollowing: followedUserIds.includes(item.id),
-        })),
-    [dismissedSearchUserIds, followedUserIds, searchResults],
+    () => searchResults.filter((item) => !dismissedSearchUserIds.includes(item.id)),
+    [dismissedSearchUserIds, searchResults],
   );
 
   useEffect(() => {
@@ -734,21 +779,28 @@ export function ExploreFeedScreen() {
                   </Pressable>
                   <View style={styles.searchProfilePrimaryActions}>
                     <Pressable
-                      onPress={() => toggleFollowUser(selectedSearchUser.id)}
+                      disabled={isFollowActionLoading}
+                      onPress={toggleFollowUser}
                       style={[
                         styles.followButton,
                         styles.searchProfilePrimaryActionButton,
-                        followedUserIds.includes(selectedSearchUser.id) && styles.followButtonActive,
+                        followStatus?.iFollow && styles.followButtonActive,
+                        followStatus?.isFriend && styles.followButtonFriend,
                       ]}
                     >
                       <AppText
                         style={[
                           styles.followButtonText,
-                          followedUserIds.includes(selectedSearchUser.id) && styles.followButtonTextActive,
+                          followStatus?.iFollow && styles.followButtonTextActive,
+                          followStatus?.isFriend && styles.followButtonTextFriend,
                         ]}
                         variant="caption"
                       >
-                        {followedUserIds.includes(selectedSearchUser.id) ? "Takiptesin" : "Takip Et"}
+                        {isFollowActionLoading
+                          ? "..."
+                          : followStatus
+                            ? getFollowButtonLabel(followStatus)
+                            : "Takip Et"}
                       </AppText>
                     </Pressable>
                     <Pressable
@@ -923,7 +975,6 @@ export function ExploreFeedScreen() {
                     </AppText>
                     <AppText style={styles.searchMeta} variant="caption">
                       {item.displayName}
-                      {item.isFollowing ? " · Takip ediyorsun" : ""}
                       {item.hasNewPosts ? " · yeni gönderi" : ""}
                     </AppText>
                   </View>
@@ -1352,6 +1403,13 @@ const styles = StyleSheet.create({
   },
   followButtonTextActive: {
     color: "#FFFFFF",
+  },
+  followButtonFriend: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#10B981",
+  },
+  followButtonTextFriend: {
+    color: "#047857",
   },
   searchProfileMoreButton: {
     alignItems: "center",

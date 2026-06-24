@@ -32,7 +32,16 @@ export type OnboardingStackParamList = {
 };
 
 export type ExploreStackParamList = {
-  ExploreFeedScreen: undefined;
+  ExploreFeedScreen:
+    | {
+        openUser?: {
+          id: string;
+          username: string;
+          displayName: string;
+          avatarUrl?: string;
+        };
+      }
+    | undefined;
   ExploreCameraScreen: undefined;
 };
 
@@ -63,6 +72,7 @@ export type ProfileStackParamList = {
   SettingsScreen: undefined;
   AccountManagementScreen: undefined;
   BlockedUsersScreen: undefined;
+  FollowConnectionsScreen: { listType: "following" | "followers" | "friends" };
   ReportProblemScreen: undefined;
   DeleteAccountScreen: undefined;
   CreateEventScreen: undefined;

@@ -47,6 +47,7 @@ export const ProfileRoutes = {
   SettingsScreen: "SettingsScreen",
   AccountManagementScreen: "AccountManagementScreen",
   BlockedUsersScreen: "BlockedUsersScreen",
+  FollowConnectionsScreen: "FollowConnectionsScreen",
   ReportProblemScreen: "ReportProblemScreen",
   DeleteAccountScreen: "DeleteAccountScreen",
   CreateEventScreen: "CreateEventScreen",

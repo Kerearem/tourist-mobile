@@ -177,6 +177,30 @@ export function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">
+          Bağlantılar
+        </AppText>
+        <SettingsRow
+          icon="people-outline"
+          onPress={() =>
+            navigation.navigate(ProfileRoutes.FollowConnectionsScreen, { listType: "following" })
+          }
+          title="Takip Ettiklerim"
+        />
+        <SettingsRow
+          icon="person-add-outline"
+          onPress={() =>
+            navigation.navigate(ProfileRoutes.FollowConnectionsScreen, { listType: "followers" })
+          }
+          title="Takipçilerim"
+        />
+        <SettingsRow
+          icon="heart-circle-outline"
+          onPress={() => navigation.navigate(ProfileRoutes.FollowConnectionsScreen, { listType: "friends" })}
+          title="Arkadaşlarım"
+        />
+
+        <View style={styles.sectionDivider} />
+        <AppText style={styles.sectionTitle} variant="label">
           Tercihler
         </AppText>
         <SettingsRow

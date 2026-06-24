@@ -59,6 +59,11 @@ export const API_ENDPOINTS = {
     blocked: "/users/blocked",
     block: "/users/:userId/block",
     blockStatus: "/users/:userId/block-status",
+    follow: "/users/:userId/follow",
+    followStatus: "/users/:userId/follow-status",
+    myFollowing: "/users/me/following",
+    myFollowers: "/users/me/followers",
+    myFriends: "/users/me/friends",
   },
   complaints: {
     create: "/complaints",
