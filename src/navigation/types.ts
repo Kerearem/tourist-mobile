@@ -57,6 +57,7 @@ export type MessagesStackParamList = {
   MessageThreadScreen: { threadId: string };
   GroupDetailScreen: { eventId: string; conversationId?: string };
   GroupInfoScreen: { eventId: string };
+  NotificationsScreen: undefined;
 };
 
 export type EventsStackParamList = {

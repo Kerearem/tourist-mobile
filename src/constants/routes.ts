@@ -32,6 +32,7 @@ export const MessagesRoutes = {
   MessageThreadScreen: "MessageThreadScreen",
   GroupDetailScreen: "GroupDetailScreen",
   GroupInfoScreen: "GroupInfoScreen",
+  NotificationsScreen: "NotificationsScreen",
 } as const;
 
 export const EventsRoutes = {

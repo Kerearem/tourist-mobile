@@ -71,6 +71,12 @@ export const API_ENDPOINTS = {
   support: {
     report: "/support/report",
   },
+  notifications: {
+    list: "/notifications",
+    unreadCount: "/notifications/unread-count",
+    readAll: "/notifications/read-all",
+    markRead: "/notifications/:notificationId/read",
+  },
   organizer: {
     apply: "/organizer/apply",
     status: "/organizer/status",

@@ -17,6 +17,7 @@ import { archiveEventGroup } from "../../events/services/eventGroup.service";
 import { getEventById, toggleEventAttendance } from "../../events/services/events.service";
 import { ConversationListItem } from "../components/ConversationListItem";
 import { getConversations, getMessageRequests } from "../services/messages.service";
+import { getUnreadNotificationCount } from "../../notifications/services/notifications.service";
 import type { ConversationThread } from "../types";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessagesInboxScreen">;
@@ -31,6 +32,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
   const [requestCount, setRequestCount] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
 
   const viewerId = user?.id ?? "";
 
@@ -52,9 +54,14 @@ export function MessagesInboxScreen({ navigation }: Props) {
     }
 
     try {
-      const [data, requests] = await Promise.all([getConversations(), getMessageRequests()]);
+      const [data, requests, unreadNotifications] = await Promise.all([
+        getConversations(),
+        getMessageRequests(),
+        getUnreadNotificationCount(),
+      ]);
       setItems(data);
       setRequestCount(requests.length);
+      setNotificationCount(unreadNotifications);
       setError(null);
     } catch {
       setItems([]);
@@ -214,6 +221,20 @@ export function MessagesInboxScreen({ navigation }: Props) {
           <AppText style={styles.title} variant="title">
             Mesajlar
           </AppText>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => navigation.navigate(MessagesRoutes.NotificationsScreen)}
+            style={styles.iconButton}
+          >
+            <Ionicons color={theme.colors.textPrimary} name="notifications-outline" size={24} />
+            {notificationCount > 0 ? (
+              <View style={styles.iconBadge}>
+                <AppText style={styles.iconBadgeText} variant="caption">
+                  {notificationCount > 99 ? "99+" : String(notificationCount)}
+                </AppText>
+              </View>
+            ) : null}
+          </Pressable>
           <Pressable
             onPress={() => navigation.navigate(MessagesRoutes.MessageRequestsScreen)}
             style={styles.requestsButton}
@@ -229,6 +250,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
               </View>
             ) : null}
           </Pressable>
+        </View>
         </View>
 
         <View style={styles.searchBar}>
@@ -303,6 +325,31 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.textPrimary,
+  },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  iconButton: {
+    position: "relative",
+  },
+  iconBadge: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: 10,
+    justifyContent: "center",
+    minWidth: 18,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    position: "absolute",
+    right: -8,
+    top: -6,
+  },
+  iconBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
   },
   requestsButton: {
     alignItems: "center",
