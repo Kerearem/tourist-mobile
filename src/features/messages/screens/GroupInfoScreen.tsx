@@ -205,6 +205,13 @@ export function GroupInfoScreen({ navigation, route }: Props) {
                     </AppText>
                   </View>
                 ) : null}
+                {item.isFriend ? (
+                  <View style={styles.friendBadge}>
+                    <AppText style={styles.friendBadgeText} variant="caption">
+                      Arkadaş
+                    </AppText>
+                  </View>
+                ) : null}
               </View>
             </View>
             {isOrganizer && item.role !== "ORGANIZER" && !group.isArchived ? (
@@ -360,6 +367,16 @@ const styles = StyleSheet.create({
   },
   blockBadgeText: {
     color: "#B91C1C",
+    fontWeight: "700",
+  },
+  friendBadge: {
+    backgroundColor: "#ECFDF5",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  friendBadgeText: {
+    color: "#047857",
     fontWeight: "700",
   },
   roleBadge: {

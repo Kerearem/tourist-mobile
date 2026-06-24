@@ -9,6 +9,8 @@ export type EventGroupMember = {
   avatarUrl?: string;
   role: "MEMBER" | "ORGANIZER";
   hasBlockRelation?: boolean;
+  iFollow?: boolean;
+  isFriend?: boolean;
 };
 
 export type EventGroupInfo = {
