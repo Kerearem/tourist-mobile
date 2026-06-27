@@ -56,6 +56,21 @@ type SignUpInput = {
   consentAccepted: boolean;
 };
 
+const buildSignUpRequestBody = (input: SignUpInput) => {
+  const phoneCountryCode = input.phoneCountryCode?.trim();
+  const phoneNumber = input.phoneNumber?.trim();
+
+  return {
+    displayName: input.displayName,
+    username: input.username,
+    email: input.email,
+    password: input.password,
+    birthDate: input.birthDate,
+    consentAccepted: input.consentAccepted,
+    ...(phoneCountryCode && phoneNumber ? { phoneCountryCode, phoneNumber } : {}),
+  };
+};
+
 type HydratedAuthState = {
   session: AuthSession;
   user: AppUser;
@@ -370,16 +385,7 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
   const payload = parseAuthPayload(
     await apiRequest<AuthPayload>(API_ENDPOINTS.auth.signUp, {
       method: "POST",
-      body: {
-        displayName: input.displayName,
-        username: input.username,
-      phoneCountryCode: input.phoneCountryCode ?? "",
-      phoneNumber: input.phoneNumber ?? "",
-        email: input.email,
-        password: input.password,
-        birthDate: input.birthDate,
-        consentAccepted: input.consentAccepted,
-      },
+      body: buildSignUpRequestBody(input),
     }),
   );
 

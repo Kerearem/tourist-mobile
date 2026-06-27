@@ -118,31 +118,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async ({
       displayName,
       username,
-      phoneCountryCode,
-      phoneNumber,
       email,
       password,
       birthDate,
       consentAccepted,
+      phoneCountryCode,
+      phoneNumber,
     }: {
       displayName: string;
       username: string;
-      phoneCountryCode?: string;
-      phoneNumber?: string;
       email: string;
       password: string;
       birthDate: string;
       consentAccepted: boolean;
+      phoneCountryCode?: string;
+      phoneNumber?: string;
     }) => {
       const authState = await signUpWithEmail({
         displayName,
         username,
-        phoneCountryCode,
-        phoneNumber,
         email,
         password,
         birthDate,
         consentAccepted,
+        ...(phoneCountryCode?.trim() && phoneNumber?.trim()
+          ? { phoneCountryCode: phoneCountryCode.trim(), phoneNumber: phoneNumber.trim() }
+          : {}),
       });
       if (!authState?.user || !authState?.session) {
         throw new Error("Sign up succeeded but auth state is missing.");
