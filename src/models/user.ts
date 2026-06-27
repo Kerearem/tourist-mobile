@@ -22,8 +22,8 @@ export type AppUserPublicProfile = {
 
 export type AppUserPrivateProfile = {
   email: string;
-  phoneCountryCode: string;
-  phoneNumber: string;
+  phoneCountryCode?: string;
+  phoneNumber?: string;
   birthDate: string;
   nationalityCountryCode: string;
   destinationCountryCode: string;

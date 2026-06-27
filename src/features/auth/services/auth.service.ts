@@ -48,8 +48,8 @@ type SignInInput = {
 type SignUpInput = {
   displayName: string;
   username: string;
-  phoneCountryCode: string;
-  phoneNumber: string;
+  phoneCountryCode?: string;
+  phoneNumber?: string;
   email: string;
   password: string;
   birthDate: string;
@@ -85,8 +85,8 @@ const buildMockUser = (input: {
   displayName: string;
   username: string;
   email: string;
-  phoneCountryCode: string;
-  phoneNumber: string;
+  phoneCountryCode?: string;
+  phoneNumber?: string;
   birthDate: string;
   consentAccepted: boolean;
   hasPhoneVerification?: boolean;
@@ -114,8 +114,9 @@ const buildMockUser = (input: {
     },
     privateProfile: {
       email: input.email,
-      phoneCountryCode: input.phoneCountryCode,
-      phoneNumber: input.phoneNumber,
+      ...(input.phoneCountryCode && input.phoneNumber
+        ? { phoneCountryCode: input.phoneCountryCode, phoneNumber: input.phoneNumber }
+        : {}),
       birthDate: input.birthDate,
       nationalityCountryCode: input.onboardingComplete ? "TR" : "",
       destinationCountryCode: input.onboardingComplete ? "DE" : "",
@@ -346,8 +347,8 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
         displayName: input.displayName.trim() || input.email.split("@")[0] || "Tourist User",
         username: input.username.trim().toLowerCase(),
         email: normalizedEmail,
-        phoneCountryCode: input.phoneCountryCode.trim(),
-        phoneNumber: input.phoneNumber.trim(),
+        phoneCountryCode: input.phoneCountryCode?.trim() ?? "",
+        phoneNumber: input.phoneNumber?.trim() ?? "",
         birthDate: input.birthDate,
         consentAccepted: input.consentAccepted,
       }),
@@ -372,8 +373,8 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
       body: {
         displayName: input.displayName,
         username: input.username,
-        phoneCountryCode: input.phoneCountryCode,
-        phoneNumber: input.phoneNumber,
+      phoneCountryCode: input.phoneCountryCode ?? "",
+      phoneNumber: input.phoneNumber ?? "",
         email: input.email,
         password: input.password,
         birthDate: input.birthDate,

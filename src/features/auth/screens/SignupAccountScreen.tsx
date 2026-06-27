@@ -11,20 +11,13 @@ import type { AuthStackParamList } from "../../../navigation/types";
 import { SignupFlowLayout } from "../components/SignupFlowLayout";
 import { SIGNUP_FLOW_STEPS } from "../constants/signupFlow";
 import { useSignupDraft } from "../providers/SignupDraftProvider";
-import {
-  isValidCountryCode,
-  isValidEmail,
-  isValidPassword,
-  isValidPhoneNumber,
-} from "../utils/signup.validation";
+import { isValidEmail, isValidPassword } from "../utils/signup.validation";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "SignupAccountScreen">;
 
 export function SignupAccountScreen({ navigation }: Props) {
   const { signUp } = useAuth();
   const { draft, updateDraft } = useSignupDraft();
-  const [phoneCountryCode, setPhoneCountryCode] = useState(draft.phoneCountryCode);
-  const [phoneNumber, setPhoneNumber] = useState(draft.phoneNumber);
   const [email, setEmail] = useState(draft.email);
   const [password, setPassword] = useState(draft.password);
   const [consentAccepted, setConsentAccepted] = useState(draft.consentAccepted);
@@ -32,18 +25,8 @@ export function SignupAccountScreen({ navigation }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const onSubmit = async () => {
-    const cleanCountryCode = phoneCountryCode.trim();
-    const cleanPhoneNumber = phoneNumber.replace(/\s+/g, "");
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!isValidCountryCode(cleanCountryCode)) {
-      setError("Select a valid country code (e.g. +90).");
-      return;
-    }
-    if (!isValidPhoneNumber(cleanPhoneNumber)) {
-      setError("Enter a valid phone number.");
-      return;
-    }
     if (!isValidEmail(cleanEmail)) {
       setError("Enter a valid email address.");
       return;
@@ -63,8 +46,6 @@ export function SignupAccountScreen({ navigation }: Props) {
     }
 
     updateDraft({
-      phoneCountryCode: cleanCountryCode,
-      phoneNumber: cleanPhoneNumber,
       email: cleanEmail,
       password,
       consentAccepted: true,
@@ -76,8 +57,6 @@ export function SignupAccountScreen({ navigation }: Props) {
       await signUp({
         displayName: draft.displayName,
         username: draft.username,
-        phoneCountryCode: cleanCountryCode,
-        phoneNumber: cleanPhoneNumber,
         email: cleanEmail,
         password,
         birthDate: draft.birthDate,
@@ -85,7 +64,7 @@ export function SignupAccountScreen({ navigation }: Props) {
       });
       navigation.reset({
         index: 0,
-        routes: [{ name: AuthRoutes.PhoneVerificationScreen }],
+        routes: [{ name: AuthRoutes.EmailVerificationScreen }],
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign up failed.";
@@ -104,23 +83,9 @@ export function SignupAccountScreen({ navigation }: Props) {
       primaryLabel={isSubmitting ? "Creating..." : "Create Account"}
       primaryLoading={isSubmitting}
       showBack
-      subtitle="Add your contact details and secure your account."
+      subtitle="Add your email and password. We'll send a verification code to your inbox."
       title="Account details"
     >
-      <View style={styles.phoneRow}>
-        <View style={styles.countryCodeWrap}>
-          <AppInput
-            keyboardType="phone-pad"
-            onChangeText={setPhoneCountryCode}
-            placeholder="+90"
-            value={phoneCountryCode}
-          />
-        </View>
-        <View style={styles.phoneNumberWrap}>
-          <AppInput keyboardType="phone-pad" onChangeText={setPhoneNumber} placeholder="Phone number" value={phoneNumber} />
-        </View>
-      </View>
-
       <AppInput
         autoCapitalize="none"
         keyboardType="email-address"
@@ -143,16 +108,6 @@ export function SignupAccountScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  phoneRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  countryCodeWrap: {
-    width: 96,
-  },
-  phoneNumberWrap: {
-    flex: 1,
-  },
   checkboxRow: {
     alignItems: "center",
     flexDirection: "row",

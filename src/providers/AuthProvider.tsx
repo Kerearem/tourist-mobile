@@ -29,8 +29,8 @@ type AuthContextValue = {
   signUp: (payload: {
     displayName: string;
     username: string;
-    phoneCountryCode: string;
-    phoneNumber: string;
+    phoneCountryCode?: string;
+    phoneNumber?: string;
     email: string;
     password: string;
     birthDate: string;
@@ -92,10 +92,6 @@ const buildGateStatus = ({
     return "signed_out";
   }
 
-  if (!user.hasPhoneVerification) {
-    return "needs_phone_verification";
-  }
-
   if (!user.hasEmailVerification) {
     return "needs_email_verification";
   }
@@ -131,8 +127,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }: {
       displayName: string;
       username: string;
-      phoneCountryCode: string;
-      phoneNumber: string;
+      phoneCountryCode?: string;
+      phoneNumber?: string;
       email: string;
       password: string;
       birthDate: string;
