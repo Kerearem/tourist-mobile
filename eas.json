@@ -6,13 +6,32 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://tourist-backend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_USE_MOCK_BACKEND": "false",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "dp2odxbwe",
+        "EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET": "hvqlcate"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://tourist-backend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_USE_MOCK_BACKEND": "false",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "dp2odxbwe",
+        "EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET": "hvqlcate"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://tourist-backend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_USE_MOCK_BACKEND": "false",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "dp2odxbwe",
+        "EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET": "hvqlcate"
+      }
     }
   },
   "submit": {
