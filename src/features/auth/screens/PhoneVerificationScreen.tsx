@@ -130,7 +130,7 @@ export function PhoneVerificationScreen({ navigation }: Props) {
           {error ? <AppText style={styles.error}>{error}</AppText> : null}
 
           <AppButton label={isSubmitting ? "Verifying..." : "Confirm Phone"} loading={isSubmitting} onPress={onConfirm} />
-          <AppButton containerStyle={styles.secondaryButton} label="Sign Out" onPress={signOut} />
+          <AppButton containerStyle={styles.secondaryButton} label="Sign Out" onPress={() => void signOut()} />
         </View>
       </View>
     </Screen>

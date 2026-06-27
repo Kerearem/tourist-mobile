@@ -1,7 +1,8 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { getFocusedRouteNameFromRoute, StackActions } from "@react-navigation/native";
+import { getFocusedRouteNameFromRoute, StackActions, type PartialState } from "@react-navigation/native";
+import type { NavigationState, RouteProp } from "@react-navigation/native";
 
 import { ExploreRoutes, TabRoutes } from "../../constants/routes";
 import { theme } from "../../constants/theme";
@@ -13,6 +14,13 @@ import { ProfileStack } from "../profile/ProfileStack";
 import type { MainTabParamList } from "../types";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+type TabRouteWithNestedState = RouteProp<MainTabParamList, keyof MainTabParamList> & {
+  state?: PartialState<NavigationState>;
+};
+
+const getNestedTabState = (route: RouteProp<MainTabParamList, keyof MainTabParamList>) =>
+  (route as TabRouteWithNestedState).state;
 
 type TabIconName = keyof typeof Ionicons.glyphMap;
 
@@ -62,7 +70,7 @@ export function MainTabs() {
         })}
         listeners={({ navigation, route }) => ({
           tabPress: (event) => {
-            const nestedState = route.state;
+            const nestedState = getNestedTabState(route);
             if (!nestedState || nestedState.index === 0) {
               return;
             }
@@ -84,7 +92,7 @@ export function MainTabs() {
             if (!navigation.isFocused()) {
               return;
             }
-            const nestedState = route.state;
+            const nestedState = getNestedTabState(route);
             if (!nestedState || nestedState.index === 0) {
               return;
             }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { CommonActions } from "@react-navigation/native";
+import { CommonActions, type NavigationProp, type ParamListBase, type PartialState } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { AuthRoutes } from "../../constants/routes";
@@ -16,9 +16,17 @@ import type { AuthStackParamList } from "../types";
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
+type AuthStackNavigationRef = Pick<NavigationProp<ParamListBase>, "getState" | "dispatch">;
+
+const StackNavigator = Stack.Navigator as React.ComponentType<
+  React.ComponentProps<typeof Stack.Navigator> & {
+    ref?: React.Ref<AuthStackNavigationRef>;
+  }
+>;
+
 export function AuthStack() {
   const { gateStatus } = useAuth();
-  const navigationRef = useRef<any>(null);
+  const navigationRef = useRef<AuthStackNavigationRef | null>(null);
   const initialRouteName =
     gateStatus === "needs_phone_verification"
       ? AuthRoutes.PhoneVerificationScreen
@@ -57,7 +65,7 @@ export function AuthStack() {
 
   return (
     <SignupDraftProvider>
-      <Stack.Navigator
+      <StackNavigator
         initialRouteName={initialRouteName}
         key={gateStatus}
         ref={navigationRef}
@@ -70,7 +78,7 @@ export function AuthStack() {
         <Stack.Screen component={SignupAccountScreen} name={AuthRoutes.SignupAccountScreen} />
         <Stack.Screen component={PhoneVerificationScreen} name={AuthRoutes.PhoneVerificationScreen} />
         <Stack.Screen component={EmailVerificationScreen} name={AuthRoutes.EmailVerificationScreen} />
-      </Stack.Navigator>
+      </StackNavigator>
     </SignupDraftProvider>
   );
 }

@@ -121,7 +121,7 @@ export function EmailVerificationScreen() {
           {error ? <AppText style={styles.error}>{error}</AppText> : null}
 
           <AppButton label={isSubmitting ? "Verifying..." : "Confirm Email"} loading={isSubmitting} onPress={onConfirm} />
-          <AppButton containerStyle={styles.secondaryButton} label="Sign Out" onPress={signOut} />
+          <AppButton containerStyle={styles.secondaryButton} label="Sign Out" onPress={() => void signOut()} />
         </View>
       </View>
     </Screen>

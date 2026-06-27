@@ -24,7 +24,7 @@ type RefreshTokensResponse = {
 
 const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
 
-const AUTH_PUBLIC_PATHS = new Set([
+const AUTH_PUBLIC_PATHS: ReadonlySet<string> = new Set([
   API_ENDPOINTS.auth.signIn,
   API_ENDPOINTS.auth.signUp,
   API_ENDPOINTS.auth.signOut,

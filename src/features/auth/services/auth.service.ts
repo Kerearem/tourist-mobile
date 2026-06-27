@@ -10,6 +10,7 @@ import {
   saveAuthState,
   saveCanonicalUser,
 } from "../../../services/api/authSession";
+import { getSecureItem, setSecureItem } from "../../../services/storage/secureStorage";
 import type { SessionTokens } from "../../../services/api/types";
 
 export type AuthPayload = {
