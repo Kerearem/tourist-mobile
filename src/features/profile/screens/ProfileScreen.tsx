@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppText } from "../../../components/ui/AppText";
@@ -22,6 +23,13 @@ export function ProfileScreen({ navigation }: Props) {
   const { user, updateAvatarUrl } = useAuth();
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [snapsRefreshToken, setSnapsRefreshToken] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setSnapsRefreshToken((value) => value + 1);
+    }, []),
+  );
 
   const profileDisplay = useMemo(() => {
     const fallbackName = "Tourist Member";
@@ -144,7 +152,7 @@ export function ProfileScreen({ navigation }: Props) {
 
           <ProfileHighlightRow highlights={storyHighlights} />
 
-          <ProfileContentTabs />
+          {user?.id ? <ProfileContentTabs refreshToken={snapsRefreshToken} userId={user.id} /> : null}
         </View>
       </ScrollView>
     </SafeAreaView>

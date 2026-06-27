@@ -12,6 +12,7 @@ export type ExplorePostMedia = {
 export type ExplorePostAuthor = {
   id: string;
   displayName: string;
+  username?: string;
   avatarUrl?: string;
 };
 
@@ -25,13 +26,30 @@ export type ExplorePostViewerState = {
   saved?: boolean;
 };
 
+export type ExploreFeedItemType = "snap";
+
+export type ExploreFeedSnapItem = {
+  type: ExploreFeedItemType;
+  id: string;
+  frontMediaUrl: string;
+  backMediaUrl: string;
+  caption?: string;
+  locationText?: string;
+  createdAt: string;
+  author: ExplorePostAuthor & { username: string };
+  stats: ExplorePostStats;
+  viewerState: {
+    liked: boolean;
+  };
+};
+
+export type ExploreFeedItem = ExploreFeedSnapItem;
+
 export type ExplorePost = {
   id: string;
+  type: ExploreFeedItemType;
   author: ExplorePostAuthor;
-  community: string;
-  countryCode: string;
-  city: string;
-  // Feed-context scope for the returned payload (city/country view), not intrinsic post visibility.
+  locationText?: string;
   scope: ExploreFeedScope;
   createdAt: string;
   text: string;
@@ -41,8 +59,34 @@ export type ExplorePost = {
 };
 
 export type LoadExploreFeedInput = {
-  scope: ExploreFeedScope;
-  community?: string;
-  countryCode: string;
-  city: string;
+  locationScope: ExploreFeedScope;
+  identityScope: "nationality" | "everyone";
 };
+
+export type SnapCommentItem = {
+  id: string;
+  snapId: string;
+  text: string;
+  createdAt: string;
+  parentCommentId?: string;
+  author: {
+    id: string;
+    displayName: string;
+    username: string;
+    avatarUrl?: string;
+  };
+  stats: {
+    likeCount: number;
+  };
+  viewerState: {
+    liked: boolean;
+  };
+  replies: SnapCommentItem[];
+};
+
+export type SnapLikeResult = {
+  liked: boolean;
+  likeCount: number;
+};
+
+export type SnapCommentLikeResult = SnapLikeResult;

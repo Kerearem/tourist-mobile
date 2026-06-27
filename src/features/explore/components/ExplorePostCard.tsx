@@ -5,16 +5,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import type { FollowStatus } from "../../profile/services/follow.service";
 import type { ExplorePost } from "../types";
 
 type ExplorePostCardProps = {
   post: ExplorePost;
   height?: number;
+  viewerId?: string;
+  authorFollowStatus?: FollowStatus | null;
   onCommentPress?: () => void;
   onLikePress?: () => void;
   onAuthorPress?: () => void;
+  onMessagePress?: () => void;
+  onFollowPress?: () => void;
+  isFollowLoading?: boolean;
   isLiked?: boolean;
   likeCount?: number;
+  commentCount?: number;
 };
 
 const formatCount = (value: number) => {
@@ -47,19 +54,28 @@ function ActionButton({
 export function ExplorePostCard({
   post,
   height,
+  viewerId,
+  authorFollowStatus,
   onCommentPress,
   onLikePress,
   onAuthorPress,
+  onMessagePress,
+  onFollowPress,
+  isFollowLoading,
   isLiked,
   likeCount,
+  commentCount,
 }: ExplorePostCardProps) {
+  const authorLabel = post.author.username || post.author.displayName;
   const initials = post.author.displayName.slice(0, 2).toUpperCase();
-  const displayNumber = post.id.endsWith("_2") ? "2" : "1";
+  const isOwnPost = Boolean(viewerId && post.author.id === viewerId);
+  const isFollowing = Boolean(authorFollowStatus?.iFollow);
   const [carouselWidth, setCarouselWidth] = useState(0);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const hasMedia = post.media.length > 0;
   const liked = isLiked ?? post.viewerState.liked;
   const visibleLikeCount = likeCount ?? post.stats.likeCount;
+  const visibleCommentCount = commentCount ?? post.stats.commentCount;
   const likeScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -110,16 +126,26 @@ export function ExplorePostCard({
         </View>
       ) : (
         <View style={styles.visualCenter}>
-          <AppText style={styles.visualNumber}>{displayNumber}</AppText>
+          <AppText style={styles.visualNumber}>Snap</AppText>
         </View>
       )}
 
       <View style={styles.actionRail}>
         <View style={styles.profileAction}>
-          <Avatar initials={initials} size="md" uri={post.author.avatarUrl} />
-          <View style={styles.followDot}>
-            <Ionicons color="#FFFFFF" name="add" size={14} />
-          </View>
+          <Pressable onPress={onAuthorPress}>
+            <Avatar initials={initials} size="md" uri={post.author.avatarUrl} />
+          </Pressable>
+          {!isOwnPost ? (
+            isFollowing ? (
+              <View style={[styles.followDot, styles.followDotActive]}>
+                <Ionicons color="#FFFFFF" name="checkmark" size={14} />
+              </View>
+            ) : (
+              <Pressable disabled={isFollowLoading} onPress={onFollowPress} style={styles.followDot}>
+                <Ionicons color="#FFFFFF" name="add" size={14} />
+              </Pressable>
+            )
+          ) : null}
         </View>
         <Pressable onPress={onLikePress} style={styles.actionButton}>
           <Animated.View style={{ transform: [{ scale: likeScale }] }}>
@@ -129,14 +155,14 @@ export function ExplorePostCard({
             {formatCount(visibleLikeCount)}
           </AppText>
         </Pressable>
-        <ActionButton icon="chatbubble-outline" label={formatCount(post.stats.commentCount)} onPress={onCommentPress} />
-        <ActionButton icon="share-social-outline" label="Share" />
+        <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
+        <ActionButton icon="paper-plane-outline" label="Mesaj" onPress={onMessagePress} />
       </View>
 
       <View style={styles.captionBlock}>
         <Pressable onPress={onAuthorPress}>
           <AppText style={styles.username} variant="label">
-            @{post.author.displayName}
+            @{authorLabel}
           </AppText>
         </Pressable>
         <AppText style={styles.caption} variant="body">
@@ -214,6 +240,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: -4,
     width: 20,
+  },
+  followDotActive: {
+    backgroundColor: "#6B7280",
   },
   actionButton: {
     alignItems: "center",

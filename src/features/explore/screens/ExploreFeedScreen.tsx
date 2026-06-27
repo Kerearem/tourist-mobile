@@ -28,23 +28,14 @@ import {
   type ComplaintReason,
 } from "../../profile/services/complaints.service";
 import { getOrCreateDirectConversation } from "../../messages/services/messages.service";
+import { addSnapComment, getSnapComments, likeSnap, likeSnapComment, unlikeSnap, unlikeSnapComment } from "../../snaps/services/snaps.service";
 import { ExplorePostCard } from "../components/ExplorePostCard";
 import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
 import { loadExploreFeed } from "../services/explore.service";
 import { searchUsers } from "../services/userSearch.service";
-import type { ExploreFeedScope, ExplorePost } from "../types";
+import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
-type MockComment = {
-  id: string;
-  author: string;
-  text: string;
-  timeAgo: string;
-  likes: number;
-  parentCommentId?: string;
-};
-type LegacyComment = string;
-type ReplyTarget = { commentId: string; author: string };
 type ExploreSearchUser = {
   id: string;
   username: string;
@@ -57,7 +48,6 @@ type ExploreSearchUser = {
   hasNewPosts?: boolean;
 };
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const SEARCH_PROFILE_STORY_HIGHLIGHTS: StoryHighlightItem[] = [
   {
     id: "story_highlight_food",
@@ -93,38 +83,28 @@ const SEARCH_PROFILE_STORY_HIGHLIGHTS: StoryHighlightItem[] = [
   },
 ];
 
-function CommentLikeButton({
-  liked,
-  count,
-  onPress,
-}: {
-  liked: boolean;
-  count: number;
-  onPress: () => void;
-}) {
-  const scale = React.useRef(new Animated.Value(1)).current;
+type CommentReplyTarget = {
+  commentId: string;
+  authorUsername: string;
+};
 
-  useEffect(() => {
-    if (!liked) {
-      return;
-    }
-    Animated.sequence([
-      Animated.spring(scale, { toValue: 1.25, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
-    ]).start();
-  }, [liked, scale]);
+const countSnapComments = (items: SnapCommentItem[]): number =>
+  items.reduce((sum, item) => sum + 1 + countSnapComments(item.replies ?? []), 0);
 
-  return (
-    <Pressable onPress={onPress} style={styles.commentLikeWrap}>
-      <Animated.View style={{ transform: [{ scale }] }}>
-        <Ionicons color={liked ? "#FF375F" : "#9CA3AF"} name={liked ? "heart" : "heart-outline"} size={18} />
-      </Animated.View>
-      <AppText style={[styles.commentLikeCount, liked && styles.commentLikeCountActive]} variant="caption">
-        {count}
-      </AppText>
-    </Pressable>
-  );
-}
+const syncCommentLikes = (items: SnapCommentItem[]): Record<string, { liked: boolean; count: number }> => {
+  const acc: Record<string, { liked: boolean; count: number }> = {};
+  const walk = (list: SnapCommentItem[]) => {
+    list.forEach((item) => {
+      acc[item.id] = {
+        liked: item.viewerState.liked,
+        count: item.stats.likeCount,
+      };
+      walk(item.replies ?? []);
+    });
+  };
+  walk(items);
+  return acc;
+};
 
 export function ExploreFeedScreen() {
   const { user } = useAuth();
@@ -141,11 +121,19 @@ export function ExploreFeedScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCommentsPost, setActiveCommentsPost] = useState<ExplorePost | null>(null);
-  const [commentsByPost, setCommentsByPost] = useState<Record<string, Array<MockComment | LegacyComment>>>({});
+  const [snapComments, setSnapComments] = useState<SnapCommentItem[]>([]);
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [postLikesById, setPostLikesById] = useState<Record<string, { liked: boolean; count: number }>>({});
-  const [commentLikesById, setCommentLikesById] = useState<Record<string, boolean>>({});
+  const [postCommentCountsById, setPostCommentCountsById] = useState<Record<string, number>>({});
+  const [followStatusByAuthorId, setFollowStatusByAuthorId] = useState<Record<string, FollowStatus>>({});
+  const [followLoadingByAuthorId, setFollowLoadingByAuthorId] = useState<Record<string, boolean>>({});
+  const [commentLikesById, setCommentLikesById] = useState<Record<string, { liked: boolean; count: number }>>({});
+  const [commentLikeLoadingId, setCommentLikeLoadingId] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<CommentReplyTarget | null>(null);
+  const [isLikeActionLoading, setIsLikeActionLoading] = useState<string | null>(null);
+  const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [draftComment, setDraftComment] = useState("");
-  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ExploreSearchUser[]>([]);
@@ -408,11 +396,17 @@ export function ExploreFeedScreen() {
           buildLoadExploreFeedInput({
             scope,
             audienceMode,
-            context: feedContext,
           }),
+          scope,
         );
         setPosts(result);
         setError(null);
+        setPostCommentCountsById(
+          result.reduce<Record<string, number>>((acc, post) => {
+            acc[post.id] = post.stats.commentCount;
+            return acc;
+          }, {}),
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load explore feed.";
         setPosts([]);
@@ -425,27 +419,297 @@ export function ExploreFeedScreen() {
     [audienceMode, feedContext.city, feedContext.community, feedContext.countryCode, scope],
   );
 
+  const loadCommentsForPost = useCallback(async (post: ExplorePost) => {
+    setIsCommentsLoading(true);
+    setCommentsError(null);
+    try {
+      const comments = await getSnapComments(post.id);
+      setSnapComments(comments);
+      setCommentLikesById(syncCommentLikes(comments));
+    } catch (err) {
+      setSnapComments([]);
+      setCommentLikesById({});
+      setCommentsError(err instanceof Error ? err.message : "Yorumlar yüklenemedi.");
+    } finally {
+      setIsCommentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeCommentsPost) {
+      setSnapComments([]);
+      setCommentLikesById({});
+      setCommentsError(null);
+      setReplyTarget(null);
+      return;
+    }
+    void loadCommentsForPost(activeCommentsPost);
+  }, [activeCommentsPost, loadCommentsForPost]);
+
+  useEffect(() => {
+    if (posts.length === 0 || !user?.id) {
+      setFollowStatusByAuthorId({});
+      return;
+    }
+
+    const authorIds = [...new Set(posts.map((post) => post.author.id).filter((authorId) => authorId !== user.id))];
+    if (authorIds.length === 0) {
+      setFollowStatusByAuthorId({});
+      return;
+    }
+
+    void (async () => {
+      const entries = await Promise.all(
+        authorIds.map(async (authorId) => {
+          try {
+            const status = await getFollowStatus(authorId);
+            return [authorId, status] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      setFollowStatusByAuthorId(
+        entries.reduce<Record<string, FollowStatus>>((acc, entry) => {
+          if (entry) {
+            acc[entry[0]] = entry[1];
+          }
+          return acc;
+        }, {}),
+      );
+    })();
+  }, [posts, user?.id]);
+
   useEffect(() => {
     void fetchFeed("initial");
   }, [fetchFeed]);
 
   useEffect(() => {
     if (posts.length === 0) {
+      setPostLikesById({});
       return;
     }
-    setPostLikesById((prev) => {
-      const next = { ...prev };
-      posts.forEach((post) => {
-        if (!next[post.id]) {
-          next[post.id] = {
-            liked: Boolean(post.viewerState.liked),
-            count: post.stats.likeCount,
-          };
-        }
-      });
-      return next;
-    });
+    setPostLikesById(
+      posts.reduce<Record<string, { liked: boolean; count: number }>>((acc, post) => {
+        acc[post.id] = {
+          liked: Boolean(post.viewerState.liked),
+          count: post.stats.likeCount,
+        };
+        return acc;
+      }, {}),
+    );
   }, [posts]);
+
+  const openPostAuthorProfile = (post: ExplorePost) => {
+    setSelectedSearchUser({
+      id: post.author.id,
+      username: post.author.username || post.author.displayName,
+      displayName: post.author.displayName,
+      countryCode: "",
+      avatarUrl: post.author.avatarUrl,
+      bio: post.text || `${post.author.displayName} Tourist topluluğunda Snap paylaşıyor.`,
+    });
+  };
+
+  const openPostDirectMessage = async (post: ExplorePost) => {
+    if (!user?.id || post.author.id === user.id) {
+      return;
+    }
+    await openDirectMessage({
+      id: post.author.id,
+      username: post.author.username || post.author.displayName,
+      displayName: post.author.displayName,
+      countryCode: "",
+      avatarUrl: post.author.avatarUrl,
+    });
+  };
+
+  const toggleFollowOnAuthor = (authorId: string) => {
+    if (followLoadingByAuthorId[authorId]) {
+      return;
+    }
+
+    void (async () => {
+      setFollowLoadingByAuthorId((prev) => ({ ...prev, [authorId]: true }));
+      try {
+        const current = followStatusByAuthorId[authorId];
+        if (current?.iFollow) {
+          await unfollowUser(authorId);
+        } else {
+          await followUser(authorId);
+        }
+        const nextStatus = await getFollowStatus(authorId);
+        setFollowStatusByAuthorId((prev) => ({ ...prev, [authorId]: nextStatus }));
+      } catch (err) {
+        Alert.alert("Hata", err instanceof Error ? err.message : "Takip işlemi tamamlanamadı.");
+      } finally {
+        setFollowLoadingByAuthorId((prev) => ({ ...prev, [authorId]: false }));
+      }
+    })();
+  };
+
+  const togglePostLike = (post: ExplorePost) => {
+    if (isLikeActionLoading === post.id) {
+      return;
+    }
+
+    const current = postLikesById[post.id] ?? {
+      liked: Boolean(post.viewerState.liked),
+      count: post.stats.likeCount,
+    };
+
+    void (async () => {
+      setIsLikeActionLoading(post.id);
+      try {
+        const result = current.liked ? await unlikeSnap(post.id) : await likeSnap(post.id);
+        setPostLikesById((prev) => ({
+          ...prev,
+          [post.id]: {
+            liked: result.liked,
+            count: result.likeCount,
+          },
+        }));
+      } catch (err) {
+        Alert.alert("Hata", err instanceof Error ? err.message : "Beğeni işlemi tamamlanamadı.");
+      } finally {
+        setIsLikeActionLoading(null);
+      }
+    })();
+  };
+
+  const toggleCommentLike = (commentId: string) => {
+    if (!activeCommentsPost || commentLikeLoadingId === commentId) {
+      return;
+    }
+
+    const current = commentLikesById[commentId] ?? { liked: false, count: 0 };
+
+    void (async () => {
+      setCommentLikeLoadingId(commentId);
+      try {
+        const result = current.liked
+          ? await unlikeSnapComment(activeCommentsPost.id, commentId)
+          : await likeSnapComment(activeCommentsPost.id, commentId);
+        setCommentLikesById((prev) => ({
+          ...prev,
+          [commentId]: {
+            liked: result.liked,
+            count: result.likeCount,
+          },
+        }));
+      } catch (err) {
+        Alert.alert("Hata", err instanceof Error ? err.message : "Beğeni işlemi tamamlanamadı.");
+      } finally {
+        setCommentLikeLoadingId(null);
+      }
+    })();
+  };
+
+  const startReply = (comment: SnapCommentItem) => {
+    const username = comment.author.username || comment.author.displayName;
+    setReplyTarget({ commentId: comment.id, authorUsername: username });
+    setDraftComment(`@${username} `);
+  };
+
+  const submitComment = () => {
+    if (!activeCommentsPost || isCommentSubmitting) {
+      return;
+    }
+    const clean = draftComment.trim();
+    if (!clean) {
+      return;
+    }
+
+    const parentCommentId = replyTarget?.commentId;
+
+    void (async () => {
+      setIsCommentSubmitting(true);
+      try {
+        await addSnapComment(activeCommentsPost.id, clean, parentCommentId);
+        if (parentCommentId) {
+          await loadCommentsForPost(activeCommentsPost);
+        } else {
+          const comments = await getSnapComments(activeCommentsPost.id);
+          setSnapComments(comments);
+          setCommentLikesById(syncCommentLikes(comments));
+        }
+        setPostCommentCountsById((prev) => ({
+          ...prev,
+          [activeCommentsPost.id]: (prev[activeCommentsPost.id] ?? activeCommentsPost.stats.commentCount) + 1,
+        }));
+        setDraftComment("");
+        setReplyTarget(null);
+      } catch (err) {
+        Alert.alert("Hata", err instanceof Error ? err.message : "Yorum gönderilemedi.");
+      } finally {
+        setIsCommentSubmitting(false);
+      }
+    })();
+  };
+
+  const formatCommentTime = (iso: string) => {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleDateString("tr-TR", { month: "short", day: "numeric" });
+  };
+
+  const composerInitials = (user?.publicProfile?.displayName || "TM").slice(0, 2).toUpperCase();
+  const totalCommentCount = countSnapComments(snapComments);
+
+  const renderCommentItem = (item: SnapCommentItem, isReply = false) => {
+    const likeState = commentLikesById[item.id] ?? {
+      liked: item.viewerState.liked,
+      count: item.stats.likeCount,
+    };
+
+    return (
+      <View key={item.id}>
+        <View style={isReply ? styles.replyRow : styles.commentRow}>
+          <View style={[styles.commentAvatar, isReply && styles.replyAvatar]}>
+            <AppText style={styles.commentAvatarText} variant="caption">
+              {item.author.displayName.slice(0, 1).toUpperCase()}
+            </AppText>
+          </View>
+          <View style={styles.commentBody}>
+            <AppText style={styles.commentUser} variant="label">
+              {item.author.displayName}
+            </AppText>
+            <AppText style={styles.commentText} variant="body">
+              {item.text}
+            </AppText>
+            <View style={styles.commentMetaRow}>
+              <AppText style={styles.commentMetaText} variant="caption">
+                {formatCommentTime(item.createdAt)}
+              </AppText>
+              <Pressable onPress={() => startReply(item)}>
+                <AppText style={styles.commentMetaText} variant="caption">
+                  Yanıtla
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+          <Pressable
+            disabled={commentLikeLoadingId === item.id}
+            onPress={() => toggleCommentLike(item.id)}
+            style={styles.commentLikeWrap}
+          >
+            <Ionicons color={likeState.liked ? "#FF375F" : "#9CA3AF"} name={likeState.liked ? "heart" : "heart-outline"} size={16} />
+            {likeState.count > 0 ? (
+              <AppText
+                style={[styles.commentLikeCount, likeState.liked && styles.commentLikeCountActive]}
+                variant="caption"
+              >
+                {likeState.count}
+              </AppText>
+            ) : null}
+          </Pressable>
+        </View>
+        {(item.replies ?? []).map((reply) => renderCommentItem(reply, true))}
+      </View>
+    );
+  };
 
   const renderContent = () => {
     if (isLoading) {
@@ -496,10 +760,10 @@ export function ExploreFeedScreen() {
       return (
         <View style={styles.stateWrap}>
           <AppText style={styles.errorTitle} variant="sectionTitle">
-            No matching content
+            Henüz snap yok
           </AppText>
           <AppText style={styles.stateText} variant="bodyMuted">
-            {scope === "city" ? "Try the country feed for a broader view." : "Check back shortly."}
+            {scope === "city" ? "Ülke filtresini dene veya ilk Snap'i sen paylaş." : "Yakında yeni Snap'ler burada görünecek."}
           </AppText>
         </View>
       );
@@ -526,61 +790,23 @@ export function ExploreFeedScreen() {
         refreshing={refreshing}
         renderItem={({ item }) => (
           <ExplorePostCard
+            authorFollowStatus={followStatusByAuthorId[item.author.id] ?? null}
+            commentCount={postCommentCountsById[item.id] ?? item.stats.commentCount}
             height={feedViewportHeight > 0 ? feedViewportHeight : height}
+            isFollowLoading={Boolean(followLoadingByAuthorId[item.author.id])}
             isLiked={postLikesById[item.id]?.liked ?? item.viewerState.liked}
             likeCount={postLikesById[item.id]?.count ?? item.stats.likeCount}
-            onAuthorPress={() =>
-              setSelectedSearchUser({
-                id: item.author.id,
-                username: item.author.displayName,
-                displayName: item.author.displayName,
-                countryCode: item.countryCode,
-                city: item.city,
-                avatarUrl: item.author.avatarUrl,
-                bio: `${item.author.displayName} adlı kullanıcı Tourist topluluğunda içerik paylaşıyor.`,
-              })
-            }
+            onAuthorPress={() => openPostAuthorProfile(item)}
             onCommentPress={() => {
               setActiveCommentsPost(item);
-              setReplyTarget(null);
               setDraftComment("");
-              setCommentsByPost((prev) => {
-                if (prev[item.id]) {
-                  return prev;
-                }
-                return {
-                  ...prev,
-                  [item.id]: [
-                    {
-                      id: `${item.id}_comment_1`,
-                      author: "Katie",
-                      text: "Looks amazing 👏",
-                      timeAgo: "5h",
-                      likes: 196,
-                      parentCommentId: undefined,
-                    },
-                    {
-                      id: `${item.id}_comment_2`,
-                      author: "John",
-                      text: "I was there last week! Great vibe and people.",
-                      timeAgo: "4h",
-                      likes: 91,
-                      parentCommentId: undefined,
-                    },
-                    {
-                      id: `${item.id}_comment_3`,
-                      author: "Alexis",
-                      text: "Great recommendation, thanks 🙌",
-                      timeAgo: "3h",
-                      likes: 23,
-                      parentCommentId: undefined,
-                    },
-                  ],
-                };
-              });
+              setReplyTarget(null);
             }}
+            onFollowPress={() => toggleFollowOnAuthor(item.author.id)}
             onLikePress={() => togglePostLike(item)}
+            onMessagePress={() => void openPostDirectMessage(item)}
             post={item}
+            viewerId={user?.id}
           />
         )}
         showsVerticalScrollIndicator={false}
@@ -588,121 +814,6 @@ export function ExploreFeedScreen() {
       />
     );
   };
-
-  const activeCommentsRaw = activeCommentsPost ? commentsByPost[activeCommentsPost.id] ?? [] : [];
-  const activeComments = useMemo<MockComment[]>(
-    () =>
-      activeCommentsRaw.map((comment, index) => {
-        if (typeof comment === "string") {
-          return {
-            id: `legacy_${index}`,
-            author: "Community",
-            text: comment,
-            timeAgo: "now",
-            likes: 0,
-            parentCommentId: undefined,
-          };
-        }
-        return {
-          id: comment.id || `comment_${index}`,
-          author: comment.author || "Community",
-          text: comment.text || "",
-          timeAgo: comment.timeAgo || "now",
-          likes: Number.isFinite(comment.likes) ? comment.likes : 0,
-          parentCommentId: comment.parentCommentId,
-        };
-      }),
-    [activeCommentsRaw],
-  );
-  const topLevelComments = useMemo(
-    () => activeComments.filter((comment) => !comment.parentCommentId),
-    [activeComments],
-  );
-  const repliesByParent = useMemo(() => {
-    const grouped: Record<string, MockComment[]> = {};
-    activeComments.forEach((comment) => {
-      if (!comment.parentCommentId) {
-        return;
-      }
-      if (!grouped[comment.parentCommentId]) {
-        grouped[comment.parentCommentId] = [];
-      }
-      grouped[comment.parentCommentId].push(comment);
-    });
-    return grouped;
-  }, [activeComments]);
-  const togglePostLike = (post: ExplorePost) => {
-    setPostLikesById((prev) => {
-      const current = prev[post.id] ?? {
-        liked: Boolean(post.viewerState.liked),
-        count: post.stats.likeCount,
-      };
-      const nextLiked = !current.liked;
-      return {
-        ...prev,
-        [post.id]: {
-          liked: nextLiked,
-          count: Math.max(0, current.count + (nextLiked ? 1 : -1)),
-        },
-      };
-    });
-  };
-  const toggleCommentLike = (commentId: string) => {
-    setCommentLikesById((prev) => ({
-      ...prev,
-      [commentId]: !(prev[commentId] ?? false),
-    }));
-  };
-  const submitComment = () => {
-    if (!activeCommentsPost) {
-      return;
-    }
-    const clean = draftComment.trim();
-    if (!clean) {
-      return;
-    }
-    setCommentsByPost((prev) => {
-      const previous = (prev[activeCommentsPost.id] ?? []).map((comment, index) =>
-        typeof comment === "string"
-          ? ({
-              id: `legacy_${index}`,
-              author: "Community",
-              text: comment,
-              timeAgo: "now",
-              likes: 0,
-            } as MockComment)
-          : comment,
-      );
-
-      return {
-        ...prev,
-        [activeCommentsPost.id]: [
-          ...previous,
-        {
-          id: `${activeCommentsPost.id}_${Date.now()}`,
-          author: "You",
-          text: clean,
-          timeAgo: "now",
-          likes: 0,
-            parentCommentId: replyTarget?.commentId,
-        },
-      ],
-      };
-    });
-    setDraftComment("");
-    setReplyTarget(null);
-  };
-  const cancelReply = () => {
-    setReplyTarget((prev) => {
-      if (!prev) {
-        return null;
-      }
-      const replyPrefix = new RegExp(`^@${escapeRegex(prev.author)}\\s*`, "i");
-      setDraftComment((current) => current.replace(replyPrefix, "").trimStart());
-      return null;
-    });
-  };
-  const composerInitials = (user?.publicProfile?.displayName || "TM").slice(0, 2).toUpperCase();
 
   return (
     <SafeAreaView style={[styles.safeArea, selectedSearchUser ? styles.safeAreaLight : null]}>
@@ -815,7 +926,7 @@ export function ExploreFeedScreen() {
 
                   <ProfileHighlightRow highlights={SEARCH_PROFILE_STORY_HIGHLIGHTS} />
 
-                  <ProfileContentTabs />
+                  <ProfileContentTabs userId={selectedSearchUser.id} />
                 </>
               ) : null}
             </View>
@@ -1095,6 +1206,7 @@ export function ExploreFeedScreen() {
         animationType="slide"
         onRequestClose={() => {
           setActiveCommentsPost(null);
+          setDraftComment("");
           setReplyTarget(null);
         }}
         transparent
@@ -1103,153 +1215,77 @@ export function ExploreFeedScreen() {
         <Pressable
           onPress={() => {
             setActiveCommentsPost(null);
+            setDraftComment("");
             setReplyTarget(null);
           }}
           style={styles.commentsBackdrop}
         >
           <Pressable onPress={() => undefined} style={styles.commentsSheet}>
             <View style={styles.commentsHandle} />
-            <View style={styles.commentsSearchRow}>
-              <AppText style={styles.commentsSearchLabel} variant="body">
-                Search:
-              </AppText>
-              <AppText style={styles.commentsSearchQuery} variant="body">
-                {activeCommentsPost?.text.slice(0, 24) || "community post"}
-              </AppText>
-            </View>
             <View style={styles.commentsHeaderRow}>
               <AppText style={styles.commentsTitle} variant="sectionTitle">
-                {activeComments.length} comments
+                {totalCommentCount} yorum
               </AppText>
-              <Pressable onPress={() => setActiveCommentsPost(null)} style={styles.commentsClose}>
+              <Pressable
+                onPress={() => {
+                  setActiveCommentsPost(null);
+                  setDraftComment("");
+                  setReplyTarget(null);
+                }}
+                style={styles.commentsClose}
+              >
                 <Ionicons color="#111827" name="close" size={20} />
               </Pressable>
             </View>
-            <FlatList
-              contentContainerStyle={styles.commentsList}
-              data={topLevelComments}
-              keyExtractor={(item, index) => item.id || `${item.author || "community"}_${index}`}
-              renderItem={({ item }) => (
-                <View style={styles.threadBlock}>
-                  <View style={styles.commentRow}>
-                    <View style={styles.commentAvatar}>
-                      <AppText style={styles.commentAvatarText} variant="caption">
-                        {item.author.slice(0, 1).toUpperCase()}
-                      </AppText>
-                    </View>
-                    <View style={styles.commentBody}>
-                      <AppText style={styles.commentUser} variant="label">
-                        {item.author}
-                      </AppText>
-                      <AppText style={styles.commentText} variant="body">
-                        {item.text}
-                      </AppText>
-                      <View style={styles.commentMetaRow}>
-                        <AppText style={styles.commentMetaText} variant="caption">
-                          {item.timeAgo}
-                        </AppText>
-                        <Pressable
-                          onPress={() => {
-                            setReplyTarget({ commentId: item.id, author: item.author });
-                            setDraftComment((prev) => {
-                              const mention = `@${item.author} `;
-                              if (prev.trim().startsWith(`@${item.author}`)) {
-                                return prev;
-                              }
-                              return `${mention}${prev}`.trimStart();
-                            });
-                          }}
-                        >
-                          <AppText style={styles.commentMetaText} variant="caption">
-                            Reply
-                          </AppText>
-                        </Pressable>
-                      </View>
-                    </View>
-                    <CommentLikeButton
-                      count={Math.max(0, item.likes + (commentLikesById[item.id] ? 1 : 0))}
-                      liked={Boolean(commentLikesById[item.id])}
-                      onPress={() => toggleCommentLike(item.id)}
-                    />
-                  </View>
-
-                  {(repliesByParent[item.id] ?? []).map((reply) => (
-                    <View key={reply.id} style={styles.replyRow}>
-                      <View style={[styles.commentAvatar, styles.replyAvatar]}>
-                        <AppText style={styles.commentAvatarText} variant="caption">
-                          {reply.author.slice(0, 1).toUpperCase()}
-                        </AppText>
-                      </View>
-                      <View style={styles.commentBody}>
-                        <AppText style={styles.commentUser} variant="label">
-                          {reply.author}
-                        </AppText>
-                        <AppText style={styles.commentText} variant="body">
-                          {reply.text}
-                        </AppText>
-                        <View style={styles.commentMetaRow}>
-                          <AppText style={styles.commentMetaText} variant="caption">
-                            {reply.timeAgo}
-                          </AppText>
-                          <Pressable
-                            onPress={() => {
-                              setReplyTarget({ commentId: item.id, author: item.author });
-                              setDraftComment((prev) => {
-                                const mention = `@${item.author} `;
-                                if (prev.trim().startsWith(`@${item.author}`)) {
-                                  return prev;
-                                }
-                                return `${mention}${prev}`.trimStart();
-                              });
-                            }}
-                          >
-                            <AppText style={styles.commentMetaText} variant="caption">
-                              Reply
-                            </AppText>
-                          </Pressable>
-                        </View>
-                      </View>
-                      <CommentLikeButton
-                        count={Math.max(0, reply.likes + (commentLikesById[reply.id] ? 1 : 0))}
-                        liked={Boolean(commentLikesById[reply.id])}
-                        onPress={() => toggleCommentLike(reply.id)}
-                      />
-                    </View>
-                  ))}
-                </View>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
-            <View style={styles.reactionBar}>
-              {["😂", "🥰", "😅", "😳", "😉", "😎"].map((emoji) => (
-                <Pressable key={emoji} onPress={() => setDraftComment((prev) => `${prev}${emoji}`)} style={styles.reactionChip}>
-                  <AppText style={styles.reactionText} variant="body">
-                    {emoji}
+            {isCommentsLoading ? (
+              <View style={styles.commentsLoadingWrap}>
+                <ActivityIndicator color={theme.colors.primary} />
+              </View>
+            ) : commentsError ? (
+              <View style={styles.commentsLoadingWrap}>
+                <AppText variant="bodyMuted">{commentsError}</AppText>
+              </View>
+            ) : (
+              <FlatList
+                contentContainerStyle={styles.commentsList}
+                data={snapComments}
+                keyExtractor={(item) => item.id}
+                ListEmptyComponent={
+                  <AppText style={styles.commentsEmpty} variant="bodyMuted">
+                    Henüz yorum yok. İlk yorumu sen yaz.
                   </AppText>
-                </Pressable>
-              ))}
-            </View>
+                }
+                renderItem={({ item }) => <View style={styles.threadBlock}>{renderCommentItem(item)}</View>}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
             <View style={styles.composerShell}>
               {replyTarget ? (
                 <View style={styles.replyBanner}>
                   <AppText style={styles.replyBannerText} variant="caption">
-                    @{replyTarget.author} kişisine yanıt veriyorsun
+                    @{replyTarget.authorUsername} yanıtlanıyor
                   </AppText>
-                  <Pressable onPress={cancelReply}>
-                    <Ionicons color="#9CA3AF" name="close" size={18} />
+                  <Pressable
+                    onPress={() => {
+                      setReplyTarget(null);
+                      setDraftComment("");
+                    }}
+                  >
+                    <Ionicons color="#64748B" name="close" size={16} />
                   </Pressable>
                 </View>
               ) : null}
               <View style={styles.commentComposer}>
                 <Avatar initials={composerInitials} size={34} uri={undefined} />
                 <TextInput
+                  editable={!isCommentSubmitting}
                   onChangeText={setDraftComment}
-                  placeholder="Add comment..."
+                  placeholder="Yorum ekle..."
                   placeholderTextColor={theme.colors.muted}
                   style={styles.commentInput}
                   value={draftComment}
                 />
-                <Pressable onPress={submitComment} style={styles.sendButton}>
+                <Pressable disabled={isCommentSubmitting} onPress={submitComment} style={styles.sendButton}>
                   <Ionicons color="#FFFFFF" name="arrow-up" size={18} />
                 </Pressable>
               </View>
@@ -1735,6 +1771,16 @@ const styles = StyleSheet.create({
   commentsList: {
     gap: theme.spacing.md,
     paddingBottom: theme.spacing.md,
+  },
+  commentsLoadingWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 120,
+    paddingVertical: theme.spacing.lg,
+  },
+  commentsEmpty: {
+    paddingVertical: theme.spacing.lg,
+    textAlign: "center",
   },
   commentRow: {
     alignItems: "flex-start",

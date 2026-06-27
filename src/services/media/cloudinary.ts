@@ -1,4 +1,5 @@
 import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET } from "../../constants/env";
+import { resolveLocalImageUri } from "./resolveImagePickerAssetUri";
 
 const DEFAULT_UPLOAD_TIMEOUT_MS = 30_000;
 
@@ -46,6 +47,8 @@ export async function uploadImage(localUri: string, options: UploadImageOptions 
     throw new Error("No image selected.");
   }
 
+  const uploadableUri = await resolveLocalImageUri(trimmedUri);
+
   const { cloudName, uploadPreset } = getCloudinaryConfig();
   const timeoutMs = options.timeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS;
   const controller = new AbortController();
@@ -54,9 +57,9 @@ export async function uploadImage(localUri: string, options: UploadImageOptions 
   try {
     const formData = new FormData();
     formData.append("file", {
-      uri: trimmedUri,
-      type: inferMimeType(trimmedUri),
-      name: inferFileName(trimmedUri),
+      uri: uploadableUri,
+      type: inferMimeType(uploadableUri),
+      name: inferFileName(uploadableUri),
     } as unknown as Blob);
     formData.append("upload_preset", uploadPreset);
 

@@ -1,51 +1,28 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import { ProfileSnapsGrid } from "../../snaps/components/ProfileSnapsGrid";
 
-type ProfileContentTab = "reels" | "events";
+type ProfileContentTab = "snaps" | "events";
 
-const tabs: Array<{ key: ProfileContentTab; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "reels", icon: "play-outline" },
-  { key: "events", icon: "calendar-outline" },
+type ProfileContentTabsProps = {
+  userId: string;
+  refreshToken?: number;
+};
+
+const tabs: Array<{ key: ProfileContentTab; icon: keyof typeof Ionicons.glyphMap; label: string }> = [
+  { key: "snaps", icon: "camera-outline", label: "Snap'ler" },
+  { key: "events", icon: "calendar-outline", label: "Etkinlikler" },
 ];
 
-const reelItems = [
-  { id: "reel_1", count: "1.2k", color: "#92400E", mediaType: "video" as const },
-  { id: "reel_2", count: "856", color: "#0E7490", mediaType: "photo" as const },
-  { id: "reel_3", count: "2.1k", color: "#374151", mediaType: "video" as const },
-  { id: "reel_4", count: "489", color: "#475569", mediaType: "photo" as const },
-  { id: "reel_5", count: "965", color: "#0369A1", mediaType: "video" as const },
-  { id: "reel_6", count: "322", color: "#7C3AED", mediaType: "photo" as const },
-];
 const eventItems = [
   { month: "OCT", day: "24", title: "International Food Festival", city: "Berlin", isHost: true },
   { month: "OCT", day: "29", title: "Startup Networking Night", city: "Berlin" },
   { month: "NOV", day: "1", title: "Sunday Park Picnic", city: "Berlin" },
 ];
-
-function ReelsTab({ tileSize, tileHeight }: { tileSize: number; tileHeight: number }) {
-  return (
-    <View style={styles.reelsGrid}>
-      {reelItems.map((item) => (
-        <View key={item.id} style={[styles.reelTile, { backgroundColor: item.color, height: tileHeight, width: tileSize }]}>
-          <View style={styles.reelCount}>
-            <Ionicons color="#FFFFFF" name={item.mediaType === "photo" ? "image-outline" : "play"} size={13} />
-            <AppText style={styles.reelCountText} variant="caption">
-              {item.count}
-            </AppText>
-          </View>
-          <AppText style={styles.reelTypeText} variant="caption">
-            {item.mediaType === "photo" ? "Foto" : "Video"}
-          </AppText>
-        </View>
-      ))}
-    </View>
-  );
-}
 
 function EventsTab() {
   return (
@@ -79,14 +56,10 @@ function EventsTab() {
   );
 }
 
-export function ProfileContentTabs() {
-  const { width } = useWindowDimensions();
-  const [activeTab, setActiveTab] = useState<ProfileContentTab>("reels");
-  const fullWidth = width;
-  const tileSize = useMemo(() => Math.floor(fullWidth / 3), [fullWidth]);
-  const reelsHeight = useMemo(() => Math.floor(tileSize / 0.58), [tileSize]);
+export function ProfileContentTabs({ userId, refreshToken }: ProfileContentTabsProps) {
+  const [activeTab, setActiveTab] = useState<ProfileContentTab>("snaps");
   const eventsHeight = 3 * 92 + 2 * theme.spacing.md + 2 * theme.spacing.lg;
-  const contentMinHeight = Math.max(reelsHeight * 2, eventsHeight);
+  const contentMinHeight = useMemo(() => Math.max(220, eventsHeight), [eventsHeight]);
 
   return (
     <View style={styles.container}>
@@ -95,7 +68,7 @@ export function ProfileContentTabs() {
           const isActive = tab.key === activeTab;
           return (
             <Pressable key={tab.key} onPress={() => setActiveTab(tab.key)} style={styles.tabButton}>
-              <Ionicons color={isActive ? theme.colors.textPrimary : theme.colors.muted} name={tab.icon} size={30} />
+              <Ionicons color={isActive ? theme.colors.textPrimary : theme.colors.muted} name={tab.icon} size={28} />
               {isActive ? <View style={styles.activeIndicator} /> : null}
             </Pressable>
           );
@@ -103,8 +76,8 @@ export function ProfileContentTabs() {
       </View>
 
       <View style={[styles.contentArea, { minHeight: contentMinHeight }]}>
-        <View style={{ display: activeTab === "reels" ? "flex" : "none" }}>
-          <ReelsTab tileHeight={reelsHeight} tileSize={tileSize} />
+        <View style={{ display: activeTab === "snaps" ? "flex" : "none" }}>
+          <ProfileSnapsGrid refreshToken={refreshToken} userId={userId} />
         </View>
         <View style={{ display: activeTab === "events" ? "flex" : "none" }}>
           <EventsTab />
@@ -138,29 +111,6 @@ const styles = StyleSheet.create({
     height: 3,
     position: "absolute",
     width: "100%",
-  },
-  reelsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  reelTile: {
-    borderColor: "#FFFFFF",
-    borderWidth: 1,
-    justifyContent: "flex-end",
-    padding: theme.spacing.sm,
-  },
-  reelCount: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: theme.spacing.xs,
-  },
-  reelCountText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  reelTypeText: {
-    color: "rgba(255, 255, 255, 0.85)",
-    marginTop: theme.spacing.xs,
   },
   eventsList: {
     gap: theme.spacing.md,

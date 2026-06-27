@@ -19,6 +19,16 @@ export const API_ENDPOINTS = {
   explore: {
     feed: "/explore/feed",
   },
+  snaps: {
+    create: "/snaps",
+    me: "/snaps/me",
+    byUser: "/users/:userId/snaps",
+    delete: "/snaps/:snapId",
+    like: "/snaps/:snapId/like",
+    comments: "/snaps/:snapId/comments",
+    comment: "/snaps/:snapId/comments/:commentId",
+    commentLike: "/snaps/:snapId/comments/:commentId/like",
+  },
   events: {
     list: "/events",
     detail: "/events/:eventId",

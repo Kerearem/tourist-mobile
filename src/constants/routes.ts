@@ -18,6 +18,7 @@ export const OnboardingRoutes = {
 export const ExploreRoutes = {
   ExploreFeedScreen: "ExploreFeedScreen",
   ExploreCameraScreen: "ExploreCameraScreen",
+  PublishSnapScreen: "PublishSnapScreen",
 } as const;
 
 export const HelpRoutes = {

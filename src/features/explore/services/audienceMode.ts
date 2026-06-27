@@ -1,5 +1,8 @@
-import type { ExploreFeedScope, LoadExploreFeedInput } from "../types";
+export type ExploreLocationScope = "city" | "country";
+export type ExploreIdentityScope = "nationality" | "everyone";
 
+/** UI alias kept for existing filter controls */
+export type ExploreFeedScope = ExploreLocationScope;
 export type AudienceMode = "community" | "global";
 
 export type ExploreFeedContext = {
@@ -16,6 +19,19 @@ export type ExploreViewState = {
 export type ExploreViewAction =
   | { type: "set_scope"; scope: ExploreFeedScope }
   | { type: "set_audience_mode"; audienceMode: AudienceMode };
+
+export type LoadExploreFeedInput = {
+  locationScope: ExploreLocationScope;
+  identityScope: ExploreIdentityScope;
+};
+
+export function toLocationScope(scope: ExploreFeedScope): ExploreLocationScope {
+  return scope;
+}
+
+export function toIdentityScope(audienceMode: AudienceMode): ExploreIdentityScope {
+  return audienceMode === "community" ? "nationality" : "everyone";
+}
 
 export function reduceExploreViewState(state: ExploreViewState, action: ExploreViewAction): ExploreViewState {
   if (action.type === "set_scope") {
@@ -43,23 +59,16 @@ export function hasRequiredContext(context: ExploreFeedContext, audienceMode: Au
 export function buildLoadExploreFeedInput(params: {
   scope: ExploreFeedScope;
   audienceMode: AudienceMode;
-  context: ExploreFeedContext;
 }): LoadExploreFeedInput {
   return {
-    scope: params.scope,
-    countryCode: params.context.countryCode,
-    city: params.context.city,
-    community: params.audienceMode === "community" ? params.context.community : undefined,
+    locationScope: toLocationScope(params.scope),
+    identityScope: toIdentityScope(params.audienceMode),
   };
 }
 
 export function buildExploreFeedQueryParams(input: LoadExploreFeedInput): URLSearchParams {
   const params = new URLSearchParams();
-  params.set("scope", input.scope);
-  params.set("countryCode", input.countryCode);
-  params.set("city", input.city);
-  if (input.community) {
-    params.set("community", input.community);
-  }
+  params.set("locationScope", input.locationScope);
+  params.set("identityScope", input.identityScope);
   return params;
 }

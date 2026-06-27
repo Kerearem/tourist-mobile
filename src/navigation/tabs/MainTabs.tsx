@@ -55,7 +55,23 @@ export function MainTabs() {
         name={TabRoutes.ExploreTab}
         options={({ route }) => ({
           title: "Explore",
-          tabBarStyle: getFocusedRouteNameFromRoute(route) === ExploreRoutes.ExploreCameraScreen ? { display: "none" } : baseTabBarStyle,
+          tabBarStyle: getFocusedRouteNameFromRoute(route) === ExploreRoutes.ExploreCameraScreen ||
+            getFocusedRouteNameFromRoute(route) === ExploreRoutes.PublishSnapScreen
+            ? { display: "none" }
+            : baseTabBarStyle,
+        })}
+        listeners={({ navigation, route }) => ({
+          tabPress: (event) => {
+            const nestedState = route.state;
+            if (!nestedState || nestedState.index === 0) {
+              return;
+            }
+            event.preventDefault();
+            navigation.dispatch({
+              ...StackActions.popToTop(),
+              target: nestedState.key,
+            });
+          },
         })}
       />
       <Tab.Screen component={HelpStack} name={TabRoutes.HelpTab} options={{ title: "Help" }} />

@@ -7,45 +7,38 @@ import {
   reduceExploreViewState,
 } from "../src/features/explore/services/audienceMode";
 
-const context = {
-  community: "Turkish",
-  countryCode: "DE",
-  city: "Berlin",
-};
-
 const buildInput = (scope: ExploreFeedScope, audienceMode: "community" | "global") =>
   buildLoadExploreFeedInput({
     scope,
     audienceMode,
-    context,
   });
 
-test("Your community + City sends community param", () => {
+test("Your community + City sends nationality identity scope", () => {
   const input = buildInput("city", "community");
   const params = buildExploreFeedQueryParams(input);
-  assert.equal(params.get("scope"), "city");
-  assert.equal(params.get("community"), "Turkish");
+  assert.equal(params.get("locationScope"), "city");
+  assert.equal(params.get("identityScope"), "nationality");
 });
 
-test("Global + City does not send community param", () => {
+test("Global + City sends everyone identity scope", () => {
   const input = buildInput("city", "global");
   const params = buildExploreFeedQueryParams(input);
-  assert.equal(params.get("scope"), "city");
-  assert.equal(params.has("community"), false);
+  assert.equal(params.get("locationScope"), "city");
+  assert.equal(params.get("identityScope"), "everyone");
 });
 
-test("Your community + Country sends community param", () => {
+test("Your community + Country sends nationality identity scope", () => {
   const input = buildInput("country", "community");
   const params = buildExploreFeedQueryParams(input);
-  assert.equal(params.get("scope"), "country");
-  assert.equal(params.get("community"), "Turkish");
+  assert.equal(params.get("locationScope"), "country");
+  assert.equal(params.get("identityScope"), "nationality");
 });
 
-test("Global + Country does not send community param", () => {
+test("Global + Country sends everyone identity scope", () => {
   const input = buildInput("country", "global");
   const params = buildExploreFeedQueryParams(input);
-  assert.equal(params.get("scope"), "country");
-  assert.equal(params.has("community"), false);
+  assert.equal(params.get("locationScope"), "country");
+  assert.equal(params.get("identityScope"), "everyone");
 });
 
 test("Switching audienceMode changes effective feed request", () => {
