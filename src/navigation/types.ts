@@ -75,6 +75,7 @@ export type ProfileStackParamList = {
   ProfileScreen: undefined;
   SettingsScreen: undefined;
   AccountManagementScreen: undefined;
+  ChangePasswordScreen: undefined;
   BlockedUsersScreen: undefined;
   FollowConnectionsScreen: { listType: "following" | "followers" | "friends" };
   ReportProblemScreen: undefined;

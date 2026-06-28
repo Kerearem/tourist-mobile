@@ -459,6 +459,71 @@ export async function verifyForgotPassword(input: {
   });
 }
 
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  const authState = await loadAuthState();
+  if (!authState) {
+    throw new Error("Oturum bulunamadı.");
+  }
+
+  if (USE_MOCK_BACKEND) {
+    const mockCredentials = await loadMockCredentials();
+    const userEmail = authState.user.privateProfile.email?.trim().toLowerCase() ?? "";
+    let credential =
+      mockCredentials.find((record) => record.userId === authState.user.id) ??
+      mockCredentials.find((record) => record.email === userEmail) ??
+      null;
+
+    if (!credential) {
+      const testUser = MOCK_TEST_USERS.find((user) => user.id === authState.user.id);
+      if (testUser) {
+        if (input.currentPassword !== testUser.password) {
+          throw new Error("Mevcut şifre yanlış");
+        }
+        await upsertMockCredential({
+          email: testUser.login,
+          password: input.newPassword,
+          userId: testUser.id,
+        });
+        return;
+      }
+      throw new Error("Mevcut şifre yanlış");
+    }
+
+    if (credential.password !== input.currentPassword) {
+      throw new Error("Mevcut şifre yanlış");
+    }
+
+    await upsertMockCredential({
+      ...credential,
+      password: input.newPassword,
+    });
+    return;
+  }
+
+  try {
+    await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.changePassword, {
+      method: "POST",
+      body: {
+        currentPassword: input.currentPassword,
+        newPassword: input.newPassword,
+      },
+      token: authState.tokens.accessToken,
+    });
+  } catch (error) {
+    if (error instanceof ApiRequestError) {
+      const message = error.message.toLowerCase();
+      if (message.includes("mevcut şifre yanlış") || message.includes("current password")) {
+        throw new Error("Mevcut şifre yanlış");
+      }
+    }
+    const message = error instanceof Error ? error.message : "Şifre değiştirilemedi.";
+    throw new Error(message);
+  }
+}
+
 export async function signUpWithEmail(input: SignUpInput): Promise<SignUpResult> {
   if (USE_MOCK_BACKEND) {
     const normalizedEmail = input.email.trim().toLowerCase();

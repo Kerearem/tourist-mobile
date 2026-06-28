@@ -104,7 +104,11 @@ export function AccountManagementScreen({ navigation }: Props) {
       {view === "management" ? (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <AccountMenuRow onPress={() => setView("info")} title="Hesap Bilgileri" />
-          <AccountMenuRow subtitle="Yakında" title="Şifre" />
+          <AccountMenuRow
+            onPress={() => navigation.navigate(ProfileRoutes.ChangePasswordScreen)}
+            subtitle="Mevcut şifreni girerek güncelle"
+            title="Şifre"
+          />
           <AccountMenuRow subtitle="Yakında" title="Doğrulama" />
           <View style={styles.sectionDivider} />
           <AccountMenuRow

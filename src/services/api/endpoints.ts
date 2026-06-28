@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
     resendEmailCode: "/auth/resend-email-code",
     forgotPasswordRequest: "/auth/forgot-password/request",
     forgotPasswordVerify: "/auth/forgot-password/verify",
+    changePassword: "/auth/change-password",
   },
   onboarding: {
     complete: "/onboarding/complete",

@@ -8,6 +8,7 @@ import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganiz
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
 import { AccountManagementScreen } from "../../features/profile/screens/AccountManagementScreen";
 import { BlockedUsersScreen } from "../../features/profile/screens/BlockedUsersScreen";
+import { ChangePasswordScreen } from "../../features/profile/screens/ChangePasswordScreen";
 import { DeleteAccountScreen } from "../../features/profile/screens/DeleteAccountScreen";
 import { FollowConnectionsScreen } from "../../features/profile/screens/FollowConnectionsScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
@@ -23,6 +24,7 @@ export function ProfileStack() {
       <Stack.Screen component={ProfileScreen} name={ProfileRoutes.ProfileScreen} />
       <Stack.Screen component={SettingsScreen} name={ProfileRoutes.SettingsScreen} />
       <Stack.Screen component={AccountManagementScreen} name={ProfileRoutes.AccountManagementScreen} />
+      <Stack.Screen component={ChangePasswordScreen} name={ProfileRoutes.ChangePasswordScreen} />
       <Stack.Screen component={DeleteAccountScreen} name={ProfileRoutes.DeleteAccountScreen} />
       <Stack.Screen component={BlockedUsersScreen} name={ProfileRoutes.BlockedUsersScreen} />
       <Stack.Screen component={FollowConnectionsScreen} name={ProfileRoutes.FollowConnectionsScreen} />

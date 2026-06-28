@@ -54,6 +54,7 @@ export const ProfileRoutes = {
   FollowConnectionsScreen: "FollowConnectionsScreen",
   ReportProblemScreen: "ReportProblemScreen",
   DeleteAccountScreen: "DeleteAccountScreen",
+  ChangePasswordScreen: "ChangePasswordScreen",
   CreateEventScreen: "CreateEventScreen",
   MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
