@@ -10,7 +10,6 @@ export const HELP_CATEGORY_VALUES = [
   "RECOMMENDATION",
   "QA",
   "EMERGENCY",
-  "OTHER",
 ] as const;
 
 export type HelpCategoryValue = (typeof HELP_CATEGORY_VALUES)[number];
@@ -32,14 +31,20 @@ export const HELP_CATEGORIES: HelpCategoryOption[] = [
   { value: "RECOMMENDATION", label: "Tavsiye & Öneri" },
   { value: "QA", label: "Soru & Cevap" },
   { value: "EMERGENCY", label: "Acil & Destek" },
-  { value: "OTHER", label: "Diğer" },
 ];
+
+export const HELP_FILTER_GREEN = "#059669";
+export const HELP_FILTER_APPLY_GREEN = "#10B981";
+export const HELP_FILTER_GREEN_BORDER = "#BBF7D0";
+export const HELP_FILTER_CHIP_ACTIVE_BG = "rgba(5, 150, 105, 0.14)";
+export const HELP_FILTER_CHIP_ACTIVE_BORDER = "#6EE7B7";
+export const HELP_FILTER_CHIP_ACTIVE_TEXT = "#047857";
 
 const labelByValue = new Map(HELP_CATEGORIES.map((item) => [item.value, item.label]));
 
 export const getHelpCategoryLabel = (category?: string | null) => {
   if (!category) {
-    return "Diğer";
+    return "Genel";
   }
   return labelByValue.get(category as HelpCategoryValue) ?? category;
 };

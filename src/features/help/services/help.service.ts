@@ -111,21 +111,23 @@ export async function getHelpRequests({
     const mockResidenceCountry = "DE";
     const mockResidenceCity = "Berlin";
 
-    return mockHelpRequests.filter((request) => {
-      const matchesCountry = request.countryCode.toUpperCase() === mockResidenceCountry;
-      const matchesCity =
-        locationScope === "country" ||
-        request.city.toLowerCase() === mockResidenceCity.toLowerCase();
-      const matchesIdentity =
-        identityScope === "everyone" ||
-        request.community.toLowerCase().includes("turkish");
-      const matchesCategory = !category || request.category === category;
-      const matchesSearch =
-        !search ||
-        request.title.toLowerCase().includes(search.toLowerCase()) ||
-        request.description.toLowerCase().includes(search.toLowerCase());
-      return matchesCountry && matchesCity && matchesIdentity && matchesCategory && matchesSearch;
-    });
+    return mockHelpRequests
+      .filter((request) => {
+        const matchesCountry = request.countryCode.toUpperCase() === mockResidenceCountry;
+        const matchesCity =
+          locationScope === "country" ||
+          request.city.toLowerCase() === mockResidenceCity.toLowerCase();
+        const matchesIdentity =
+          identityScope === "everyone" ||
+          request.community.toLowerCase().includes("turkish");
+        const matchesCategory = !category || request.category === category;
+        const matchesSearch =
+          !search ||
+          request.title.toLowerCase().includes(search.toLowerCase()) ||
+          request.description.toLowerCase().includes(search.toLowerCase());
+        return matchesCountry && matchesCity && matchesIdentity && matchesCategory && matchesSearch;
+      })
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   }
 
   void viewerId;

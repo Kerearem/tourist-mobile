@@ -3,7 +3,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -12,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -29,6 +29,12 @@ import {
   getHelpCategoryLabel,
   getHelpFilterSummary,
   HELP_CATEGORIES,
+  HELP_FILTER_GREEN,
+  HELP_FILTER_APPLY_GREEN,
+  HELP_FILTER_GREEN_BORDER,
+  HELP_FILTER_CHIP_ACTIVE_BG,
+  HELP_FILTER_CHIP_ACTIVE_BORDER,
+  HELP_FILTER_CHIP_ACTIVE_TEXT,
   HELP_IDENTITY_SCOPE_OPTIONS,
   HELP_LOCATION_SCOPE_OPTIONS,
   type HelpCategoryValue,
@@ -52,7 +58,7 @@ const DEFAULT_HELP_FILTERS: HelpFilterState = {
   category: null,
 };
 
-type CategoryFilter = { value: HelpCategoryValue | null; label: string };
+const SHEET_EDGE = 20;
 
 const relativeTimeTr = (iso: string) => {
   const date = new Date(iso);
@@ -138,72 +144,58 @@ type HelpFilterSheetProps = {
 };
 
 function HelpFilterSheet({ visible, filters, onChange, onClose, onClearAll, onApply }: HelpFilterSheetProps) {
-  const selectedPreviewItems = useMemo(() => {
-    const items: Array<{ key: string; label: string }> = [];
-    const locationLabel =
-      HELP_LOCATION_SCOPE_OPTIONS.find((item) => item.value === filters.locationScope)?.label ?? "Şehrim";
-    const identityLabel =
-      HELP_IDENTITY_SCOPE_OPTIONS.find((item) => item.value === filters.identityScope)?.label ?? "Herkes";
-
-    items.push({ key: `location:${filters.locationScope}`, label: locationLabel });
-    items.push({ key: `identity:${filters.identityScope}`, label: identityLabel });
-
-    if (filters.category) {
-      items.push({
-        key: `category:${filters.category}`,
-        label: getHelpCategoryLabel(filters.category),
-      });
-    }
-    return items;
-  }, [filters]);
-
   const setLocationScope = (value: HelpLocationScope) => onChange({ ...filters, locationScope: value });
   const setIdentityScope = (value: HelpIdentityScope) => onChange({ ...filters, identityScope: value });
   const setCategory = (value: HelpCategoryValue) =>
     onChange({ ...filters, category: filters.category === value ? null : value });
-
-  const removeSelectedItem = (key: string) => {
-    const [group, value] = key.split(":");
-    if (group === "location") {
-      onChange({ ...filters, locationScope: DEFAULT_HELP_LOCATION_SCOPE });
-    } else if (group === "identity") {
-      onChange({ ...filters, identityScope: DEFAULT_HELP_IDENTITY_SCOPE });
-    } else if (group === "category" && value) {
-      onChange({ ...filters, category: null });
-    }
-  };
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <View style={styles.sheetBackdrop}>
         <Pressable onPress={onClose} style={styles.sheetBackdropTapArea} />
 
-        <SafeAreaView style={styles.sheetContainer}>
-          <View style={styles.sheetHandle} />
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetHeaderSpacer} />
-            <AppText style={styles.sheetTitle} variant="sectionTitle">
-              Filtreler
-            </AppText>
-            <Pressable onPress={onClose} style={styles.sheetCloseButton}>
-              <Ionicons color={theme.colors.textPrimary} name="close" size={20} />
-            </Pressable>
-          </View>
+        <SafeAreaView edges={["bottom"]} style={styles.sheetContainer}>
+          <View style={styles.sheetContent}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeaderSpacer} />
+              <AppText style={styles.sheetTitle} variant="sectionTitle">
+                Filtreler
+              </AppText>
+              <Pressable onPress={onClose} style={styles.sheetCloseButton}>
+                <Ionicons color={theme.colors.textPrimary} name="close" size={22} />
+              </Pressable>
+            </View>
 
-          {selectedPreviewItems.length > 0 ? (
-            <ScrollView contentContainerStyle={styles.sheetSelectedRow} horizontal showsHorizontalScrollIndicator={false}>
-              {selectedPreviewItems.map((item) => (
-                <Pressable key={item.key} onPress={() => removeSelectedItem(item.key)} style={styles.sheetSelectedChip}>
-                  <AppText style={styles.sheetSelectedText} variant="caption">
-                    {item.label}
-                  </AppText>
-                  <Ionicons color="#6B7280" name="close" size={14} />
-                </Pressable>
-              ))}
-            </ScrollView>
-          ) : null}
+            <ScrollView contentContainerStyle={styles.sheetScrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.sheetSection}>
+              <AppText style={styles.sheetSectionTitle} variant="label">
+                Kategori
+              </AppText>
+              <View style={styles.sheetHorizontalScrollHost}>
+                <ScrollView
+                  contentContainerStyle={styles.sheetHorizontalChipRow}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.sheetHorizontalScroll}
+                >
+                  <FilterChip
+                    active={filters.category === null}
+                    label="Tümü"
+                    onPress={() => onChange({ ...filters, category: null })}
+                  />
+                  {HELP_CATEGORIES.map((item) => (
+                    <FilterChip
+                      active={filters.category === item.value}
+                      key={item.value}
+                      label={item.label}
+                      onPress={() => setCategory(item.value)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
 
-          <ScrollView contentContainerStyle={styles.sheetScrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.sheetSection}>
               <AppText style={styles.sheetSectionTitle} variant="label">
                 Konum
@@ -235,35 +227,20 @@ function HelpFilterSheet({ visible, filters, onChange, onClose, onClearAll, onAp
                 ))}
               </View>
             </View>
-
-            <View style={styles.sheetSection}>
-              <AppText style={styles.sheetSectionTitle} variant="label">
-                Kategori
-              </AppText>
-              <View style={styles.sheetChipWrap}>
-                {HELP_CATEGORIES.map((item) => (
-                  <FilterChip
-                    active={filters.category === item.value}
-                    key={item.value}
-                    label={item.label}
-                    onPress={() => setCategory(item.value)}
-                  />
-                ))}
-              </View>
-            </View>
           </ScrollView>
 
-          <View style={styles.sheetFooter}>
-            <Pressable onPress={onClearAll} style={styles.sheetClearButton}>
-              <AppText style={styles.sheetClearText} variant="label">
-                Temizle
-              </AppText>
-            </Pressable>
-            <Pressable onPress={onApply} style={styles.sheetApplyButton}>
-              <AppText style={styles.sheetApplyText} variant="label">
-                Uygula
-              </AppText>
-            </Pressable>
+            <View style={styles.sheetFooter}>
+              <Pressable onPress={onClearAll} style={styles.sheetClearButton}>
+                <AppText style={styles.sheetClearText} variant="label">
+                  Temizle
+                </AppText>
+              </Pressable>
+              <Pressable onPress={onApply} style={styles.sheetApplyButton}>
+                <AppText style={styles.sheetApplyText} variant="label">
+                  Uygula
+                </AppText>
+              </Pressable>
+            </View>
           </View>
         </SafeAreaView>
       </View>
@@ -323,7 +300,7 @@ function HelpListItem({ request, isOwnRequest, isResponding, onOpen, onHelp }: H
             }}
             style={[styles.listItemHelpButton, isResponding && styles.listItemHelpButtonDisabled]}
           >
-            <Ionicons color="#059669" name="hand-left-outline" size={16} />
+            <Ionicons color={HELP_FILTER_GREEN} name="hand-left-outline" size={16} />
             <AppText style={styles.listItemHelpButtonText} variant="caption">
               {isResponding ? "Açılıyor..." : "Yardım edebilirim"}
             </AppText>
@@ -347,14 +324,12 @@ export function HelpListScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<HelpCategoryValue | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState<HelpFilterState>(DEFAULT_HELP_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<HelpFilterState>(DEFAULT_HELP_FILTERS);
   const [respondingId, setRespondingId] = useState<string | null>(null);
 
   const viewerId = user?.id ?? "";
-  const { locationScope, identityScope } = appliedFilters;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchText.trim()), 400);
@@ -363,17 +338,13 @@ export function HelpListScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (isFilterOpen) {
-      setDraftFilters({
-        locationScope: appliedFilters.locationScope,
-        identityScope: appliedFilters.identityScope,
-        category: selectedCategory,
-      });
+      setDraftFilters(appliedFilters);
     }
-  }, [appliedFilters.identityScope, appliedFilters.locationScope, isFilterOpen, selectedCategory]);
+  }, [appliedFilters, isFilterOpen]);
 
   const scopeSummaryLabel = useMemo(
-    () => getHelpFilterSummary(locationScope, identityScope),
-    [identityScope, locationScope],
+    () => getHelpFilterSummary(appliedFilters.locationScope, appliedFilters.identityScope),
+    [appliedFilters.identityScope, appliedFilters.locationScope],
   );
 
   const loadRequests = useCallback(
@@ -395,9 +366,9 @@ export function HelpListScreen({ navigation, route }: Props) {
       try {
         const result = await getHelpRequests({
           viewerId,
-          locationScope,
-          identityScope,
-          category: selectedCategory ?? undefined,
+          locationScope: appliedFilters.locationScope,
+          identityScope: appliedFilters.identityScope,
+          category: appliedFilters.category ?? undefined,
           search: debouncedSearch || undefined,
         });
         setRequests(result);
@@ -411,7 +382,7 @@ export function HelpListScreen({ navigation, route }: Props) {
         setRefreshing(false);
       }
     },
-    [debouncedSearch, identityScope, locationScope, selectedCategory, viewerId],
+    [appliedFilters, debouncedSearch, viewerId],
   );
 
   useEffect(() => {
@@ -442,28 +413,13 @@ export function HelpListScreen({ navigation, route }: Props) {
     }
   };
 
-  const categoryFilters = useMemo<CategoryFilter[]>(
-    () => [{ value: null, label: "Tümü" }, ...HELP_CATEGORIES.map((item) => ({ value: item.value, label: item.label }))],
-    [],
-  );
-
   const onApplyFilters = () => {
-    setAppliedFilters({
-      locationScope: draftFilters.locationScope,
-      identityScope: draftFilters.identityScope,
-      category: draftFilters.category,
-    });
-    setSelectedCategory(draftFilters.category);
+    setAppliedFilters(draftFilters);
     setIsFilterOpen(false);
   };
 
   const onClearFilters = () => {
     setDraftFilters(DEFAULT_HELP_FILTERS);
-  };
-
-  const onCategoryChipPress = (value: HelpCategoryValue | null) => {
-    setSelectedCategory(value);
-    setAppliedFilters((previous) => ({ ...previous, category: value }));
   };
 
   const renderEmpty = () => {
@@ -512,29 +468,6 @@ export function HelpListScreen({ navigation, route }: Props) {
             <Ionicons color="#FFFFFF" name="add" size={22} />
           </Pressable>
         </View>
-
-        <ScrollView
-          horizontal
-          contentContainerStyle={styles.categoryScrollContent}
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryScroll}
-        >
-          {categoryFilters.map((item) => {
-            const active = selectedCategory === item.value;
-            return (
-              <Pressable
-                key={item.label}
-                onPress={() => onCategoryChipPress(item.value)}
-                style={[styles.categoryChip, active && styles.categoryChipActive]}
-              >
-                <AppText numberOfLines={1} style={[styles.categoryChipText, active && styles.categoryChipTextActive]} variant="caption">
-                  {item.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
 
         <FlatList
           contentContainerStyle={requests.length === 0 ? styles.emptyListContent : styles.listContent}
@@ -622,48 +555,15 @@ const styles = StyleSheet.create({
   },
   createButton: {
     alignItems: "center",
-    backgroundColor: "#059669",
+    backgroundColor: HELP_FILTER_GREEN,
     borderRadius: 32,
     height: 64,
     justifyContent: "center",
     width: 64,
   },
-  categoryScroll: {
-    flexGrow: 0,
-    maxHeight: 34,
-  },
-  categoryScrollContent: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: theme.spacing.xs,
-    paddingRight: theme.spacing.md,
-  },
-  categoryChip: {
-    alignSelf: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D1D5DB",
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  categoryChipActive: {
-    backgroundColor: "#111827",
-    borderColor: "#111827",
-  },
-  categoryChipText: {
-    color: theme.colors.textPrimary,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 16,
-  },
-  categoryChipTextActive: {
-    color: "#FFFFFF",
-  },
   listContent: {
     paddingBottom: theme.spacing.xxl,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.xs,
   },
   emptyListContent: {
     flexGrow: 1,
@@ -732,7 +632,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   listItemHelpButtonText: {
-    color: "#059669",
+    color: HELP_FILTER_GREEN,
     fontWeight: "700",
   },
   listItemResponded: {
@@ -758,8 +658,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: "88%",
-    paddingHorizontal: theme.spacing.lg,
+    maxHeight: "90%",
+    overflow: "hidden",
+  },
+  sheetContent: {
+    paddingHorizontal: SHEET_EDGE,
     paddingTop: theme.spacing.sm,
   },
   sheetHandle: {
@@ -767,125 +670,122 @@ const styles = StyleSheet.create({
     backgroundColor: "#D1D5DB",
     borderRadius: 999,
     height: 4,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
     width: 44,
   },
   sheetHeader: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    paddingBottom: theme.spacing.md,
   },
   sheetHeaderSpacer: {
     width: 34,
   },
   sheetTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 17,
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
   },
   sheetCloseButton: {
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderColor: "#E5E7EB",
-    borderRadius: 17,
-    borderWidth: 1,
+    backgroundColor: "transparent",
     height: 34,
     justifyContent: "center",
     width: 34,
   },
   sheetScrollContent: {
-    gap: theme.spacing.xl,
+    gap: theme.spacing.xxl,
     paddingBottom: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
-  },
-  sheetSelectedRow: {
-    alignItems: "center",
-    gap: theme.spacing.xs,
-    paddingBottom: theme.spacing.sm,
-    paddingTop: theme.spacing.md,
-  },
-  sheetSelectedChip: {
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderColor: "#E5E7EB",
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 4,
-    justifyContent: "center",
-    minHeight: 32,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 6,
-  },
-  sheetSelectedText: {
-    color: "#374151",
-    fontWeight: "600",
+    paddingTop: theme.spacing.sm,
   },
   sheetSection: {
-    gap: theme.spacing.sm,
+    gap: theme.spacing.md,
   },
   sheetSectionTitle: {
     color: theme.colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
+    paddingLeft: 2,
   },
   sheetChipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing.sm,
+    paddingRight: 2,
+  },
+  sheetHorizontalScrollHost: {
+    marginHorizontal: -SHEET_EDGE,
+  },
+  sheetHorizontalScroll: {
+    flexGrow: 0,
+  },
+  sheetHorizontalChipRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    paddingHorizontal: SHEET_EDGE,
+    paddingRight: SHEET_EDGE + theme.spacing.md,
   },
   sheetChip: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E5E7EB",
+    borderColor: HELP_FILTER_GREEN_BORDER,
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 11,
   },
   sheetChipActive: {
-    backgroundColor: "#111827",
-    borderColor: "#111827",
+    backgroundColor: HELP_FILTER_CHIP_ACTIVE_BG,
+    borderColor: HELP_FILTER_CHIP_ACTIVE_BORDER,
   },
   sheetChipLabel: {
-    color: "#6B7280",
+    color: theme.colors.textPrimary,
+    fontSize: 14,
     fontWeight: "600",
   },
   sheetChipLabelActive: {
-    color: "#FFFFFF",
+    color: HELP_FILTER_CHIP_ACTIVE_TEXT,
   },
   sheetFooter: {
     backgroundColor: "#FFFFFF",
     borderTopColor: "#E5E7EB",
     borderTopWidth: 1,
     flexDirection: "row",
-    gap: theme.spacing.sm,
-    paddingBottom: theme.spacing.sm,
-    paddingTop: theme.spacing.md,
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+    paddingTop: theme.spacing.lg,
   },
   sheetClearButton: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderColor: "#E5E7EB",
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 50,
   },
   sheetClearText: {
     color: theme.colors.textPrimary,
     fontSize: 15,
+    fontWeight: "600",
   },
   sheetApplyButton: {
     alignItems: "center",
-    backgroundColor: "#111827",
-    borderRadius: 12,
+    backgroundColor: HELP_FILTER_APPLY_GREEN,
+    borderRadius: 14,
     flex: 1.2,
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 50,
   },
   sheetApplyText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });
