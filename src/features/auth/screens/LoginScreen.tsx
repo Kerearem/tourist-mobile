@@ -257,6 +257,12 @@ export function LoginScreen({ navigation }: Props) {
 
         {errors.form ? <AppText style={styles.error}>{errors.form}</AppText> : null}
 
+        <Pressable onPress={() => navigation.navigate(AuthRoutes.ForgotPasswordScreen)} style={styles.forgotPasswordWrap}>
+          <AppText style={styles.forgotPasswordText} variant="caption">
+            Şifremi unuttum?
+          </AppText>
+        </Pressable>
+
         <AppButton label={t("auth.login.signIn")} loading={isSubmitting} onPress={onSubmit} />
 
         <Pressable onPress={() => navigation.navigate(AuthRoutes.SignupDisplayNameScreen)}>
@@ -462,6 +468,13 @@ const styles = StyleSheet.create({
   },
   error: {
     color: "#DC2626",
+  },
+  forgotPasswordWrap: {
+    alignSelf: "flex-end",
+  },
+  forgotPasswordText: {
+    color: theme.colors.primary,
+    fontWeight: "600",
   },
   link: {
     marginTop: 12,

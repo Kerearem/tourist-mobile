@@ -6,6 +6,8 @@ export const AuthRoutes = {
   SignupAccountScreen: "SignupAccountScreen",
   PhoneVerificationScreen: "PhoneVerificationScreen",
   EmailVerificationScreen: "EmailVerificationScreen",
+  ForgotPasswordScreen: "ForgotPasswordScreen",
+  ResetPasswordScreen: "ResetPasswordScreen",
 } as const;
 
 export const OnboardingRoutes = {

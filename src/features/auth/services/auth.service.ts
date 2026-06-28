@@ -102,6 +102,17 @@ const MOCK_TEST_USERS = [
   },
 ] as const;
 const MOCK_CREDENTIALS_KEY = "tourist.mock.auth.credentials";
+const MOCK_PASSWORD_RESET_KEY = "tourist.mock.password.reset";
+const MOCK_PASSWORD_RESET_CODE = "123456";
+const MOCK_PASSWORD_RESET_EXPIRY_MS = 15 * 60 * 1000;
+const MOCK_PASSWORD_RESET_COOLDOWN_MS = 60_000;
+
+type MockPasswordResetRecord = {
+  email: string;
+  code: string;
+  expiresAt: string;
+  lastResentAt?: string;
+};
 
 const buildMockUser = (input: {
   id: string;
@@ -208,6 +219,22 @@ const loadMockCredentials = async (): Promise<MockCredentialRecord[]> => {
 
 const saveMockCredentials = async (records: MockCredentialRecord[]): Promise<void> => {
   await setSecureItem(MOCK_CREDENTIALS_KEY, JSON.stringify(records));
+};
+
+const loadMockPasswordReset = async (): Promise<MockPasswordResetRecord | null> => {
+  const raw = await getSecureItem(MOCK_PASSWORD_RESET_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as MockPasswordResetRecord;
+  } catch {
+    return null;
+  }
+};
+
+const saveMockPasswordReset = async (record: MockPasswordResetRecord): Promise<void> => {
+  await setSecureItem(MOCK_PASSWORD_RESET_KEY, JSON.stringify(record));
 };
 
 const upsertMockCredential = async (record: MockCredentialRecord): Promise<void> => {
@@ -354,6 +381,82 @@ export async function verifyRestoreAccount(input: SignInInput & { code: string }
   );
 
   return persistAuthPayload(payload);
+}
+
+export async function requestForgotPassword(email: string): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (USE_MOCK_BACKEND) {
+    const mockCredentials = await loadMockCredentials();
+    const accountExists = mockCredentials.some((record) => record.email === normalizedEmail);
+    const existingReset = await loadMockPasswordReset();
+
+    if (existingReset?.email === normalizedEmail && existingReset.lastResentAt) {
+      const elapsedMs = Date.now() - new Date(existingReset.lastResentAt).getTime();
+      if (elapsedMs < MOCK_PASSWORD_RESET_COOLDOWN_MS) {
+        throw new Error("Çok sık denediniz, biraz bekleyin.");
+      }
+    }
+
+    if (accountExists) {
+      await saveMockPasswordReset({
+        email: normalizedEmail,
+        code: MOCK_PASSWORD_RESET_CODE,
+        expiresAt: new Date(Date.now() + MOCK_PASSWORD_RESET_EXPIRY_MS).toISOString(),
+        lastResentAt: new Date().toISOString(),
+      });
+    }
+
+    return;
+  }
+
+  await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.forgotPasswordRequest, {
+    method: "POST",
+    body: { email: normalizedEmail },
+  });
+}
+
+export async function verifyForgotPassword(input: {
+  email: string;
+  code: string;
+  newPassword: string;
+}): Promise<void> {
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const cleanCode = input.code.replace(/\D+/g, "").slice(0, 6);
+
+  if (USE_MOCK_BACKEND) {
+    const mockCredentials = await loadMockCredentials();
+    const credential = mockCredentials.find((record) => record.email === normalizedEmail);
+    const resetRecord = await loadMockPasswordReset();
+
+    if (!credential || !resetRecord || resetRecord.email !== normalizedEmail) {
+      throw new Error("Geçersiz veya süresi dolmuş doğrulama kodu.");
+    }
+
+    if (new Date(resetRecord.expiresAt).getTime() < Date.now()) {
+      throw new Error("Geçersiz veya süresi dolmuş doğrulama kodu.");
+    }
+
+    if (resetRecord.code !== cleanCode) {
+      throw new Error("Geçersiz veya süresi dolmuş doğrulama kodu.");
+    }
+
+    const nextCredentials = mockCredentials.map((record) =>
+      record.email === normalizedEmail ? { ...record, password: input.newPassword } : record,
+    );
+    await saveMockCredentials(nextCredentials);
+    await setSecureItem(MOCK_PASSWORD_RESET_KEY, "");
+    return;
+  }
+
+  await apiRequest<{ success: boolean }>(API_ENDPOINTS.auth.forgotPasswordVerify, {
+    method: "POST",
+    body: {
+      email: normalizedEmail,
+      code: cleanCode,
+      newPassword: input.newPassword,
+    },
+  });
 }
 
 export async function signUpWithEmail(input: SignUpInput): Promise<SignUpResult> {

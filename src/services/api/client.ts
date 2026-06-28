@@ -32,6 +32,8 @@ const AUTH_PUBLIC_PATHS: ReadonlySet<string> = new Set([
   API_ENDPOINTS.auth.restoreAccount,
   API_ENDPOINTS.auth.restoreAccountRequest,
   API_ENDPOINTS.auth.restoreAccountVerify,
+  API_ENDPOINTS.auth.forgotPasswordRequest,
+  API_ENDPOINTS.auth.forgotPasswordVerify,
 ]);
 
 let refreshInFlight: Promise<string | null> | null = null;

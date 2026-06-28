@@ -5,8 +5,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AuthRoutes } from "../../constants/routes";
 import { SignupDraftProvider } from "../../features/auth/providers/SignupDraftProvider";
 import { EmailVerificationScreen } from "../../features/auth/screens/EmailVerificationScreen";
+import { ForgotPasswordScreen } from "../../features/auth/screens/ForgotPasswordScreen";
 import { LoginScreen } from "../../features/auth/screens/LoginScreen";
 import { PhoneVerificationScreen } from "../../features/auth/screens/PhoneVerificationScreen";
+import { ResetPasswordScreen } from "../../features/auth/screens/ResetPasswordScreen";
 import { SignupAccountScreen } from "../../features/auth/screens/SignupAccountScreen";
 import { SignupBirthDateScreen } from "../../features/auth/screens/SignupBirthDateScreen";
 import { SignupDisplayNameScreen } from "../../features/auth/screens/SignupDisplayNameScreen";
@@ -72,6 +74,8 @@ export function AuthStack() {
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen component={LoginScreen} name={AuthRoutes.LoginScreen} />
+        <Stack.Screen component={ForgotPasswordScreen} name={AuthRoutes.ForgotPasswordScreen} />
+        <Stack.Screen component={ResetPasswordScreen} name={AuthRoutes.ResetPasswordScreen} />
         <Stack.Screen component={SignupDisplayNameScreen} name={AuthRoutes.SignupDisplayNameScreen} />
         <Stack.Screen component={SignupBirthDateScreen} name={AuthRoutes.SignupBirthDateScreen} />
         <Stack.Screen component={SignupUsernameScreen} name={AuthRoutes.SignupUsernameScreen} />
