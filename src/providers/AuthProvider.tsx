@@ -29,13 +29,13 @@ type AuthContextValue = {
   signUp: (payload: {
     displayName: string;
     username: string;
-    phoneCountryCode?: string;
-    phoneNumber?: string;
     email: string;
     password: string;
     birthDate: string;
     consentAccepted: boolean;
-  }) => Promise<void>;
+    phoneCountryCode?: string;
+    phoneNumber?: string;
+  }) => Promise<{ resumedPendingVerification?: boolean }>;
   signOut: (options?: { skipRemote?: boolean }) => Promise<void>;
   requestRestoreAccount: (payload: { identifier: string; password: string }) => Promise<{ email: string }>;
   verifyRestoreAccount: (payload: { identifier: string; password: string; code: string }) => Promise<void>;
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       phoneCountryCode?: string;
       phoneNumber?: string;
     }) => {
-      const authState = await signUpWithEmail({
+      const result = await signUpWithEmail({
         displayName,
         username,
         email,
@@ -145,16 +145,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? { phoneCountryCode: phoneCountryCode.trim(), phoneNumber: phoneNumber.trim() }
           : {}),
       });
-      if (!authState?.user || !authState?.session) {
+      if (!result.state?.user || !result.state?.session) {
         throw new Error("Sign up succeeded but auth state is missing.");
       }
-      setSession(authState.session);
-      setUser(authState.user);
+      setSession(result.state.session);
+      setUser(result.state.user);
       console.log("[AuthProvider] signUp set state", {
-        userId: authState.user.id,
-        hasPhoneVerification: authState.user.hasPhoneVerification,
-        hasEmailVerification: authState.user.hasEmailVerification,
+        userId: result.state.user.id,
+        hasPhoneVerification: result.state.user.hasPhoneVerification,
+        hasEmailVerification: result.state.user.hasEmailVerification,
+        resumedPendingVerification: result.resumedPendingVerification ?? false,
       });
+      return { resumedPendingVerification: result.resumedPendingVerification };
     },
     [],
   );

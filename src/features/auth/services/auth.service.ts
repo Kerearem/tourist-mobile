@@ -17,6 +17,14 @@ export type AuthPayload = {
   session: AuthSession;
   user: AppUser;
   tokens: SessionTokens;
+  signupMeta?: {
+    resumedPendingVerification?: boolean;
+  };
+};
+
+export type SignUpResult = {
+  state: HydratedAuthState;
+  resumedPendingVerification?: boolean;
 };
 
 export const ACCOUNT_PENDING_DELETION_CODE = "ACCOUNT_PENDING_DELETION";
@@ -210,7 +218,8 @@ const upsertMockCredential = async (record: MockCredentialRecord): Promise<void>
 };
 
 const persistAuthPayload = async (payload: AuthPayload): Promise<HydratedAuthState> => {
-  await saveAuthState(payload);
+  const { signupMeta: _signupMeta, ...authState } = payload;
+  await saveAuthState(authState);
   const hydrated = await loadAuthState();
   console.log("[auth.service] Persisted auth state after signup/signin", {
     hasSession: Boolean(hydrated?.session),
@@ -220,8 +229,8 @@ const persistAuthPayload = async (payload: AuthPayload): Promise<HydratedAuthSta
     hasEmailVerification: hydrated?.user?.hasEmailVerification ?? null,
   });
   return {
-    session: payload.session,
-    user: payload.user,
+    session: authState.session,
+    user: authState.user,
   };
 };
 
@@ -347,13 +356,75 @@ export async function verifyRestoreAccount(input: SignInInput & { code: string }
   return persistAuthPayload(payload);
 }
 
-export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthState> {
+export async function signUpWithEmail(input: SignUpInput): Promise<SignUpResult> {
   if (USE_MOCK_BACKEND) {
     const normalizedEmail = input.email.trim().toLowerCase();
+    const normalizedUsername = input.username.trim().toLowerCase();
     const mockCredentials = await loadMockCredentials();
-    const emailAlreadyTaken = mockCredentials.some((record) => record.email === normalizedEmail);
-    if (emailAlreadyTaken) {
-      throw new Error("An account with this email already exists.");
+    const existingCredential = mockCredentials.find((record) => record.email === normalizedEmail);
+
+    if (existingCredential) {
+      const existingUser = await getMockUserRegistryUser(existingCredential.userId);
+      if (existingUser?.hasEmailVerification) {
+        throw new Error("An account with this email already exists.");
+      }
+
+      if (existingUser) {
+        const registryUsers = await Promise.all(
+          mockCredentials.map((record) => getMockUserRegistryUser(record.userId)),
+        );
+        const usernameTaken = registryUsers.some(
+          (user) =>
+            user &&
+            user.id !== existingUser.id &&
+            user.publicProfile.usernameLower === normalizedUsername,
+        );
+        if (usernameTaken) {
+          throw new Error("An account with this username already exists.");
+        }
+
+        const updatedUser: AppUser = {
+          ...existingUser,
+          publicProfile: {
+            ...existingUser.publicProfile,
+            displayName: input.displayName.trim() || existingUser.publicProfile.displayName,
+            username: input.username.trim(),
+            usernameLower: normalizedUsername,
+          },
+          privateProfile: {
+            ...existingUser.privateProfile,
+            email: normalizedEmail,
+            phoneCountryCode: input.phoneCountryCode?.trim() ?? "",
+            phoneNumber: input.phoneNumber?.trim() ?? "",
+            birthDate: input.birthDate,
+          },
+          consentAccepted: input.consentAccepted,
+          isUsernameSet: Boolean(input.username.trim()),
+          hasEmailVerification: false,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const payload = buildMockPayload({ user: updatedUser });
+        const state = await persistAuthPayload(payload);
+        await upsertMockCredential({
+          email: normalizedEmail,
+          password: input.password,
+          userId: state.user.id,
+        });
+        await saveCanonicalUser(updatedUser);
+
+        return { state, resumedPendingVerification: true };
+      }
+    }
+
+    const registryUsers = await Promise.all(
+      mockCredentials.map((record) => getMockUserRegistryUser(record.userId)),
+    );
+    const usernameTaken = registryUsers.some(
+      (user) => user?.publicProfile.usernameLower === normalizedUsername,
+    );
+    if (usernameTaken) {
+      throw new Error("An account with this username already exists.");
     }
 
     const payload = buildMockPayload({
@@ -379,7 +450,7 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
       hasPhoneVerification: state.user.hasPhoneVerification,
       hasEmailVerification: state.user.hasEmailVerification,
     });
-    return state;
+    return { state };
   }
 
   const payload = parseAuthPayload(
@@ -394,8 +465,12 @@ export async function signUpWithEmail(input: SignUpInput): Promise<HydratedAuthS
     userId: state.user.id,
     hasPhoneVerification: state.user.hasPhoneVerification,
     hasEmailVerification: state.user.hasEmailVerification,
+    resumedPendingVerification: payload.signupMeta?.resumedPendingVerification ?? false,
   });
-  return state;
+  return {
+    state,
+    resumedPendingVerification: payload.signupMeta?.resumedPendingVerification,
+  };
 }
 
 export async function signOutSession(options?: { skipRemote?: boolean }): Promise<void> {

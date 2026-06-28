@@ -54,7 +54,7 @@ export function SignupAccountScreen({ navigation }: Props) {
     setError("");
     setIsSubmitting(true);
     try {
-      await signUp({
+      const result = await signUp({
         displayName: draft.displayName,
         username: draft.username,
         email: cleanEmail,
@@ -64,7 +64,17 @@ export function SignupAccountScreen({ navigation }: Props) {
       });
       navigation.reset({
         index: 0,
-        routes: [{ name: AuthRoutes.EmailVerificationScreen }],
+        routes: [
+          {
+            name: AuthRoutes.EmailVerificationScreen,
+            params: result.resumedPendingVerification
+              ? {
+                  infoMessage:
+                    "Bu e-posta için doğrulama bekliyor. Yeni bir doğrulama kodu gönderdik.",
+                }
+              : undefined,
+          },
+        ],
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign up failed.";

@@ -8,7 +8,7 @@ export type AuthStackParamList = {
   SignupUsernameScreen: undefined;
   SignupAccountScreen: undefined;
   PhoneVerificationScreen: undefined;
-  EmailVerificationScreen: undefined;
+  EmailVerificationScreen: { infoMessage?: string } | undefined;
 };
 
 export type OnboardingStackParamList = {

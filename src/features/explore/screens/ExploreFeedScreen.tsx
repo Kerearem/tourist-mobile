@@ -11,8 +11,6 @@ import { useAuth } from "../../../hooks/useAuth";
 import type { ExploreStackParamList, MainTabParamList } from "../../../navigation/types";
 import { ProfileContentTabs } from "../../profile/components/ProfileContentTabs";
 import { ProfileAvatarRing } from "../../profile/components/ProfileAvatarRing";
-import { ProfileHighlightRow } from "../../profile/components/ProfileHighlightRow";
-import type { StoryHighlightItem } from "../../profile/components/ProfileEventHighlights";
 import { ProfileStatsRow } from "../../profile/components/ProfileStatsRow";
 import { blockUser, getUserBlockStatus, unblockUser, type UserBlockStatus } from "../../profile/services/block.service";
 import {
@@ -47,41 +45,6 @@ type ExploreSearchUser = {
   isFollowing?: boolean;
   hasNewPosts?: boolean;
 };
-
-const SEARCH_PROFILE_STORY_HIGHLIGHTS: StoryHighlightItem[] = [
-  {
-    id: "story_highlight_food",
-    title: "Food memories",
-    coverImageUrl: "https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1200&q=80",
-    stories: [
-      {
-        id: "story_food_1",
-        imageUrl: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?auto=format&fit=crop&w=1200&q=80",
-        caption: "We met amazing people from different communities in Berlin.",
-        createdAt: "2026-05-24T18:15:00.000Z",
-      },
-      {
-        id: "story_food_2",
-        imageUrl: "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&w=1200&q=80",
-        caption: "The food stands and live music were incredible.",
-        createdAt: "2026-05-24T19:05:00.000Z",
-      },
-    ],
-  },
-  {
-    id: "story_highlight_city",
-    title: "City walks",
-    coverImageUrl: "https://images.unsplash.com/photo-1526481280695-3c469d92f4d6?auto=format&fit=crop&w=1200&q=80",
-    stories: [
-      {
-        id: "story_walk_1",
-        imageUrl: "https://images.unsplash.com/photo-1505764706515-aa95265c5abc?auto=format&fit=crop&w=1200&q=80",
-        caption: "Explored hidden streets and coffee spots with new friends.",
-        createdAt: "2026-05-18T16:11:00.000Z",
-      },
-    ],
-  },
-];
 
 type CommentReplyTarget = {
   commentId: string;
@@ -923,8 +886,6 @@ export function ExploreFeedScreen() {
                       </AppText>
                     </Pressable>
                   </View>
-
-                  <ProfileHighlightRow highlights={SEARCH_PROFILE_STORY_HIGHLIGHTS} />
 
                   <ProfileContentTabs userId={selectedSearchUser.id} />
                 </>

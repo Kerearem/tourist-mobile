@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { useRoute, type RouteProp } from "@react-navigation/native";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
@@ -7,17 +8,27 @@ import { AppText } from "../../../components/ui/AppText";
 import { FlowProgressBar } from "../../../components/ui/FlowProgressBar";
 import { SIGNUP_FLOW_STEPS, SIGNUP_FLOW_TOTAL_STEPS } from "../constants/signupFlow";
 import { Screen } from "../../../components/ui/Screen";
+import type { AuthStackParamList } from "../../../navigation/types";
 import { useAuth } from "../../../hooks/useAuth";
 
 export function EmailVerificationScreen() {
+  const route = useRoute<RouteProp<AuthStackParamList, "EmailVerificationScreen">>();
   const { completeEmailVerification, resendEmailCode, signOut } = useAuth();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState("A 6-digit code was sent to your email.");
+  const [info, setInfo] = useState(
+    route.params?.infoMessage ?? "A 6-digit code was sent to your email.",
+  );
   const [expiresInSec, setExpiresInSec] = useState(600);
   const [resendInSec, setResendInSec] = useState(30);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  useEffect(() => {
+    if (route.params?.infoMessage) {
+      setInfo(route.params.infoMessage);
+    }
+  }, [route.params?.infoMessage]);
 
   useEffect(() => {
     const timer = setInterval(() => {
