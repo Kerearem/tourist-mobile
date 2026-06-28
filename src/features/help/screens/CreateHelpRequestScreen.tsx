@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as ImagePicker from "expo-image-picker";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
@@ -122,93 +123,115 @@ export function CreateHelpRequestScreen({ navigation }: Props) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.container}>
-        <Card>
-          <AppText style={styles.title} variant="title">
-            Yardım İsteği Oluştur
-          </AppText>
-          <AppText style={styles.subtitle} variant="bodyMuted">
-            İhtiyacını net yaz; yakındaki topluluk üyeleri sana ulaşabilsin.
-          </AppText>
-          {locationSummary ? (
-            <AppText style={styles.locationSummary} variant="caption">
-              Konum: {locationSummary}
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          <Card>
+            <AppText style={styles.title} variant="title">
+              Yardım İsteği Oluştur
             </AppText>
-          ) : null}
-        </Card>
+            <AppText style={styles.subtitle} variant="bodyMuted">
+              İhtiyacını net yaz; yakındaki topluluk üyeleri sana ulaşabilsin.
+            </AppText>
+            {locationSummary ? (
+              <AppText style={styles.locationSummary} variant="caption">
+                Konum: {locationSummary}
+              </AppText>
+            ) : null}
+          </Card>
 
-        <Card>
-          <AppText style={styles.sectionLabel} variant="label">
-            Kategori *
-          </AppText>
-          <View style={styles.categoryGrid}>
-            {HELP_CATEGORIES.map((item) => {
-              const selected = category === item.value;
-              return (
-                <Pressable
-                  key={item.value}
-                  onPress={() => setCategory(item.value)}
-                  style={[styles.categoryChip, selected && styles.categoryChipSelected]}
-                >
-                  <AppText style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]} variant="caption">
-                    {item.label}
+          <Card style={styles.formCard}>
+            <View style={styles.formSection}>
+              <AppText style={styles.fieldLabel} variant="label">
+                Kategori *
+              </AppText>
+              <View style={styles.categoryGrid}>
+                {HELP_CATEGORIES.map((item) => {
+                  const selected = category === item.value;
+                  return (
+                    <Pressable
+                      key={item.value}
+                      onPress={() => setCategory(item.value)}
+                      style={[styles.categoryChip, selected && styles.categoryChipSelected]}
+                    >
+                      <AppText style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]} variant="caption">
+                        {item.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <AppText style={styles.fieldLabel} variant="label">
+                Başlık *
+              </AppText>
+              <AppInput onChangeText={setTitle} placeholder="Örn. Kira sözleşmesi için rehberlik" value={title} />
+            </View>
+
+            <View style={styles.formSection}>
+              <AppText style={styles.fieldLabel} variant="label">
+                Durumunu Anlat *
+              </AppText>
+              <AppInput
+                multiline
+                onChangeText={setDescription}
+                placeholder="Yardımcı olacak kişinin bilmesi gereken detayları yaz..."
+                style={styles.descriptionInput}
+                value={description}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <AppText style={styles.fieldLabel} variant="label">
+                Fotoğraf (isteğe bağlı)
+              </AppText>
+              {photoUri ? (
+                <View style={styles.photoPreviewWrap}>
+                  <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+                  <Pressable onPress={removePhoto} style={styles.removePhotoButton}>
+                    <Ionicons color="#FFFFFF" name="close" size={14} />
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => void pickFromGallery()} style={styles.galleryButton}>
+                  <Ionicons color="#059669" name="images-outline" size={20} />
+                  <AppText style={styles.galleryButtonText} variant="label">
+                    Galeriden fotoğraf seç
                   </AppText>
                 </Pressable>
-              );
-            })}
-          </View>
+              )}
+            </View>
 
-          <AppInput label="Başlık *" onChangeText={setTitle} placeholder="Örn. Kira sözleşmesi için rehberlik" value={title} />
-          <AppInput
-            label="Durumunu Anlat *"
-            multiline
-            onChangeText={setDescription}
-            placeholder="Yardımcı olacak kişinin bilmesi gereken detayları yaz..."
-            style={styles.descriptionInput}
-            value={description}
-          />
+            {error ? (
+              <AppText style={styles.error} variant="caption">
+                {error}
+              </AppText>
+            ) : null}
 
-          <View style={styles.photoSection}>
-            <AppText style={styles.sectionLabel} variant="label">
-              Fotoğraf (isteğe bağlı)
-            </AppText>
-            {photoUri ? (
-              <View style={styles.photoPreviewWrap}>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                <Pressable onPress={removePhoto} style={styles.removePhotoButton}>
-                  <Ionicons color="#FFFFFF" name="close" size={14} />
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable onPress={() => void pickFromGallery()} style={styles.galleryButton}>
-                <Ionicons color="#059669" name="images-outline" size={20} />
-                <AppText style={styles.galleryButtonText} variant="label">
-                  Galeriden fotoğraf seç
-                </AppText>
-              </Pressable>
-            )}
-          </View>
-
-          {error ? (
-            <AppText style={styles.error} variant="caption">
-              {error}
-            </AppText>
-          ) : null}
-
-          <AppButton
-            containerStyle={styles.submitButton}
-            label={isSubmitting ? "Gönderiliyor..." : "İsteği Yayınla"}
-            loading={isSubmitting}
-            onPress={() => void onSubmit()}
-          />
-        </Card>
-      </View>
-    </ScrollView>
+            <AppButton
+              containerStyle={styles.submitButton}
+              label={isSubmitting ? "Gönderiliyor..." : "İsteği Yayınla"}
+              loading={isSubmitting}
+              onPress={() => void onSubmit()}
+            />
+          </Card>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: theme.colors.background,
+    flex: 1,
+  },
   scrollContent: {
     paddingBottom: theme.spacing.xxl,
   },
@@ -218,24 +241,29 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
   },
   title: {
-    marginBottom: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
   },
   subtitle: {
-    marginBottom: theme.spacing.sm,
+    lineHeight: 22,
   },
   locationSummary: {
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
   },
-  sectionLabel: {
+  formCard: {
+    gap: theme.spacing.xxl,
+  },
+  formSection: {
+    gap: theme.spacing.sm,
+  },
+  fieldLabel: {
     color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.sm,
+    fontWeight: "600",
   },
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
   },
   categoryChip: {
     backgroundColor: "#F3F4F6",
@@ -257,13 +285,8 @@ const styles = StyleSheet.create({
     color: "#047857",
   },
   descriptionInput: {
-    marginTop: theme.spacing.md,
     minHeight: 120,
     textAlignVertical: "top",
-  },
-  photoSection: {
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
   },
   galleryButton: {
     alignItems: "center",
@@ -303,7 +326,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: "#16A34A",
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
   },
   error: {
     color: theme.colors.danger,
