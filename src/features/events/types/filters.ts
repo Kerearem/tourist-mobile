@@ -6,6 +6,8 @@ export type DateFilterOption = "today" | "tomorrow" | "this_weekend" | "this_wee
 export type PriceFilterOption = "any" | "free" | "paid";
 export type EventTypeFilterOption = EventType;
 export type CommunityFilterOption = "my_community" | "all_communities";
+export type AlcoholFilterOption = "any" | "alcoholic" | "non_alcoholic";
+export type SmokingFilterOption = "any" | "allowed" | "not_allowed";
 
 export type FilterOption<T extends string> = {
   value: T;
@@ -17,6 +19,8 @@ export type EventsFilterState = {
   price: PriceFilterOption;
   eventTypes: EventTypeFilterOption[];
   community: CommunityFilterOption;
+  alcohol: AlcoholFilterOption;
+  smoking: SmokingFilterOption;
 };
 
 export const DATE_FILTERS: Array<FilterOption<DateFilterOption>> = [
@@ -42,11 +46,25 @@ export const COMMUNITY_FILTERS: Array<FilterOption<CommunityFilterOption>> = [
   { value: "all_communities", label: "Tüm topluluklar" },
 ];
 
+export const ALCOHOL_FILTERS: Array<FilterOption<AlcoholFilterOption>> = [
+  { value: "any", label: "Farketmez" },
+  { value: "alcoholic", label: "Alkollü" },
+  { value: "non_alcoholic", label: "Alkolsüz" },
+];
+
+export const SMOKING_FILTERS: Array<FilterOption<SmokingFilterOption>> = [
+  { value: "any", label: "Farketmez" },
+  { value: "allowed", label: "Sigara serbest" },
+  { value: "not_allowed", label: "Değil" },
+];
+
 export const DEFAULT_EVENTS_FILTERS: EventsFilterState = {
   date: null,
   price: "any",
   eventTypes: [],
   community: "all_communities",
+  alcohol: "any",
+  smoking: "any",
 };
 
 export const mapDateFilterToApi = (date: DateFilterOption | null): string | undefined => {
@@ -70,7 +88,7 @@ export const mapDateFilterToApi = (date: DateFilterOption | null): string | unde
 
 export const buildEventsListQuery = (
   filters: EventsFilterState,
-  options: { search?: string; activeTab?: string },
+  options: { search?: string },
 ): ListEventsQuery => {
   const query: ListEventsQuery = {
     scope: filters.community === "my_community" ? "community" : "global",
@@ -86,21 +104,21 @@ export const buildEventsListQuery = (
     query.dateFilter = dateFilter;
   }
 
-  const tab = options.activeTab ?? "All";
-  if (tab === "Free") {
-    query.price = "free";
-  } else if (tab === "Paid") {
-    query.price = "paid";
-  } else if (tab !== "All") {
-    const tabKey = tab.toLowerCase();
-    query.eventTypes = [tabKey === "outdoors" ? "outdoor" : (tabKey as EventType)];
-  }
-
   if (filters.price !== "any") {
     query.price = filters.price;
   }
   if (filters.eventTypes.length > 0) {
     query.eventTypes = [...filters.eventTypes];
+  }
+  if (filters.alcohol === "alcoholic") {
+    query.hasAlcohol = true;
+  } else if (filters.alcohol === "non_alcoholic") {
+    query.hasAlcohol = false;
+  }
+  if (filters.smoking === "allowed") {
+    query.smokingAllowed = true;
+  } else if (filters.smoking === "not_allowed") {
+    query.smokingAllowed = false;
   }
 
   return query;

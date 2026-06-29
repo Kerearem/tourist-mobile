@@ -29,6 +29,9 @@ export type EventItem = {
   canJoin?: boolean;
   joinBlockReason?: string;
   tags?: string[];
+  minAge?: number | null;
+  hasAlcohol?: boolean;
+  smokingAllowed?: boolean;
   metadata?: Record<string, unknown>;
 };
 
@@ -55,6 +58,9 @@ export type CreateEventInput = {
   capacity?: number;
   timezone?: string;
   tags?: string[];
+  minAge?: 18 | 21;
+  hasAlcohol?: boolean;
+  smokingAllowed?: boolean;
 };
 
 export type ListEventsQuery = {
@@ -65,6 +71,8 @@ export type ListEventsQuery = {
   eventTypes?: import("../constants/eventTypes").EventType[];
   dateFilter?: string;
   search?: string;
+  hasAlcohol?: boolean;
+  smokingAllowed?: boolean;
   page?: number;
   limit?: number;
 };

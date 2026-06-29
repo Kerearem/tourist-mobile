@@ -7,8 +7,7 @@ export const EVENT_TYPES = [
   { value: "sports", label: "Spor", emoji: "⚽" },
   { value: "workshop", label: "Workshop & Eğitim", emoji: "📚" },
   { value: "nightlife", label: "Gece Hayatı", emoji: "🌙" },
-  { value: "language", label: "Dil Değişimi", emoji: "🗣" },
-  { value: "newcomer", label: "Yeni Gelenler", emoji: "✈️" },
+  { value: "language", label: "Dil pratiği", emoji: "🗣" },
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number]["value"];

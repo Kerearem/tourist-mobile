@@ -36,9 +36,16 @@ type Props = NativeStackScreenProps<
   "CreateEventScreen"
 >;
 
-type FieldKey = "title" | "description" | "endsAt" | "venueName" | "location" | "eventType" | "price";
+type FieldKey = "title" | "description" | "endsAt" | "venueName" | "location" | "eventType" | "price" | "ageRestriction";
 type FieldErrors = Partial<Record<FieldKey, string>>;
 type PriceCurrency = "EUR" | "USD" | "TRY" | "GBP";
+type EventMinAgeOption = null | 18 | 21;
+
+const MIN_AGE_OPTIONS: Array<{ value: EventMinAgeOption; label: string }> = [
+  { value: null, label: "Genel (16+)" },
+  { value: 18, label: "18+" },
+  { value: 21, label: "21+" },
+];
 
 const CHIP_RADIUS = 999;
 const FIELD_RADIUS = 14;
@@ -110,6 +117,10 @@ export function CreateEventScreen({ navigation }: Props) {
   const [coverUri, setCoverUri] = useState<string | null>(null);
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [eventType, setEventType] = useState<EventType | null>(null);
+  const [minAge, setMinAge] = useState<EventMinAgeOption>(null);
+  const [hasAlcohol, setHasAlcohol] = useState(false);
+  const [smokingAllowed, setSmokingAllowed] = useState(false);
+  const [alcoholWarning, setAlcoholWarning] = useState<string | null>(null);
   const [isPaid, setIsPaid] = useState(false);
   const [priceAmount, setPriceAmount] = useState("");
   const [priceCurrency, setPriceCurrency] = useState<PriceCurrency>("EUR");
@@ -175,6 +186,9 @@ export function CreateEventScreen({ navigation }: Props) {
         errors.price = "Geçerli bir tutar gir.";
       }
     }
+    if (hasAlcohol && minAge == null) {
+      errors.ageRestriction = "Alkollü etkinlik için yaş sınırı (18+/21+) seçmelisin";
+    }
 
     return errors;
   };
@@ -225,6 +239,25 @@ export function CreateEventScreen({ navigation }: Props) {
     setIsPaid(true);
   };
 
+  const onSelectMinAge = (value: EventMinAgeOption) => {
+    setMinAge(value);
+    if (value == null) {
+      setHasAlcohol(false);
+    }
+    setAlcoholWarning(null);
+    clearFieldError("ageRestriction");
+  };
+
+  const onSelectHasAlcohol = (value: boolean) => {
+    if (value && minAge == null) {
+      setAlcoholWarning("Alkollü etkinlik için yaş sınırı (18+/21+) seçmelisin");
+      return;
+    }
+    setHasAlcohol(value);
+    setAlcoholWarning(null);
+    clearFieldError("ageRestriction");
+  };
+
   const onSubmit = async () => {
     if (!isOrganizerApproved || hasActiveEvent) {
       return;
@@ -271,6 +304,9 @@ export function CreateEventScreen({ navigation }: Props) {
             }
           : {}),
         ...(coverImageUrl ? { coverImageUrl } : {}),
+        ...(minAge != null ? { minAge } : {}),
+        hasAlcohol: minAge != null ? hasAlcohol : false,
+        smokingAllowed,
       });
 
       Alert.alert("Başarılı", "Etkinliğin incelenmek üzere gönderildi.", [
@@ -528,6 +564,77 @@ export function CreateEventScreen({ navigation }: Props) {
                 })}
               </View>
               <FieldError message={fieldErrors.eventType} />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <AppText variant="label">Yaş Sınırı</AppText>
+              <AppText variant="caption">Katılım için minimum yaş (opsiyonel)</AppText>
+              <View style={[styles.choiceRow, fieldErrors.ageRestriction ? styles.inputErrorBorder : null]}>
+                {MIN_AGE_OPTIONS.map((item) => {
+                  const active = minAge === item.value;
+                  return (
+                    <Pressable
+                      key={item.label}
+                      onPress={() => onSelectMinAge(item.value)}
+                      style={[styles.choiceChip, active && styles.choiceChipActive]}
+                    >
+                      <AppText style={[styles.choiceChipText, active && styles.choiceChipTextActive]} variant="caption">
+                        {item.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <AppText variant="label">Alkol var mı?</AppText>
+              <View style={styles.choiceRow}>
+                <Pressable
+                  onPress={() => onSelectHasAlcohol(false)}
+                  style={[styles.choiceChip, !hasAlcohol && styles.choiceChipActive]}
+                >
+                  <AppText style={[styles.choiceChipText, !hasAlcohol && styles.choiceChipTextActive]} variant="caption">
+                    Hayır
+                  </AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => onSelectHasAlcohol(true)}
+                  style={[styles.choiceChip, hasAlcohol && styles.choiceChipActive]}
+                >
+                  <AppText style={[styles.choiceChipText, hasAlcohol && styles.choiceChipTextActive]} variant="caption">
+                    Evet
+                  </AppText>
+                </Pressable>
+              </View>
+              {alcoholWarning ? (
+                <AppText style={styles.fieldError} variant="caption">
+                  {alcoholWarning}
+                </AppText>
+              ) : null}
+              <FieldError message={fieldErrors.ageRestriction} />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <AppText variant="label">Sigara içilebilir mi?</AppText>
+              <View style={styles.choiceRow}>
+                <Pressable
+                  onPress={() => setSmokingAllowed(false)}
+                  style={[styles.choiceChip, !smokingAllowed && styles.choiceChipActive]}
+                >
+                  <AppText style={[styles.choiceChipText, !smokingAllowed && styles.choiceChipTextActive]} variant="caption">
+                    Hayır
+                  </AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setSmokingAllowed(true)}
+                  style={[styles.choiceChip, smokingAllowed && styles.choiceChipActive]}
+                >
+                  <AppText style={[styles.choiceChipText, smokingAllowed && styles.choiceChipTextActive]} variant="caption">
+                    Evet
+                  </AppText>
+                </Pressable>
+              </View>
             </View>
 
             <View style={styles.fieldBlock}>

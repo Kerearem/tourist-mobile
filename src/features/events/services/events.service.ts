@@ -27,6 +27,10 @@ const buildListQuery = (query?: ListEventsQuery) => {
   if (query.eventTypes?.length) params.set("eventType", query.eventTypes.join(","));
   if (query.dateFilter) params.set("dateFilter", query.dateFilter);
   if (query.search) params.set("search", query.search);
+  if (query.hasAlcohol === true) params.set("hasAlcohol", "true");
+  if (query.hasAlcohol === false) params.set("hasAlcohol", "false");
+  if (query.smokingAllowed === true) params.set("smokingAllowed", "true");
+  if (query.smokingAllowed === false) params.set("smokingAllowed", "false");
   if (query.page) params.set("page", String(query.page));
   if (query.limit) params.set("limit", String(query.limit));
 
@@ -65,7 +69,7 @@ const mockEvents: EventItem[] = [
       id: "host_tourist_team",
       displayName: "Tourist Community",
     },
-    type: "newcomer",
+    type: "social",
     visibility: "city",
     city: "Berlin",
     countryCode: "DE",
@@ -77,13 +81,40 @@ const mockEvents: EventItem[] = [
     capacity: 60,
     isUserAttending: true,
     attendanceStatus: "approved",
-    tags: ["newcomers", "workshop"],
+    hasAlcohol: false,
+    smokingAllowed: false,
+    tags: ["workshop"],
   },
 ];
 
+const matchesAlcoholFilter = (event: EventItem, filter?: boolean) => {
+  if (filter === undefined) {
+    return true;
+  }
+  return Boolean(event.hasAlcohol) === filter;
+};
+
+const matchesSmokingFilter = (event: EventItem, filter?: boolean) => {
+  if (filter === undefined) {
+    return true;
+  }
+  return Boolean(event.smokingAllowed) === filter;
+};
+
 export async function getEvents(query?: ListEventsQuery): Promise<EventItem[]> {
   if (USE_MOCK_BACKEND) {
-    return mockEvents;
+    return mockEvents.filter((event) => {
+      const matchesPrice =
+        !query?.price ||
+        query.price === "any" ||
+        (query.price === "free" && !event.metadata?.isPaid) ||
+        (query.price === "paid" && event.metadata?.isPaid);
+      const matchesType =
+        !query?.eventTypes?.length || query.eventTypes.includes(event.type);
+      const matchesAlcohol = matchesAlcoholFilter(event, query?.hasAlcohol);
+      const matchesSmoking = matchesSmokingFilter(event, query?.smokingAllowed);
+      return matchesPrice && matchesType && matchesAlcohol && matchesSmoking;
+    });
   }
 
   const token = await getAccessToken();
@@ -152,6 +183,9 @@ export async function createEvent(input: CreateEventInput): Promise<EventItem> {
       attendanceStatus: "none",
       tags: input.tags,
       ...(input.coverImageUrl ? { coverImageUrl: input.coverImageUrl } : {}),
+      ...(input.minAge != null ? { minAge: input.minAge } : { minAge: null }),
+      hasAlcohol: input.hasAlcohol ?? false,
+      smokingAllowed: input.smokingAllowed ?? false,
       metadata: {
         requiresApproval: input.requiresApproval ?? false,
         status: "PENDING_REVIEW",

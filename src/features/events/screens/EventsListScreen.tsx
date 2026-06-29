@@ -12,7 +12,6 @@ import { EventsRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList } from "../../../navigation/types";
-import { EventCategoryTabs } from "../components/EventCategoryTabs";
 import { EventCard } from "../components/EventCard";
 import { EventsFilterSheet } from "../components/EventsFilterSheet";
 import { EventTopSearch } from "../components/EventTopSearch";
@@ -23,6 +22,7 @@ import {
   buildEventsListQuery,
   type EventsFilterState,
 } from "../types/filters";
+import { canUseAlcoholAndSmokingFilters } from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventsListScreen">;
 
@@ -34,7 +34,6 @@ export function EventsListScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [activeChip, setActiveChip] = useState("All");
   const [togglingEventId, setTogglingEventId] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
@@ -61,9 +60,14 @@ export function EventsListScreen({ navigation }: Props) {
     }
   }, [appliedFilters, isFilterOpen]);
 
+  const showAlcoholAndSmokingFilters = useMemo(
+    () => canUseAlcoholAndSmokingFilters(user?.privateProfile.birthDate),
+    [user?.privateProfile.birthDate],
+  );
+
   const listQuery = useMemo(
-    () => buildEventsListQuery(appliedFilters, { search: debouncedSearch, activeTab: activeChip }),
-    [activeChip, appliedFilters, debouncedSearch],
+    () => buildEventsListQuery(appliedFilters, { search: debouncedSearch }),
+    [appliedFilters, debouncedSearch],
   );
 
   const loadEvents = useCallback(
@@ -155,7 +159,6 @@ export function EventsListScreen({ navigation }: Props) {
             <Ionicons color={theme.colors.textPrimary} name="options-outline" size={20} />
           </Pressable>
         </View>
-        <EventCategoryTabs activeTab={activeChip} onChange={setActiveChip} />
 
         {scopedEvents.length === 0 ? (
           <Card style={styles.stateCard}>
@@ -191,6 +194,7 @@ export function EventsListScreen({ navigation }: Props) {
         onChange={setDraftFilters}
         onClearAll={onClearFilters}
         onClose={() => setIsFilterOpen(false)}
+        showAlcoholAndSmokingFilters={showAlcoholAndSmokingFilters}
         visible={isFilterOpen}
       />
     </Screen>
