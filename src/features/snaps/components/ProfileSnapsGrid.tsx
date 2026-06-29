@@ -7,7 +7,7 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { getMySnaps, getSnapsByUser } from "../services/snaps.service";
 import type { SnapItem } from "../types";
-import { SnapDetailModal } from "./SnapDetailModal";
+import { ProfileSnapFeedViewer } from "./ProfileSnapFeedViewer";
 
 type ProfileSnapsGridProps = {
   userId: string;
@@ -20,11 +20,39 @@ export function ProfileSnapsGrid({ userId, refreshToken = 0 }: ProfileSnapsGridP
   const [snaps, setSnaps] = useState<SnapItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSnap, setSelectedSnap] = useState<SnapItem | null>(null);
+  const [feedInitialIndex, setFeedInitialIndex] = useState(0);
+  const [isFeedOpen, setIsFeedOpen] = useState(false);
 
   const isOwnProfile = user?.id === userId;
   const tileSize = useMemo(() => Math.floor(width / 3), [width]);
   const tileHeight = useMemo(() => Math.floor(tileSize / 0.58), [tileSize]);
+
+  const authorFallback = useMemo(() => {
+    const firstWithAuthor = snaps.find((snap) => snap.author);
+    if (firstWithAuthor?.author) {
+      return {
+        displayName: firstWithAuthor.author.displayName,
+        username: firstWithAuthor.author.username,
+      };
+    }
+
+    if (isOwnProfile && user) {
+      return {
+        displayName: user.publicProfile.displayName,
+        username: user.publicProfile.username,
+      };
+    }
+
+    return {
+      displayName: "Kullanıcı",
+      username: "kullanici",
+    };
+  }, [isOwnProfile, snaps, user]);
+
+  const openSnapFeed = (index: number) => {
+    setFeedInitialIndex(index);
+    setIsFeedOpen(true);
+  };
 
   useEffect(() => {
     if (!userId) {
@@ -93,8 +121,12 @@ export function ProfileSnapsGrid({ userId, refreshToken = 0 }: ProfileSnapsGridP
   return (
     <>
       <View style={styles.grid}>
-        {snaps.map((snap) => (
-          <Pressable key={snap.id} onPress={() => setSelectedSnap(snap)} style={[styles.tile, { height: tileHeight, width: tileSize }]}>
+        {snaps.map((snap, index) => (
+          <Pressable
+            key={snap.id}
+            onPress={() => openSnapFeed(index)}
+            style={[styles.tile, { height: tileHeight, width: tileSize }]}
+          >
             <Image resizeMode="cover" source={{ uri: snap.backMediaUrl }} style={styles.tileBack} />
             <View style={styles.tileFrontWrap}>
               <Image resizeMode="cover" source={{ uri: snap.frontMediaUrl }} style={styles.tileFront} />
@@ -103,7 +135,13 @@ export function ProfileSnapsGrid({ userId, refreshToken = 0 }: ProfileSnapsGridP
         ))}
       </View>
 
-      <SnapDetailModal onClose={() => setSelectedSnap(null)} snap={selectedSnap} visible={selectedSnap != null} />
+      <ProfileSnapFeedViewer
+        authorFallback={authorFallback}
+        initialIndex={feedInitialIndex}
+        onClose={() => setIsFeedOpen(false)}
+        snaps={snaps}
+        visible={isFeedOpen}
+      />
     </>
   );
 }
