@@ -59,8 +59,8 @@ export const ALCOHOL_FILTERS: Array<FilterOption<AlcoholFilterOption>> = [
 ];
 
 export const SMOKING_FILTERS: Array<FilterOption<SmokingFilterOption>> = [
-  { value: "allowed", label: "Sigara serbest" },
-  { value: "not_allowed", label: "Değil" },
+  { value: "allowed", label: "İzin veriliyor" },
+  { value: "not_allowed", label: "İzin verilmiyor" },
 ];
 
 export const DEFAULT_EVENTS_FILTERS: EventsFilterState = {

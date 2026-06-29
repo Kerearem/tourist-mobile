@@ -1,8 +1,8 @@
 export const EVENT_FILTER_RED = "#DC2626";
 export const EVENT_FILTER_APPLY_RED = "#EF4444";
 export const EVENT_FILTER_RED_BORDER = "#FECACA";
-export const EVENT_FILTER_CHIP_ACTIVE_BG = "rgba(220, 38, 38, 0.14)";
-export const EVENT_FILTER_CHIP_ACTIVE_BORDER = "#FCA5A5";
-export const EVENT_FILTER_CHIP_ACTIVE_TEXT = "#B91C1C";
+export const EVENT_FILTER_CHIP_ACTIVE_BG = "rgba(220, 38, 38, 0.10)";
+export const EVENT_FILTER_CHIP_ACTIVE_BORDER = "#FECACA";
+export const EVENT_FILTER_CHIP_ACTIVE_TEXT = "#DC2626";
 
 export const EVENTS_SHEET_EDGE = 20;

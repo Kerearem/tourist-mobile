@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -24,7 +24,9 @@ import {
 } from "../types/filters";
 import {
   EVENT_FILTER_APPLY_RED,
-  EVENT_FILTER_RED,
+  EVENT_FILTER_CHIP_ACTIVE_BG,
+  EVENT_FILTER_CHIP_ACTIVE_BORDER,
+  EVENT_FILTER_CHIP_ACTIVE_TEXT,
   EVENT_FILTER_RED_BORDER,
   EVENTS_SHEET_EDGE,
 } from "../constants/eventFilterTheme";
@@ -77,25 +79,34 @@ export function EventsFilterSheet({
   const toggleType = (value: EventTypeFilterOption) =>
     onChange({ ...filters, eventTypes: toggleItem(filters.eventTypes, value) });
 
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = windowHeight * 0.9;
+
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <View style={styles.backdrop}>
         <Pressable onPress={onClose} style={styles.backdropTapArea} />
 
-        <SafeAreaView edges={["bottom"]} style={styles.sheet}>
-          <View style={styles.sheetContent}>
-            <View style={styles.handle} />
-            <View style={styles.header}>
-              <View style={styles.headerSpacer} />
-              <AppText style={styles.title} variant="sectionTitle">
-                Filtreler
-              </AppText>
-              <Pressable onPress={onClose} style={styles.closeButton}>
-                <Ionicons color={theme.colors.textPrimary} name="close" size={22} />
-              </Pressable>
+        <SafeAreaView edges={["bottom"]} style={[styles.sheet, { maxHeight: sheetMaxHeight }]}>
+          <View style={[styles.sheetContent, { maxHeight: sheetMaxHeight }]}>
+            <View style={styles.sheetHeaderBlock}>
+              <View style={styles.handle} />
+              <View style={styles.header}>
+                <View style={styles.headerSpacer} />
+                <AppText style={styles.title} variant="sectionTitle">
+                  Filtreler
+                </AppText>
+                <Pressable onPress={onClose} style={styles.closeButton}>
+                  <Ionicons color={theme.colors.textPrimary} name="close" size={22} />
+                </Pressable>
+              </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              style={styles.scrollBody}
+            >
               <View style={styles.section}>
                 <AppText style={styles.sectionTitle} variant="label">
                   Tarih
@@ -121,7 +132,7 @@ export function EventsFilterSheet({
 
               <View style={styles.section}>
                 <AppText style={styles.sectionTitle} variant="label">
-                  Fiyat
+                  Ücretlendirme
                 </AppText>
                 <View style={styles.chipWrap}>
                   {PRICE_FILTERS.map((item) => (
@@ -259,12 +270,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: "90%",
     overflow: "hidden",
+    width: "100%",
   },
   sheetContent: {
+    flexDirection: "column",
     paddingHorizontal: EVENTS_SHEET_EDGE,
     paddingTop: theme.spacing.sm,
+  },
+  sheetHeaderBlock: {
+    flexShrink: 0,
   },
   handle: {
     alignSelf: "center",
@@ -297,6 +312,11 @@ const styles = StyleSheet.create({
     height: 34,
     justifyContent: "center",
     width: 34,
+  },
+  scrollBody: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
   },
   scrollContent: {
     gap: theme.spacing.xxl,
@@ -340,8 +360,8 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   chipActive: {
-    backgroundColor: EVENT_FILTER_RED,
-    borderColor: EVENT_FILTER_RED,
+    backgroundColor: EVENT_FILTER_CHIP_ACTIVE_BG,
+    borderColor: EVENT_FILTER_CHIP_ACTIVE_BORDER,
   },
   chipLabel: {
     color: theme.colors.textPrimary,
@@ -349,7 +369,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   chipLabelActive: {
-    color: "#FFFFFF",
+    color: EVENT_FILTER_CHIP_ACTIVE_TEXT,
     fontWeight: "700",
   },
   footer: {
@@ -357,6 +377,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5E7EB",
     borderTopWidth: 1,
     flexDirection: "row",
+    flexShrink: 0,
     gap: theme.spacing.md,
     marginTop: theme.spacing.sm,
     paddingBottom: theme.spacing.md,
