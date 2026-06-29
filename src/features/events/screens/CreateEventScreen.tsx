@@ -30,6 +30,10 @@ import { EventLocationPickerModal } from "../components/EventLocationPickerModal
 import { createEvent } from "../services/events.service";
 import { getOrganizerStatus } from "../services/organizer.service";
 import { EVENT_TYPES, type EventType } from "../constants/eventTypes";
+import {
+  calculateAgeFromBirthDate,
+  isEventMinAgeAllowedForOrganizer,
+} from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
@@ -134,6 +138,16 @@ export function CreateEventScreen({ navigation }: Props) {
 
   const isOrganizerApproved = user?.organizerStatus === "approved";
 
+  const organizerAge = useMemo(
+    () => (user?.privateProfile.birthDate ? calculateAgeFromBirthDate(user.privateProfile.birthDate) : null),
+    [user?.privateProfile.birthDate],
+  );
+
+  const availableMinAgeOptions = useMemo(
+    () => MIN_AGE_OPTIONS.filter((item) => isEventMinAgeAllowedForOrganizer(organizerAge, item.value)),
+    [organizerAge],
+  );
+
   const locationLabel = useMemo(() => {
     if (!countryCode || !city.trim()) {
       return "Ülke ve şehir seç";
@@ -189,9 +203,19 @@ export function CreateEventScreen({ navigation }: Props) {
     if (hasAlcohol && minAge == null) {
       errors.ageRestriction = "Alkollü etkinlik için yaş sınırı (18+/21+) seçmelisin";
     }
+    if (minAge != null && !isEventMinAgeAllowedForOrganizer(organizerAge, minAge)) {
+      errors.ageRestriction = "Kendi yaşından büyük yaş sınırı koyamazsın";
+    }
 
     return errors;
   };
+
+  useEffect(() => {
+    if (minAge != null && !isEventMinAgeAllowedForOrganizer(organizerAge, minAge)) {
+      setMinAge(null);
+      setHasAlcohol(false);
+    }
+  }, [minAge, organizerAge]);
 
   useEffect(() => {
     const loadLimit = async () => {
@@ -240,6 +264,13 @@ export function CreateEventScreen({ navigation }: Props) {
   };
 
   const onSelectMinAge = (value: EventMinAgeOption) => {
+    if (!isEventMinAgeAllowedForOrganizer(organizerAge, value)) {
+      setFieldErrors((previous) => ({
+        ...previous,
+        ageRestriction: "Kendi yaşından büyük yaş sınırı koyamazsın",
+      }));
+      return;
+    }
     setMinAge(value);
     if (value == null) {
       setHasAlcohol(false);
@@ -570,7 +601,7 @@ export function CreateEventScreen({ navigation }: Props) {
               <AppText variant="label">Yaş Sınırı</AppText>
               <AppText variant="caption">Katılım için minimum yaş (opsiyonel)</AppText>
               <View style={[styles.choiceRow, fieldErrors.ageRestriction ? styles.inputErrorBorder : null]}>
-                {MIN_AGE_OPTIONS.map((item) => {
+                {availableMinAgeOptions.map((item) => {
                   const active = minAge === item.value;
                   return (
                     <Pressable
@@ -585,6 +616,11 @@ export function CreateEventScreen({ navigation }: Props) {
                   );
                 })}
               </View>
+              {organizerAge != null && organizerAge < 21 ? (
+                <AppText variant="caption">
+                  21+ yaş sınırı yalnızca 21 yaş ve üzeri organizatörler tarafından seçilebilir.
+                </AppText>
+              ) : null}
             </View>
 
             <View style={styles.fieldBlock}>

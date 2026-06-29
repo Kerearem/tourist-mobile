@@ -15,6 +15,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
 import type { OrganizerStatus } from "../../../models/user";
 import { applyForOrganizer, getOrganizerStatus } from "../services/organizer.service";
+import { meetsOrganizerMinimumAge } from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
@@ -44,6 +45,7 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
   const [success, setSuccess] = useState<string | null>(null);
 
   const canApply = organizerStatus === "not_applied" || organizerStatus === "rejected";
+  const isOldEnoughForOrganizer = meetsOrganizerMinimumAge(user?.privateProfile.birthDate);
   const infoMessage = useMemo(() => statusMessage(organizerStatus), [organizerStatus]);
 
   useEffect(() => {
@@ -74,6 +76,11 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     }
 
     if (!canApply) {
+      return;
+    }
+
+    if (!isOldEnoughForOrganizer) {
+      setError("Organizatör olmak için en az 18 yaşında olmalısın.");
       return;
     }
 
@@ -139,6 +146,14 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
           </Card>
         ) : null}
 
+        {!isOldEnoughForOrganizer && canApply ? (
+          <Card style={styles.warningCard}>
+            <AppText variant="body">
+              Organizatör olmak için en az 18 yaşında olmalısın. Şu an başvuru yapamazsın.
+            </AppText>
+          </Card>
+        ) : null}
+
         {success ? (
           <Card style={styles.successCard}>
             <AppText style={styles.successText} variant="body">
@@ -150,7 +165,7 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
         <Card style={styles.card}>
           <AppText variant="sectionTitle">Neden organizatör olmak istiyorsun?</AppText>
           <AppInput
-            editable={canApply}
+            editable={canApply && isOldEnoughForOrganizer}
             multiline
             numberOfLines={5}
             onChangeText={setMotivation}
@@ -166,13 +181,13 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
             </AppText>
           ) : null}
 
-          {canApply ? (
+          {canApply && isOldEnoughForOrganizer ? (
             <AppButton
               disabled={isSubmitting}
               label={isSubmitting ? "Gönderiliyor..." : "Başvuruyu Gönder"}
               onPress={() => void onSubmit()}
             />
-          ) : (
+          ) : canApply ? null : (
             <AppButton label="Geri Dön" onPress={() => navigation.goBack()} variant="secondary" />
           )}
         </Card>
@@ -191,6 +206,10 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     backgroundColor: "#EFF6FF",
+    gap: theme.spacing.xs,
+  },
+  warningCard: {
+    backgroundColor: "#FEF3C7",
     gap: theme.spacing.xs,
   },
   successCard: {

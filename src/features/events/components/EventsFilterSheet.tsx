@@ -94,21 +94,23 @@ export function EventsFilterSheet({
                 <AppText style={styles.sectionTitle} variant="label">
                   Tarih
                 </AppText>
-                <ScrollView
-                  contentContainerStyle={styles.horizontalChipRow}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.horizontalScroll}
-                >
-                  {DATE_FILTERS.map((item) => (
-                    <FilterChip
-                      active={filters.date === item.value}
-                      key={item.value}
-                      label={item.label}
-                      onPress={() => setDate(item.value)}
-                    />
-                  ))}
-                </ScrollView>
+                <View style={styles.horizontalScrollHost}>
+                  <ScrollView
+                    contentContainerStyle={styles.horizontalChipRow}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.horizontalScroll}
+                  >
+                    {DATE_FILTERS.map((item) => (
+                      <FilterChip
+                        active={filters.date === item.value}
+                        key={item.value}
+                        label={item.label}
+                        onPress={() => setDate(item.value)}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
               </View>
 
               <View style={styles.section}>

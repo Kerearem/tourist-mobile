@@ -11,6 +11,7 @@ import { ProfileRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ProfileStackParamList } from "../../../navigation/types";
+import { formatBirthDateLabel } from "../../auth/utils/birthDate";
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "AccountManagementScreen">;
 
@@ -136,7 +137,7 @@ export function AccountManagementScreen({ navigation }: Props) {
             warning={!user?.hasEmailVerification}
           />
           <AccountInfoRow
-            rightText={user?.privateProfile.birthDate || undefined}
+            rightText={formatBirthDateLabel(user?.privateProfile.birthDate)}
             title="Doğum tarihi"
           />
           <AccountInfoRow

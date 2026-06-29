@@ -39,3 +39,20 @@ export const getMaximumBirthDate = () => {
   date.setHours(12, 0, 0, 0);
   return date;
 };
+
+export const formatBirthDateLabel = (value?: string | null): string => {
+  if (!value?.trim()) {
+    return "Belirtilmemiş";
+  }
+
+  const parsed = parseBirthDate(value.trim());
+  if (!parsed) {
+    return "Belirtilmemiş";
+  }
+
+  return parsed.toLocaleDateString("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
