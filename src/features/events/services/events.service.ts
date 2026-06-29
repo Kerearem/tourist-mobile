@@ -22,8 +22,10 @@ const buildListQuery = (query?: ListEventsQuery) => {
   const params = new URLSearchParams();
   if (query.city) params.set("city", query.city);
   if (query.countryCode) params.set("countryCode", query.countryCode);
+  if (query.locationScope) params.set("locationScope", query.locationScope);
+  if (query.identityScope) params.set("identityScope", query.identityScope);
   if (query.scope) params.set("scope", query.scope);
-  if (query.price && query.price !== "any") params.set("price", query.price);
+  if (query.price) params.set("price", query.price);
   if (query.eventTypes?.length) params.set("eventType", query.eventTypes.join(","));
   if (query.dateFilter) params.set("dateFilter", query.dateFilter);
   if (query.search) params.set("search", query.search);
@@ -106,7 +108,6 @@ export async function getEvents(query?: ListEventsQuery): Promise<EventItem[]> {
     return mockEvents.filter((event) => {
       const matchesPrice =
         !query?.price ||
-        query.price === "any" ||
         (query.price === "free" && !event.metadata?.isPaid) ||
         (query.price === "paid" && event.metadata?.isPaid);
       const matchesType =

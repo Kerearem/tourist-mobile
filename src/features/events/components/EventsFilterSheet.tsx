@@ -7,14 +7,16 @@ import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import {
   ALCOHOL_FILTERS,
-  COMMUNITY_FILTERS,
   DATE_FILTERS,
+  EVENT_IDENTITY_SCOPE_OPTIONS,
+  EVENT_LOCATION_SCOPE_OPTIONS,
   EVENT_TYPE_FILTERS,
   PRICE_FILTERS,
   SMOKING_FILTERS,
   type AlcoholFilterOption,
-  type CommunityFilterOption,
   type DateFilterOption,
+  type EventIdentityScope,
+  type EventLocationScope,
   type EventTypeFilterOption,
   type EventsFilterState,
   type PriceFilterOption,
@@ -64,10 +66,14 @@ export function EventsFilterSheet({
   showAlcoholAndSmokingFilters,
 }: EventsFilterSheetProps) {
   const setDate = (value: DateFilterOption) => onChange({ ...filters, date: filters.date === value ? null : value });
-  const setPrice = (value: PriceFilterOption) => onChange({ ...filters, price: value });
-  const setCommunity = (value: CommunityFilterOption) => onChange({ ...filters, community: value });
-  const setAlcohol = (value: AlcoholFilterOption) => onChange({ ...filters, alcohol: value });
-  const setSmoking = (value: SmokingFilterOption) => onChange({ ...filters, smoking: value });
+  const setPrice = (value: PriceFilterOption) =>
+    onChange({ ...filters, price: filters.price === value ? null : value });
+  const setLocationScope = (value: EventLocationScope) => onChange({ ...filters, locationScope: value });
+  const setIdentityScope = (value: EventIdentityScope) => onChange({ ...filters, identityScope: value });
+  const setAlcohol = (value: AlcoholFilterOption) =>
+    onChange({ ...filters, alcohol: filters.alcohol === value ? null : value });
+  const setSmoking = (value: SmokingFilterOption) =>
+    onChange({ ...filters, smoking: filters.smoking === value ? null : value });
   const toggleType = (value: EventTypeFilterOption) =>
     onChange({ ...filters, eventTypes: toggleItem(filters.eventTypes, value) });
 
@@ -190,15 +196,31 @@ export function EventsFilterSheet({
 
               <View style={styles.section}>
                 <AppText style={styles.sectionTitle} variant="label">
-                  Topluluk
+                  Konum
                 </AppText>
                 <View style={styles.chipWrap}>
-                  {COMMUNITY_FILTERS.map((item) => (
+                  {EVENT_LOCATION_SCOPE_OPTIONS.map((item) => (
                     <FilterChip
-                      active={filters.community === item.value}
+                      active={filters.locationScope === item.value}
                       key={item.value}
                       label={item.label}
-                      onPress={() => setCommunity(item.value)}
+                      onPress={() => setLocationScope(item.value)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <AppText style={styles.sectionTitle} variant="label">
+                  Kimlik
+                </AppText>
+                <View style={styles.chipWrap}>
+                  {EVENT_IDENTITY_SCOPE_OPTIONS.map((item) => (
+                    <FilterChip
+                      active={filters.identityScope === item.value}
+                      key={item.value}
+                      label={item.label}
+                      onPress={() => setIdentityScope(item.value)}
                     />
                   ))}
                 </View>

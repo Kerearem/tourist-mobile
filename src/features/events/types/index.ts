@@ -66,8 +66,11 @@ export type CreateEventInput = {
 export type ListEventsQuery = {
   city?: string;
   countryCode?: string;
+  locationScope?: "city" | "country";
+  identityScope?: "nationality" | "everyone";
+  /** @deprecated Use locationScope + identityScope */
   scope?: "community" | "global";
-  price?: "any" | "free" | "paid";
+  price?: "free" | "paid";
   eventTypes?: import("../constants/eventTypes").EventType[];
   dateFilter?: string;
   search?: string;
