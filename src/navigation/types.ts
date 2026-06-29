@@ -45,7 +45,10 @@ export type ExploreStackParamList = {
       }
     | undefined;
   ExploreCameraScreen: undefined;
-  PublishSnapScreen: undefined;
+  PublishSnapScreen: {
+    frontUri: string;
+    backUri: string;
+  };
 };
 
 export type HelpStackParamList = {

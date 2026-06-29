@@ -1,8 +1,4 @@
-/**
- * GEÇİCİ ekran — çift kamera çekim UI'ı (ExploreCameraScreen) sonraki parçada
- * eklenecek. Şimdilik galeriden 2 foto seçilerek Snap yayın akışı test edilir.
- */
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -16,19 +12,15 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { resetExploreToFeed } from "../../../navigation/explore/resetExploreStack";
 import type { ExploreStackParamList } from "../../../navigation/types";
-import { pickGalleryImage } from "../../../services/media/pickGalleryImage";
 import { uploadImage } from "../../../services/media/cloudinary";
 import { createSnap } from "../services/snaps.service";
 
 type Props = NativeStackScreenProps<ExploreStackParamList, "PublishSnapScreen">;
 
-type PhotoSlot = "front" | "back";
-
-export function PublishSnapScreen({ navigation }: Props) {
+export function PublishSnapScreen({ navigation, route }: Props) {
+  const { frontUri, backUri } = route.params;
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [frontUri, setFrontUri] = useState<string | null>(null);
-  const [backUri, setBackUri] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [locationText, setLocationText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,27 +38,15 @@ export function PublishSnapScreen({ navigation }: Props) {
     return city || country || "";
   }, [user]);
 
-  const pickPhoto = async (slot: PhotoSlot) => {
-    try {
-      const uri = await pickGalleryImage();
-      if (!uri) {
-        return;
-      }
-
-      if (slot === "front") {
-        setFrontUri(uri);
-      } else {
-        setBackUri(uri);
-      }
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Fotoğraf seçilemedi.");
+  useEffect(() => {
+    if (!frontUri?.trim() || !backUri?.trim()) {
+      navigation.goBack();
     }
-  };
+  }, [backUri, frontUri, navigation]);
 
   const onPublish = async () => {
     if (!frontUri || !backUri) {
-      setError("Ön ve arka fotoğraf seçmelisin.");
+      setError("Fotoğraflar bulunamadı. Lütfen tekrar çek.");
       return;
     }
 
@@ -103,20 +83,9 @@ export function PublishSnapScreen({ navigation }: Props) {
     }
   };
 
-  const renderPhotoSlot = (slot: PhotoSlot, label: string, uri: string | null) => (
-    <Pressable onPress={() => void pickPhoto(slot)} style={styles.photoSlot}>
-      {uri ? (
-        <Image source={{ uri }} style={styles.photoPreview} />
-      ) : (
-        <View style={styles.photoPlaceholder}>
-          <Ionicons color={theme.colors.muted} name="image-outline" size={28} />
-          <AppText style={styles.photoPlaceholderText} variant="caption">
-            {label}
-          </AppText>
-        </View>
-      )}
-    </Pressable>
-  );
+  if (!frontUri || !backUri) {
+    return null;
+  }
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, theme.spacing.md) }]}>
@@ -129,13 +98,11 @@ export function PublishSnapScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <AppText style={styles.tempNote} variant="caption">
-          Geçici test akışı: galeriden 2 foto seç. Çift kamera çekimi sonraki parçada eklenecek.
-        </AppText>
-
-        <View style={styles.photoRow}>
-          {renderPhotoSlot("front", "Ön kamera", frontUri)}
-          {renderPhotoSlot("back", "Arka kamera", backUri)}
+        <View style={styles.heroWrap}>
+          <Image resizeMode="cover" source={{ uri: backUri }} style={styles.heroImage} />
+          <View style={styles.frontInset}>
+            <Image resizeMode="cover" source={{ uri: frontUri }} style={styles.frontImage} />
+          </View>
         </View>
 
         <AppInput
@@ -157,7 +124,7 @@ export function PublishSnapScreen({ navigation }: Props) {
         {error ? <AppText style={styles.error}>{error}</AppText> : null}
 
         <AppButton
-          disabled={isSubmitting || !frontUri || !backUri}
+          disabled={isSubmitting}
           label={isSubmitting ? "Paylaşılıyor..." : "Snap Paylaş"}
           onPress={() => void onPublish()}
         />
@@ -189,37 +156,31 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     paddingBottom: theme.spacing.xxl,
   },
-  tempNote: {
-    color: theme.colors.textSecondary,
-    lineHeight: 18,
-  },
-  photoRow: {
-    flexDirection: "row",
-    gap: theme.spacing.md,
-  },
-  photoSlot: {
+  heroWrap: {
     aspectRatio: 0.75,
     backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    flex: 1,
     overflow: "hidden",
+    width: "100%",
   },
-  photoPreview: {
+  heroImage: {
     height: "100%",
     width: "100%",
   },
-  photoPlaceholder: {
-    alignItems: "center",
-    flex: 1,
-    gap: theme.spacing.sm,
-    justifyContent: "center",
-    padding: theme.spacing.md,
+  frontInset: {
+    borderColor: "#FFFFFF",
+    borderRadius: theme.radius.md,
+    borderWidth: 2,
+    height: 120,
+    overflow: "hidden",
+    position: "absolute",
+    right: theme.spacing.md,
+    top: theme.spacing.md,
+    width: 88,
   },
-  photoPlaceholderText: {
-    color: theme.colors.textSecondary,
-    textAlign: "center",
+  frontImage: {
+    height: "100%",
+    width: "100%",
   },
   error: {
     color: "#DC2626",
