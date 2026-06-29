@@ -5,7 +5,6 @@ import { useNavigation, type NavigationProp } from "@react-navigation/native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
-import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
@@ -15,6 +14,9 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, MainTabParamList } from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
+import { EventDetailOfferings } from "../components/EventDetailOfferings";
+import { EVENT_FILTER_APPLY_RED } from "../constants/eventFilterTheme";
+import { HELP_FILTER_APPLY_GREEN } from "../../help/constants/helpCategories";
 import { createEventGroup, getEventGroup, type EventGroupInfo } from "../services/eventGroup.service";
 import { getEventById, toggleEventAttendance } from "../services/events.service";
 import type { EventAttendanceStatus, EventItem } from "../types";
@@ -86,7 +88,7 @@ const formatDateBadge = (startsAt: string) => {
 
 export function EventDetailScreen({ route }: Props) {
   const { user } = useAuth();
-  const navigation = useNavigation<NavigationProp<MainTabParamList>>();
+  const tabNavigation = useNavigation<NavigationProp<MainTabParamList>>();
   const [event, setEvent] = useState<EventItem | null>(null);
   const [groupInfo, setGroupInfo] = useState<EventGroupInfo | null>(null);
   const [isGroupSubmitting, setIsGroupSubmitting] = useState(false);
@@ -165,7 +167,7 @@ export function EventDetailScreen({ route }: Props) {
   };
 
   const openGroupScreen = (eventId: string, conversationId?: string) => {
-    navigation.navigate(TabRoutes.MessagesTab, {
+    tabNavigation.navigate(TabRoutes.MessagesTab, {
       screen: MessagesRoutes.GroupDetailScreen,
       params: { eventId, conversationId },
     });
@@ -257,11 +259,6 @@ export function EventDetailScreen({ route }: Props) {
             </View>
           </ImageBackground>
           <View style={styles.heroContent}>
-            <View style={styles.badgeRow}>
-              <Badge label={event.type} />
-              <Badge label={event.visibility} />
-              {attendanceState === "approved" ? <Badge label="Approved" /> : attendanceState === "pending" ? <Badge label="Pending" /> : null}
-            </View>
             <AppText style={styles.title} variant="title">
               {event.title}
             </AppText>
@@ -300,6 +297,13 @@ export function EventDetailScreen({ route }: Props) {
           <AppText style={styles.description} variant="body">
             {event.description}
           </AppText>
+        </Card>
+
+        <Card>
+          <AppText style={styles.sectionTitle} variant="sectionTitle">
+            Bu etkinlik size neler sunuyor?
+          </AppText>
+          <EventDetailOfferings event={event} />
         </Card>
 
         {isHost && isApproved ? (
@@ -382,14 +386,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     padding: theme.spacing.lg,
   },
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.xs,
-  },
-  title: {
-    marginTop: theme.spacing.xs,
-  },
+  title: {},
   dateBadge: {
     alignItems: "center",
     alignSelf: "flex-start",
@@ -440,16 +437,16 @@ const styles = StyleSheet.create({
   },
   attendButton: {
     alignItems: "center",
-    backgroundColor: "#111827",
+    backgroundColor: HELP_FILTER_APPLY_GREEN,
     borderRadius: theme.radius.md,
     justifyContent: "center",
     minHeight: 48,
   },
   pendingButton: {
-    backgroundColor: "#DC2626",
+    backgroundColor: EVENT_FILTER_APPLY_RED,
   },
   approvedButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: EVENT_FILTER_APPLY_RED,
   },
   disabledButton: {
     opacity: 0.6,
