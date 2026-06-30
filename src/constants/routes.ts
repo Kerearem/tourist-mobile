@@ -42,6 +42,7 @@ export const EventsRoutes = {
   EventsListScreen: "EventsListScreen",
   EventDetailScreen: "EventDetailScreen",
   EventAlbumScreen: "EventAlbumScreen",
+  CreateMomentScreen: "CreateMomentScreen",
   CreateEventScreen: "CreateEventScreen",
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
   MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
@@ -61,6 +62,7 @@ export const ProfileRoutes = {
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
   EventDetailScreen: "EventDetailScreen",
   EventAlbumScreen: "EventAlbumScreen",
+  CreateMomentScreen: "CreateMomentScreen",
 } as const;
 
 export const TabRoutes = {

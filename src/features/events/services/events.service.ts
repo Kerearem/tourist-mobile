@@ -1,4 +1,4 @@
-import type { CreateEventInput, EventAlbum, EventItem, EventRatingResult, ListEventsQuery, ToggleEventAttendanceInput } from "../types";
+import type { CreateEventInput, CreateMomentInput, EventAlbum, EventAlbumMoment, EventItem, EventRatingResult, ListEventsQuery, ToggleEventAttendanceInput } from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
@@ -150,6 +150,8 @@ export async function getEventAlbum(eventId: string): Promise<EventAlbum> {
       viewerRating: null,
       viewerIsParticipant: false,
       canRate: false,
+      canShareMoment: false,
+      viewerAttendanceId: null,
       moments: [],
     };
   }
@@ -171,6 +173,33 @@ export async function rateEvent(eventId: string, rating: number): Promise<EventR
     method: "POST",
     token,
     body: { rating },
+  });
+}
+
+export async function createEventMoment(eventId: string, input: CreateMomentInput): Promise<EventAlbumMoment> {
+  if (USE_MOCK_BACKEND) {
+    return {
+      id: `moment_${Date.now()}`,
+      caption: input.caption ?? null,
+      createdAt: new Date().toISOString(),
+      author: {
+        displayName: "Mock User",
+        avatarUrl: null,
+      },
+      media: input.media.map((item, index) => ({
+        id: `moment_media_${index}`,
+        url: item.url,
+        type: item.type,
+        order: item.order,
+      })),
+    };
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EventAlbumMoment>(withPathParam(API_ENDPOINTS.events.moments, eventId), {
+    method: "POST",
+    token,
+    body: input,
   });
 }
 

@@ -37,6 +37,7 @@ export const API_ENDPOINTS = {
     detail: "/events/:eventId",
     album: "/events/:eventId/album",
     rating: "/events/:eventId/rating",
+    moments: "/events/:eventId/moments",
     toggleAttendance: "/events/:eventId/attendance/toggle",
     create: "/events",
     myAttendances: "/events/my-attendances",

@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppText } from "../../../components/ui/AppText";
+import { AppButton } from "../../../components/ui/AppButton";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
+import { EventMomentCard } from "../components/EventMomentCard";
 import { getEventAlbum, rateEvent } from "../services/events.service";
 import type { EventAlbum } from "../types";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
@@ -88,9 +91,11 @@ export function EventAlbumScreen({ navigation, route }: Props) {
     }
   }, [route.params.eventId]);
 
-  useEffect(() => {
-    void loadAlbum();
-  }, [loadAlbum]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadAlbum();
+    }, [loadAlbum]),
+  );
 
   const submitRating = async () => {
     if (!album?.canRate || draftRating < 1 || isSubmitting) {
@@ -205,18 +210,39 @@ export function EventAlbumScreen({ navigation, route }: Props) {
         )}
 
         <View style={styles.sectionCard}>
-          <AppText style={styles.sectionTitle} variant="label">
-            Etkinlik anıları
-          </AppText>
-          <View style={styles.momentsPlaceholder}>
-            <Ionicons color={theme.colors.muted} name="images-outline" size={36} />
-            <AppText style={styles.momentsTitle} variant="label">
-              Henüz anı paylaşılmamış
+          <View style={styles.momentsHeader}>
+            <AppText style={styles.sectionTitle} variant="label">
+              Etkinlik anıları
             </AppText>
-            <AppText style={styles.momentsHint} variant="bodyMuted">
-              Katılımcı momentleri yakında burada görünecek.
-            </AppText>
+            {album.canShareMoment ? (
+              <AppButton
+                containerStyle={styles.shareMomentButton}
+                label="Anı Paylaş"
+                onPress={() => navigation.navigate("CreateMomentScreen", { eventId: route.params.eventId })}
+                variant="secondary"
+              />
+            ) : null}
           </View>
+
+          {album.moments.length > 0 ? (
+            <View style={styles.momentsList}>
+              {album.moments.map((moment) => (
+                <EventMomentCard key={moment.id} moment={moment} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.momentsPlaceholder}>
+              <Ionicons color={theme.colors.muted} name="images-outline" size={36} />
+              <AppText style={styles.momentsTitle} variant="label">
+                Henüz anı paylaşılmamış
+              </AppText>
+              <AppText style={styles.momentsHint} variant="bodyMuted">
+                {album.canShareMoment
+                  ? "İlk anıyı sen paylaşabilirsin."
+                  : "Katılımcılar etkinlik bittikten sonra anılarını burada paylaşır."}
+              </AppText>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -310,6 +336,19 @@ const styles = StyleSheet.create({
   },
   noteText: {
     flex: 1,
+  },
+  momentsHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "space-between",
+  },
+  shareMomentButton: {
+    minHeight: 40,
+    paddingHorizontal: theme.spacing.md,
+  },
+  momentsList: {
+    gap: theme.spacing.md,
   },
   momentsPlaceholder: {
     alignItems: "center",

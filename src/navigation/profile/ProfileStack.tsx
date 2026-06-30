@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { ProfileRoutes } from "../../constants/routes";
 import { CreateEventScreen } from "../../features/events/screens/CreateEventScreen";
+import { CreateMomentScreen } from "../../features/events/screens/CreateMomentScreen";
 import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen";
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
@@ -35,6 +36,7 @@ export function ProfileStack() {
       <Stack.Screen component={OrganizerApplicationScreen} name={ProfileRoutes.OrganizerApplicationScreen} />
       <Stack.Screen component={EventDetailScreen} name={ProfileRoutes.EventDetailScreen} />
       <Stack.Screen component={EventAlbumScreen} name={ProfileRoutes.EventAlbumScreen} />
+      <Stack.Screen component={CreateMomentScreen} name={ProfileRoutes.CreateMomentScreen} />
     </Stack.Navigator>
   );
 }

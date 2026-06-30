@@ -82,6 +82,24 @@ export type ListEventsQuery = {
   limit?: number;
 };
 
+export type EventAlbumMomentMedia = {
+  id: string;
+  url: string;
+  type: "IMAGE" | "VIDEO";
+  order: number;
+};
+
+export type EventAlbumMoment = {
+  id: string;
+  caption: string | null;
+  createdAt: string;
+  author: {
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  media: EventAlbumMomentMedia[];
+};
+
 export type EventAlbum = {
   event: EventItem;
   averageRating: number | null;
@@ -89,7 +107,18 @@ export type EventAlbum = {
   viewerRating: number | null;
   viewerIsParticipant: boolean;
   canRate: boolean;
-  moments: [];
+  canShareMoment: boolean;
+  viewerAttendanceId: string | null;
+  moments: EventAlbumMoment[];
+};
+
+export type CreateMomentInput = {
+  caption?: string;
+  media: Array<{
+    url: string;
+    type: "IMAGE" | "VIDEO";
+    order: number;
+  }>;
 };
 
 export type EventRatingResult = {

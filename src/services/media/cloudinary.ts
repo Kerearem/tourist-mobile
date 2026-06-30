@@ -97,3 +97,76 @@ export async function uploadImage(localUri: string, options: UploadImageOptions 
     clearTimeout(timeout);
   }
 }
+
+export type UploadVideoOptions = UploadImageOptions;
+
+const inferVideoMimeType = (uri: string) => {
+  const normalized = uri.split("?")[0]?.toLowerCase() ?? "";
+  if (normalized.endsWith(".mov")) return "video/quicktime";
+  if (normalized.endsWith(".webm")) return "video/webm";
+  return "video/mp4";
+};
+
+const inferVideoFileName = (uri: string) => {
+  const segment = uri.split("/").pop()?.split("?")[0];
+  if (segment && segment.includes(".")) {
+    return segment;
+  }
+  return `upload-${Date.now()}.mp4`;
+};
+
+export async function uploadVideo(localUri: string, options: UploadVideoOptions = {}): Promise<string> {
+  const trimmedUri = localUri.trim();
+  if (!trimmedUri) {
+    throw new Error("No video selected.");
+  }
+
+  const uploadableUri = await resolveLocalImageUri(trimmedUri);
+  const { cloudName, uploadPreset } = getCloudinaryConfig();
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: uploadableUri,
+      type: inferVideoMimeType(uploadableUri),
+      name: inferVideoFileName(uploadableUri),
+    } as unknown as Blob);
+    formData.append("upload_preset", uploadPreset);
+
+    if (options.folder) {
+      formData.append("folder", options.folder);
+    }
+    if (options.publicId) {
+      formData.append("public_id", options.publicId);
+    }
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+
+    const payload = (await response.json()) as CloudinaryUploadResponse;
+
+    if (!response.ok) {
+      throw new Error(payload.error?.message ?? "Cloudinary video upload failed.");
+    }
+
+    const secureUrl = payload.secure_url?.trim();
+    if (!secureUrl || !secureUrl.startsWith("https://")) {
+      throw new Error("Cloudinary did not return a secure video URL.");
+    }
+
+    return secureUrl;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Video upload timed out. Please try again.");
+    }
+    throw error instanceof Error ? error : new Error("Cloudinary video upload failed.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
