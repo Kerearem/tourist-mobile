@@ -8,10 +8,11 @@ import { Badge } from "../../../components/ui/Badge";
 import { ProfileRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { eventStatusLabel } from "../../events/utils/eventStatusLabel";
+import { formatEventRating } from "../../events/utils/eventRatingDisplay";
 import { getMyOrganizerEvents, getOrganizerPublicEvents } from "../../events/services/organizer.service";
 import type { EventItem } from "../../events/types";
 import type { ProfileStackParamList } from "../../../navigation/types";
-import { splitOrganizerProfileEvents } from "../utils/organizerProfileEvents";
+import { isPastOrganizerProfileEvent, splitOrganizerProfileEvents } from "../utils/organizerProfileEvents";
 
 const formatEventDateParts = (iso: string) => {
   const date = new Date(iso);
@@ -38,6 +39,7 @@ type EventCardProps = {
 
 function OrganizerProfileEventCard({ event, onPress }: EventCardProps) {
   const { month, day } = formatEventDateParts(event.startsAt);
+  const ratingLabel = formatEventRating(event.averageRating, event.ratingCount);
 
   return (
     <Pressable onPress={onPress} style={styles.eventCard}>
@@ -56,6 +58,11 @@ function OrganizerProfileEventCard({ event, onPress }: EventCardProps) {
         <AppText numberOfLines={1} variant="bodyMuted">
           {eventLocationLabel(event)}
         </AppText>
+        {ratingLabel ? (
+          <AppText style={styles.ratingText} variant="caption">
+            {ratingLabel}
+          </AppText>
+        ) : null}
       </View>
       <Badge label={eventStatusLabel(event)} />
     </Pressable>
@@ -65,7 +72,7 @@ function OrganizerProfileEventCard({ event, onPress }: EventCardProps) {
 type EventSectionProps = {
   title: string;
   events: EventItem[];
-  onEventPress: (eventId: string) => void;
+  onEventPress: (event: EventItem) => void;
 };
 
 function EventSection({ title, events, onEventPress }: EventSectionProps) {
@@ -79,7 +86,7 @@ function EventSection({ title, events, onEventPress }: EventSectionProps) {
         {title}
       </AppText>
       {events.map((event) => (
-        <OrganizerProfileEventCard key={event.id} event={event} onPress={() => onEventPress(event.id)} />
+        <OrganizerProfileEventCard key={event.id} event={event} onPress={() => onEventPress(event)} />
       ))}
     </View>
   );
@@ -88,13 +95,15 @@ function EventSection({ title, events, onEventPress }: EventSectionProps) {
 type ProfileOrganizerEventsTabProps = {
   organizerUserId: string;
   isOwnProfile?: boolean;
-  onEventPress?: (eventId: string) => void;
+  onActiveEventPress?: (eventId: string) => void;
+  onPastEventPress?: (eventId: string) => void;
 };
 
 export function ProfileOrganizerEventsTab({
   organizerUserId,
   isOwnProfile = true,
-  onEventPress,
+  onActiveEventPress,
+  onPastEventPress,
 }: ProfileOrganizerEventsTabProps) {
   const navigation = useNavigation<NavigationProp<ProfileStackParamList>>();
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -125,12 +134,23 @@ export function ProfileOrganizerEventsTab({
 
   const { active, past } = splitOrganizerProfileEvents(events);
 
-  const openEventDetail = (eventId: string) => {
-    if (onEventPress) {
-      onEventPress(eventId);
+  const openEvent = (event: EventItem) => {
+    const isPast = isPastOrganizerProfileEvent(event);
+
+    if (isPast) {
+      if (onPastEventPress) {
+        onPastEventPress(event.id);
+        return;
+      }
+      navigation.navigate(ProfileRoutes.EventAlbumScreen, { eventId: event.id });
       return;
     }
-    navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId });
+
+    if (onActiveEventPress) {
+      onActiveEventPress(event.id);
+      return;
+    }
+    navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId: event.id });
   };
 
   if (isLoading) {
@@ -176,8 +196,8 @@ export function ProfileOrganizerEventsTab({
 
   return (
     <View style={styles.list}>
-      <EventSection events={active} onEventPress={openEventDetail} title="Aktif Etkinlikler" />
-      <EventSection events={past} onEventPress={openEventDetail} title="Geçmiş Etkinlikler" />
+      <EventSection events={active} onEventPress={openEvent} title="Aktif Etkinlikler" />
+      <EventSection events={past} onEventPress={openEvent} title="Geçmiş Etkinlikler" />
     </View>
   );
 }
@@ -227,6 +247,10 @@ const styles = StyleSheet.create({
   eventTitle: {
     color: theme.colors.textPrimary,
     fontSize: 17,
+  },
+  ratingText: {
+    color: "#B45309",
+    fontWeight: "700",
   },
   stateWrap: {
     alignItems: "center",

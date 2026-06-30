@@ -70,6 +70,7 @@ export type MessagesStackParamList = {
 export type EventsStackParamList = {
   EventsListScreen: undefined;
   EventDetailScreen: { eventId: string };
+  EventAlbumScreen: { eventId: string };
   CreateEventScreen: undefined;
   OrganizerApplicationScreen: undefined;
   MyOrganizerEventsScreen: undefined;
@@ -88,6 +89,7 @@ export type ProfileStackParamList = {
   MyOrganizerEventsScreen: undefined;
   OrganizerApplicationScreen: undefined;
   EventDetailScreen: { eventId: string };
+  EventAlbumScreen: { eventId: string };
 };
 
 export type MainTabParamList = {

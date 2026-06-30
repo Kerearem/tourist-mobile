@@ -16,7 +16,8 @@ type ProfileContentTabsProps = {
   refreshToken?: number;
   isOrganizer?: boolean;
   isOwnProfile?: boolean;
-  onEventPress?: (eventId: string) => void;
+  onActiveEventPress?: (eventId: string) => void;
+  onPastEventPress?: (eventId: string) => void;
 };
 
 const memberTabs: Array<{ key: MemberTab; icon: keyof typeof Ionicons.glyphMap; label: string }> = [
@@ -72,7 +73,8 @@ export function ProfileContentTabs({
   refreshToken,
   isOrganizer = false,
   isOwnProfile = true,
-  onEventPress,
+  onActiveEventPress,
+  onPastEventPress,
 }: ProfileContentTabsProps) {
   const [memberTab, setMemberTab] = useState<MemberTab>("snaps");
   const [organizerTab, setOrganizerTab] = useState<OrganizerTab>("intro");
@@ -131,7 +133,8 @@ export function ProfileContentTabs({
             <View style={{ display: organizerTab === "organizerEvents" ? "flex" : "none" }}>
               <ProfileOrganizerEventsTab
                 isOwnProfile={isOwnProfile}
-                onEventPress={onEventPress}
+                onActiveEventPress={onActiveEventPress}
+                onPastEventPress={onPastEventPress}
                 organizerUserId={userId}
               />
             </View>

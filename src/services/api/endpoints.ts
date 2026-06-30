@@ -35,6 +35,8 @@ export const API_ENDPOINTS = {
   events: {
     list: "/events",
     detail: "/events/:eventId",
+    album: "/events/:eventId/album",
+    rating: "/events/:eventId/rating",
     toggleAttendance: "/events/:eventId/attendance/toggle",
     create: "/events",
     myAttendances: "/events/my-attendances",

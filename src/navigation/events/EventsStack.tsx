@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { EventsRoutes } from "../../constants/routes";
 import { CreateEventScreen } from "../../features/events/screens/CreateEventScreen";
+import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen";
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { EventsListScreen } from "../../features/events/screens/EventsListScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
@@ -23,6 +24,7 @@ export function EventsStack() {
           gestureEnabled: true,
         }}
       />
+      <Stack.Screen component={EventAlbumScreen} name={EventsRoutes.EventAlbumScreen} />
       <Stack.Screen component={CreateEventScreen} name={EventsRoutes.CreateEventScreen} />
       <Stack.Screen component={OrganizerApplicationScreen} name={EventsRoutes.OrganizerApplicationScreen} />
       <Stack.Screen component={MyOrganizerEventsScreen} name={EventsRoutes.MyOrganizerEventsScreen} />

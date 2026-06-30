@@ -1,4 +1,4 @@
-import type { CreateEventInput, EventItem, ListEventsQuery, ToggleEventAttendanceInput } from "../types";
+import type { CreateEventInput, EventAlbum, EventItem, EventRatingResult, ListEventsQuery, ToggleEventAttendanceInput } from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
@@ -134,6 +134,43 @@ export async function getEventById(eventId: string): Promise<EventItem | null> {
   return apiRequest<EventItem | null>(withPathParam(API_ENDPOINTS.events.detail, eventId), {
     method: "GET",
     token,
+  });
+}
+
+export async function getEventAlbum(eventId: string): Promise<EventAlbum> {
+  if (USE_MOCK_BACKEND) {
+    const event = mockEvents.find((item) => item.id === eventId);
+    if (!event) {
+      throw new Error("Event not found");
+    }
+    return {
+      event,
+      averageRating: null,
+      ratingCount: 0,
+      viewerRating: null,
+      viewerIsParticipant: false,
+      canRate: false,
+      moments: [],
+    };
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EventAlbum>(withPathParam(API_ENDPOINTS.events.album, eventId), {
+    method: "GET",
+    token,
+  });
+}
+
+export async function rateEvent(eventId: string, rating: number): Promise<EventRatingResult> {
+  if (USE_MOCK_BACKEND) {
+    return { rating, averageRating: rating, ratingCount: 1 };
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EventRatingResult>(withPathParam(API_ENDPOINTS.events.rating, eventId), {
+    method: "POST",
+    token,
+    body: { rating },
   });
 }
 

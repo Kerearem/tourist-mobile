@@ -486,11 +486,22 @@ export function ExploreFeedScreen() {
     });
   };
 
-  const openExploreOrganizerEventDetail = useCallback(
+  const openExploreActiveEvent = useCallback(
     (eventId: string) => {
       const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
       tabNavigation?.navigate(TabRoutes.EventsTab, {
         screen: EventsRoutes.EventDetailScreen,
+        params: { eventId },
+      });
+    },
+    [navigation],
+  );
+
+  const openExplorePastEvent = useCallback(
+    (eventId: string) => {
+      const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
+      tabNavigation?.navigate(TabRoutes.EventsTab, {
+        screen: EventsRoutes.EventAlbumScreen,
         params: { eventId },
       });
     },
@@ -917,7 +928,8 @@ export function ExploreFeedScreen() {
                         : Boolean(selectedSearchUser.isOrganizer)
                     }
                     isOwnProfile={selectedSearchUser.id === user?.id}
-                    onEventPress={openExploreOrganizerEventDetail}
+                    onActiveEventPress={openExploreActiveEvent}
+                    onPastEventPress={openExplorePastEvent}
                     userId={selectedSearchUser.id}
                   />
                 </>

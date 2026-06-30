@@ -32,6 +32,8 @@ export type EventItem = {
   minAge?: number | null;
   hasAlcohol?: boolean;
   smokingAllowed?: boolean;
+  averageRating?: number | null;
+  ratingCount?: number;
   metadata?: Record<string, unknown>;
 };
 
@@ -78,4 +80,20 @@ export type ListEventsQuery = {
   smokingAllowed?: boolean;
   page?: number;
   limit?: number;
+};
+
+export type EventAlbum = {
+  event: EventItem;
+  averageRating: number | null;
+  ratingCount: number;
+  viewerRating: number | null;
+  viewerIsParticipant: boolean;
+  canRate: boolean;
+  moments: [];
+};
+
+export type EventRatingResult = {
+  rating: number;
+  averageRating: number | null;
+  ratingCount: number;
 };
