@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
-import { ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
+import { EventsRoutes, ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAnimatedKeyboardHeight } from "../../../hooks/useAnimatedKeyboardHeight";
 import { useAuth } from "../../../hooks/useAuth";
@@ -46,6 +46,7 @@ type ExploreSearchUser = {
   avatarUrl?: string;
   isFollowing?: boolean;
   hasNewPosts?: boolean;
+  isOrganizer?: boolean;
 };
 
 type CommentReplyTarget = {
@@ -157,6 +158,7 @@ export function ExploreFeedScreen() {
       displayName: openUser.displayName,
       avatarUrl: openUser.avatarUrl,
       countryCode: "",
+      isOrganizer: openUser.isOrganizer ?? false,
     });
     navigation.setParams({ openUser: undefined });
   }, [navigation, route.params?.openUser]);
@@ -319,6 +321,7 @@ export function ExploreFeedScreen() {
               displayName: item.displayName,
               countryCode: "",
               avatarUrl: item.avatarUrl,
+              isOrganizer: item.isOrganizer,
             })),
           );
         } catch {
@@ -479,8 +482,20 @@ export function ExploreFeedScreen() {
       countryCode: "",
       avatarUrl: post.author.avatarUrl,
       bio: post.text || `${post.author.displayName} Tourist topluluğunda Snap paylaşıyor.`,
+      isOrganizer: post.author.isOrganizer ?? false,
     });
   };
+
+  const openExploreOrganizerEventDetail = useCallback(
+    (eventId: string) => {
+      const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
+      tabNavigation?.navigate(TabRoutes.EventsTab, {
+        screen: EventsRoutes.EventDetailScreen,
+        params: { eventId },
+      });
+    },
+    [navigation],
+  );
 
   const openPostDirectMessage = async (post: ExplorePost) => {
     if (!user?.id || post.author.id === user.id) {
@@ -895,7 +910,16 @@ export function ExploreFeedScreen() {
                     </Pressable>
                   </View>
 
-                  <ProfileContentTabs userId={selectedSearchUser.id} />
+                  <ProfileContentTabs
+                    isOrganizer={
+                      selectedSearchUser.id === user?.id
+                        ? user?.organizerStatus === "approved"
+                        : Boolean(selectedSearchUser.isOrganizer)
+                    }
+                    isOwnProfile={selectedSearchUser.id === user?.id}
+                    onEventPress={openExploreOrganizerEventDetail}
+                    userId={selectedSearchUser.id}
+                  />
                 </>
               ) : null}
             </View>

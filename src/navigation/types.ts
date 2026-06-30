@@ -41,6 +41,7 @@ export type ExploreStackParamList = {
           username: string;
           displayName: string;
           avatarUrl?: string;
+          isOrganizer?: boolean;
         };
       }
     | undefined;

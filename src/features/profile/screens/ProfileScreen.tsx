@@ -110,7 +110,14 @@ export function ProfileScreen({ navigation }: Props) {
             </AppText>
           </Pressable>
 
-          {user?.id ? <ProfileContentTabs refreshToken={snapsRefreshToken} userId={user.id} /> : null}
+          {user?.id ? (
+            <ProfileContentTabs
+              isOrganizer={user.organizerStatus === "approved"}
+              isOwnProfile
+              refreshToken={snapsRefreshToken}
+              userId={user.id}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>

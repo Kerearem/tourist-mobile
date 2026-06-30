@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
     myFollowing: "/users/me/following",
     myFollowers: "/users/me/followers",
     myFriends: "/users/me/friends",
+    organizerEvents: "/users/:userId/events",
   },
   complaints: {
     create: "/complaints",

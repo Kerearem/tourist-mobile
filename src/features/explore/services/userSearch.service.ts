@@ -8,6 +8,7 @@ export type SearchUserResult = {
   username: string;
   displayName: string;
   avatarUrl?: string;
+  isOrganizer: boolean;
 };
 
 const getAccessToken = async () => {

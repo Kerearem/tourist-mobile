@@ -25,16 +25,7 @@ type Props = NativeStackScreenProps<
 
 type TabKey = "created" | "attended";
 
-const statusLabel = (event: EventItem) => {
-  const status = event.metadata?.status;
-  if (status === "APPROVED") return "Onaylandı";
-  if (status === "PENDING_REVIEW") return "İncelemede";
-  if (status === "REJECTED") return "Reddedildi";
-  if (status === "DRAFT") return "Taslak";
-  if (status === "CANCELLED") return "İptal";
-  if (status === "COMPLETED") return "Tamamlandı";
-  return "Bilinmiyor";
-};
+import { eventStatusLabel } from "../utils/eventStatusLabel";
 
 const attendanceLabel = (event: EventItem) => {
   if (event.attendanceStatus === "approved") return "Katıldın";
@@ -92,7 +83,7 @@ export function MyOrganizerEventsScreen({ navigation }: Props) {
   const renderEvent = (item: EventItem) => (
     <View style={styles.itemWrap}>
       <View style={styles.statusRow}>
-        <Badge label={activeTab === "created" ? statusLabel(item) : attendanceLabel(item)} />
+        <Badge label={activeTab === "created" ? eventStatusLabel(item) : attendanceLabel(item)} />
         {activeTab === "created" && item.metadata?.status === "APPROVED" ? (
           <Pressable onPress={() => void onGroupPress(item)} style={styles.groupLink}>
             <AppText style={styles.groupLinkText} variant="caption">

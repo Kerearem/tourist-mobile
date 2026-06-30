@@ -14,6 +14,7 @@ export type ExplorePostAuthor = {
   displayName: string;
   username?: string;
   avatarUrl?: string;
+  isOrganizer?: boolean;
 };
 
 export type ExplorePostStats = {
@@ -36,7 +37,7 @@ export type ExploreFeedSnapItem = {
   caption?: string;
   locationText?: string;
   createdAt: string;
-  author: ExplorePostAuthor & { username: string };
+  author: ExplorePostAuthor & { username: string; isOrganizer: boolean };
   stats: ExplorePostStats;
   viewerState: {
     liked: boolean;

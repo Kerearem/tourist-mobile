@@ -31,6 +31,7 @@ const mapFeedItemToPost = (item: ExploreFeedItem, scope: ExploreFeedScope): Expl
       displayName: item.author.displayName,
       username: item.author.username,
       avatarUrl: item.author.avatarUrl,
+      isOrganizer: item.author.isOrganizer,
     },
     locationText: item.locationText,
     scope,

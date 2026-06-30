@@ -49,6 +49,8 @@ export async function applyForOrganizer(input: ApplyOrganizerInput): Promise<Org
   });
 }
 
+const withUserIdParam = (template: string, userId: string) => template.replace(":userId", userId);
+
 export async function getMyOrganizerEvents(): Promise<EventItem[]> {
   if (USE_MOCK_BACKEND) {
     return [];
@@ -56,6 +58,18 @@ export async function getMyOrganizerEvents(): Promise<EventItem[]> {
 
   const token = await getAccessToken();
   return apiRequest<EventItem[]>(API_ENDPOINTS.organizer.myEvents, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function getOrganizerPublicEvents(userId: string): Promise<EventItem[]> {
+  if (USE_MOCK_BACKEND) {
+    return [];
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EventItem[]>(withUserIdParam(API_ENDPOINTS.users.organizerEvents, userId), {
     method: "GET",
     token,
   });
