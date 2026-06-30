@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   Modal,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKeyboardLayout";
 import { ApiRequestError } from "../../../services/api/client";
 import {
   addSnapComment,
@@ -158,6 +160,9 @@ export function ProfileSnapFeedViewer({
 }: ProfileSnapFeedViewerProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const { isKeyboardVisible, keyboardPadding, sheetBottomPadding } = useModalCommentKeyboardLayout({
+    extraOffset: theme.spacing.sm,
+  });
   const listRef = useRef<FlatList<SnapItem>>(null);
   const loadedCommentSnapIds = useRef(new Set<string>());
 
@@ -413,64 +418,75 @@ export function ProfileSnapFeedViewer({
       >
         <View style={styles.commentsBackdrop}>
           <Pressable onPress={() => setCommentsSnap(null)} style={styles.commentsDismissArea} />
-          <View style={[styles.commentsSheet, { paddingBottom: Math.max(insets.bottom, theme.spacing.md) }]}>
-            <View style={styles.commentsHandle} />
-            <AppText style={styles.commentsTitle} variant="sectionTitle">
-              Yorumlar
-            </AppText>
+          <View
+            style={[
+              styles.commentsSheet,
+              !isKeyboardVisible ? { paddingBottom: sheetBottomPadding } : null,
+            ]}
+          >
+            <View style={styles.commentsSheetBody}>
+              <View style={styles.commentsHandle} />
+              <AppText style={styles.commentsTitle} variant="sectionTitle">
+                Yorumlar
+              </AppText>
 
-            {commentsLoading ? (
-              <View style={styles.commentsState}>
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : commentsError ? (
-              <View style={styles.commentsState}>
-                <AppText style={styles.commentsError} variant="bodyMuted">
-                  {commentsError}
-                </AppText>
-              </View>
-            ) : comments.length === 0 ? (
-              <View style={styles.commentsState}>
-                <AppText variant="bodyMuted">Henüz yorum yok.</AppText>
-              </View>
-            ) : (
-              <FlatList
-                contentContainerStyle={styles.commentsList}
-                data={comments}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <View style={styles.commentRow}>
-                    <AppText style={styles.commentAuthor} variant="label">
-                      @{item.author.username || item.author.displayName}
-                    </AppText>
-                    <AppText style={styles.commentText} variant="body">
-                      {item.text}
-                    </AppText>
-                  </View>
-                )}
-                style={styles.commentsScroll}
-              />
-            )}
-
-            <View style={styles.commentComposer}>
-              <TextInput
-                onChangeText={setDraftComment}
-                placeholder="Yorum yaz..."
-                placeholderTextColor={theme.colors.muted}
-                style={styles.commentInput}
-                value={draftComment}
-              />
-              <Pressable
-                disabled={isCommentSubmitting || !draftComment.trim()}
-                onPress={() => void submitComment()}
-                style={styles.commentSend}
-              >
-                <Ionicons
-                  color={draftComment.trim() ? theme.colors.primary : theme.colors.muted}
-                  name="send"
-                  size={22}
+              {commentsLoading ? (
+                <View style={styles.commentsState}>
+                  <ActivityIndicator color={theme.colors.primary} />
+                </View>
+              ) : commentsError ? (
+                <View style={styles.commentsState}>
+                  <AppText style={styles.commentsError} variant="bodyMuted">
+                    {commentsError}
+                  </AppText>
+                </View>
+              ) : comments.length === 0 ? (
+                <View style={styles.commentsState}>
+                  <AppText variant="bodyMuted">Henüz yorum yok.</AppText>
+                </View>
+              ) : (
+                <FlatList
+                  contentContainerStyle={styles.commentsList}
+                  data={comments}
+                  keyboardShouldPersistTaps="handled"
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <View style={styles.commentRow}>
+                      <AppText style={styles.commentAuthor} variant="label">
+                        @{item.author.username || item.author.displayName}
+                      </AppText>
+                      <AppText style={styles.commentText} variant="body">
+                        {item.text}
+                      </AppText>
+                    </View>
+                  )}
+                  style={styles.commentsScroll}
                 />
-              </Pressable>
+              )}
+            </View>
+
+            <View style={styles.composerDock}>
+              <View style={styles.commentComposer}>
+                <TextInput
+                  onChangeText={setDraftComment}
+                  placeholder="Yorum yaz..."
+                  placeholderTextColor={theme.colors.muted}
+                  style={styles.commentInput}
+                  value={draftComment}
+                />
+                <Pressable
+                  disabled={isCommentSubmitting || !draftComment.trim()}
+                  onPress={() => void submitComment()}
+                  style={styles.commentSend}
+                >
+                  <Ionicons
+                    color={draftComment.trim() ? theme.colors.primary : theme.colors.muted}
+                    name="send"
+                    size={22}
+                  />
+                </Pressable>
+              </View>
+              <Animated.View style={[styles.keyboardFill, { height: keyboardPadding }]} />
             </View>
           </View>
         </View>
@@ -576,6 +592,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.radius.lg,
     maxHeight: "72%",
     minHeight: 320,
+    overflow: "hidden",
+  },
+  commentsSheetBody: {
+    flex: 1,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
   },
@@ -617,13 +637,20 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     lineHeight: 20,
   },
-  commentComposer: {
-    alignItems: "center",
+  composerDock: {
+    backgroundColor: theme.colors.background,
     borderTopColor: theme.colors.border,
     borderTopWidth: 1,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+  },
+  keyboardFill: {
+    backgroundColor: theme.colors.background,
+  },
+  commentComposer: {
+    alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing.sm,
-    paddingTop: theme.spacing.sm,
   },
   commentInput: {
     backgroundColor: theme.colors.surface,

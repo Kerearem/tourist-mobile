@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Image,
   Modal,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Vibration,
   View,
@@ -17,7 +17,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import * as Haptics from "expo-haptics";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions, useFocusEffect } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "../../../components/ui/AppText";
 import { Card } from "../../../components/ui/Card";
@@ -26,6 +26,7 @@ import { Loader } from "../../../components/ui/Loader";
 import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
+import { useTabMessageKeyboardLayout } from "../../../hooks/useTabMessageKeyboardLayout";
 import { uploadImage } from "../../../services/media/cloudinary";
 import { getEventGroup, type EventGroupInfo } from "../../events/services/eventGroup.service";
 import type { MessagesStackParamList } from "../../../navigation/types";
@@ -290,6 +291,7 @@ function FullscreenImageViewer({ imageUrl, onClose }: FullscreenImageViewerProps
 
 export function GroupDetailScreen({ navigation, route }: Props) {
   const { user } = useAuth();
+  const { isKeyboardVisible, keyboardPadding, restingBottomInset } = useTabMessageKeyboardLayout();
   const listRef = useRef<FlatList<ConversationMessage>>(null);
   const [group, setGroup] = useState<EventGroupInfo | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -513,7 +515,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
         <View style={styles.loadingWrap}>
           <Loader label="Grup sohbeti yükleniyor..." />
         </View>
@@ -523,7 +525,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   if (error || !group) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
         <View style={styles.header}>
           <Pressable onPress={goToInbox} style={styles.backButton}>
             <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={30} />
@@ -537,7 +539,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable onPress={goToInbox} style={styles.backButton}>
@@ -611,7 +613,10 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           )}
         </View>
 
-        <View style={styles.composerWrap}>
+        <Animated.View style={{ paddingBottom: keyboardPadding }}>
+          <View
+            style={[styles.composerWrap, !isKeyboardVisible ? { paddingBottom: restingBottomInset } : null]}
+          >
           {group.isArchived ? (
             <View style={styles.archivedBanner}>
               <Ionicons color={theme.colors.textSecondary} name="archive-outline" size={18} />
@@ -631,7 +636,8 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               textOnly
             />
           )}
-        </View>
+          </View>
+        </Animated.View>
       </View>
 
       <GroupMessageActionSheet
@@ -741,7 +747,6 @@ const styles = StyleSheet.create({
   },
   composerWrap: {
     backgroundColor: "#FFFFFF",
-    paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
   },

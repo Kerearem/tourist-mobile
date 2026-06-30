@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, SafeAreaView, StyleSheet, View } from "react-native";
+import { Alert, Animated, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -13,6 +14,7 @@ import { Screen } from "../../../components/ui/Screen";
 import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
+import { useTabMessageKeyboardLayout } from "../../../hooks/useTabMessageKeyboardLayout";
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { blockUser } from "../../profile/services/block.service";
 import { MessageBubble } from "../components/MessageBubble";
@@ -65,6 +67,7 @@ const formatThreadTime = (messages: ConversationMessage[]) => {
 
 export function MessageThreadScreen({ route, navigation }: Props) {
   const { user } = useAuth();
+  const { isKeyboardVisible, keyboardPadding, restingBottomInset } = useTabMessageKeyboardLayout();
   const [conversation, setConversation] = useState<ConversationThread | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,7 +219,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.navigate(MessagesRoutes.MessagesInboxScreen)} style={styles.backButton}>
@@ -301,9 +304,13 @@ export function MessageThreadScreen({ route, navigation }: Props) {
           )}
         </View>
         {!isSystemInbox ? (
-          <View style={styles.composerWrap}>
-            <MessageComposer disabled={!user} onSend={onSend} />
-          </View>
+          <Animated.View style={{ paddingBottom: keyboardPadding }}>
+            <View
+              style={[styles.composerWrap, !isKeyboardVisible ? { paddingBottom: restingBottomInset } : null]}
+            >
+              <MessageComposer disabled={!user} onSend={onSend} />
+            </View>
+          </Animated.View>
         ) : null}
       </View>
     </SafeAreaView>
@@ -423,7 +430,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
   },
   stateCard: {
     flex: 1,

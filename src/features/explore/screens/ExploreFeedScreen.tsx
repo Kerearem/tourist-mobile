@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Animated, FlatList, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
 import { ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
+import { useAnimatedKeyboardHeight } from "../../../hooks/useAnimatedKeyboardHeight";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ExploreStackParamList, MainTabParamList } from "../../../navigation/types";
 import { ProfileContentTabs } from "../../profile/components/ProfileContentTabs";
@@ -74,6 +76,12 @@ export function ExploreFeedScreen() {
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const route = useRoute<RouteProp<ExploreStackParamList, "ExploreFeedScreen">>();
   const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { isKeyboardVisible, animatedHeight: keyboardPadding } = useAnimatedKeyboardHeight({
+    contentBottomOffset: 0,
+    extraOffset: theme.spacing.xs,
+  });
+  const sheetBottomPadding = Math.max(insets.bottom, theme.spacing.lg);
   const [viewState, dispatchViewState] = useReducer(reduceExploreViewState, {
     scope: "city" as ExploreFeedScope,
     audienceMode: "community" as AudienceMode,
@@ -1181,74 +1189,86 @@ export function ExploreFeedScreen() {
           }}
           style={styles.commentsBackdrop}
         >
-          <Pressable onPress={() => undefined} style={styles.commentsSheet}>
-            <View style={styles.commentsHandle} />
-            <View style={styles.commentsHeaderRow}>
-              <AppText style={styles.commentsTitle} variant="sectionTitle">
-                {totalCommentCount} yorum
-              </AppText>
-              <Pressable
-                onPress={() => {
-                  setActiveCommentsPost(null);
-                  setDraftComment("");
-                  setReplyTarget(null);
-                }}
-                style={styles.commentsClose}
-              >
-                <Ionicons color="#111827" name="close" size={20} />
-              </Pressable>
-            </View>
-            {isCommentsLoading ? (
-              <View style={styles.commentsLoadingWrap}>
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : commentsError ? (
-              <View style={styles.commentsLoadingWrap}>
-                <AppText variant="bodyMuted">{commentsError}</AppText>
-              </View>
-            ) : (
-              <FlatList
-                contentContainerStyle={styles.commentsList}
-                data={snapComments}
-                keyExtractor={(item) => item.id}
-                ListEmptyComponent={
-                  <AppText style={styles.commentsEmpty} variant="bodyMuted">
-                    Henüz yorum yok. İlk yorumu sen yaz.
-                  </AppText>
-                }
-                renderItem={({ item }) => <View style={styles.threadBlock}>{renderCommentItem(item)}</View>}
-                showsVerticalScrollIndicator={false}
-              />
-            )}
-            <View style={styles.composerShell}>
-              {replyTarget ? (
-                <View style={styles.replyBanner}>
-                  <AppText style={styles.replyBannerText} variant="caption">
-                    @{replyTarget.authorUsername} yanıtlanıyor
+          <Pressable onPress={() => undefined} style={styles.commentsSheetPressable}>
+            <View
+              style={[
+                styles.commentsSheet,
+                !isKeyboardVisible ? { paddingBottom: sheetBottomPadding } : null,
+              ]}
+            >
+              <View style={styles.commentsSheetBody}>
+                <View style={styles.commentsHandle} />
+                <View style={styles.commentsHeaderRow}>
+                  <AppText style={styles.commentsTitle} variant="sectionTitle">
+                    {totalCommentCount} yorum
                   </AppText>
                   <Pressable
                     onPress={() => {
-                      setReplyTarget(null);
+                      setActiveCommentsPost(null);
                       setDraftComment("");
+                      setReplyTarget(null);
                     }}
+                    style={styles.commentsClose}
                   >
-                    <Ionicons color="#64748B" name="close" size={16} />
+                    <Ionicons color="#111827" name="close" size={20} />
                   </Pressable>
                 </View>
-              ) : null}
-              <View style={styles.commentComposer}>
-                <Avatar initials={composerInitials} size={34} uri={undefined} />
-                <TextInput
-                  editable={!isCommentSubmitting}
-                  onChangeText={setDraftComment}
-                  placeholder="Yorum ekle..."
-                  placeholderTextColor={theme.colors.muted}
-                  style={styles.commentInput}
-                  value={draftComment}
-                />
-                <Pressable disabled={isCommentSubmitting} onPress={submitComment} style={styles.sendButton}>
-                  <Ionicons color="#FFFFFF" name="arrow-up" size={18} />
-                </Pressable>
+                {isCommentsLoading ? (
+                  <View style={styles.commentsLoadingWrap}>
+                    <ActivityIndicator color={theme.colors.primary} />
+                  </View>
+                ) : commentsError ? (
+                  <View style={styles.commentsLoadingWrap}>
+                    <AppText variant="bodyMuted">{commentsError}</AppText>
+                  </View>
+                ) : (
+                  <FlatList
+                    contentContainerStyle={styles.commentsList}
+                    data={snapComments}
+                    keyboardShouldPersistTaps="handled"
+                    keyExtractor={(item) => item.id}
+                    ListEmptyComponent={
+                      <AppText style={styles.commentsEmpty} variant="bodyMuted">
+                        Henüz yorum yok. İlk yorumu sen yaz.
+                      </AppText>
+                    }
+                    renderItem={({ item }) => <View style={styles.threadBlock}>{renderCommentItem(item)}</View>}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+              </View>
+
+              <View style={styles.composerDock}>
+                {replyTarget ? (
+                  <View style={styles.replyBanner}>
+                    <AppText style={styles.replyBannerText} variant="caption">
+                      @{replyTarget.authorUsername} yanıtlanıyor
+                    </AppText>
+                    <Pressable
+                      onPress={() => {
+                        setReplyTarget(null);
+                        setDraftComment("");
+                      }}
+                    >
+                      <Ionicons color="#64748B" name="close" size={16} />
+                    </Pressable>
+                  </View>
+                ) : null}
+                <View style={styles.commentComposer}>
+                  <Avatar initials={composerInitials} size={34} uri={undefined} />
+                  <TextInput
+                    editable={!isCommentSubmitting}
+                    onChangeText={setDraftComment}
+                    placeholder="Yorum ekle..."
+                    placeholderTextColor={theme.colors.muted}
+                    style={styles.commentInput}
+                    value={draftComment}
+                  />
+                  <Pressable disabled={isCommentSubmitting} onPress={submitComment} style={styles.sendButton}>
+                    <Ionicons color="#FFFFFF" name="arrow-up" size={18} />
+                  </Pressable>
+                </View>
+                <Animated.View style={[styles.keyboardFill, { height: keyboardPadding }]} />
               </View>
             </View>
           </Pressable>
@@ -1682,13 +1702,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
   },
+  commentsSheetPressable: {
+    width: "100%",
+  },
   commentsSheet: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     maxHeight: "74%",
     minHeight: 380,
-    paddingBottom: theme.spacing.lg,
+    overflow: "hidden",
+  },
+  commentsSheetBody: {
+    flex: 1,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
   },
@@ -1825,13 +1851,16 @@ const styles = StyleSheet.create({
   reactionText: {
     fontSize: 24,
   },
-  composerShell: {
+  composerDock: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#E5E7EB",
-    borderWidth: 1,
-    borderRadius: 20,
+    borderTopColor: "#E5E7EB",
+    borderTopWidth: 1,
     gap: theme.spacing.xs,
-    padding: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+  },
+  keyboardFill: {
+    backgroundColor: "#FFFFFF",
   },
   replyBanner: {
     alignItems: "center",
