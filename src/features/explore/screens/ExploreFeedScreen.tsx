@@ -929,6 +929,11 @@ export function ExploreFeedScreen() {
                     }
                     isOwnProfile={selectedSearchUser.id === user?.id}
                     onActiveEventPress={openExploreActiveEvent}
+                    onCreateReel={
+                      selectedSearchUser.id === user?.id && user?.organizerStatus === "approved"
+                        ? () => navigation.navigate(ExploreRoutes.CreateReelScreen)
+                        : undefined
+                    }
                     onPastEventPress={openExplorePastEvent}
                     userId={selectedSearchUser.id}
                   />

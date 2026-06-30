@@ -50,6 +50,7 @@ export type ExploreStackParamList = {
     frontUri: string;
     backUri: string;
   };
+  CreateReelScreen: undefined;
 };
 
 export type HelpStackParamList = {
@@ -92,6 +93,7 @@ export type ProfileStackParamList = {
   EventDetailScreen: { eventId: string };
   EventAlbumScreen: { eventId: string };
   CreateMomentScreen: { eventId: string };
+  CreateReelScreen: undefined;
 };
 
 export type MainTabParamList = {

@@ -114,6 +114,7 @@ export function ProfileScreen({ navigation }: Props) {
             <ProfileContentTabs
               isOrganizer={user.organizerStatus === "approved"}
               isOwnProfile
+              onCreateReel={() => navigation.navigate(ProfileRoutes.CreateReelScreen)}
               refreshToken={snapsRefreshToken}
               userId={user.id}
             />

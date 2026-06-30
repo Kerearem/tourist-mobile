@@ -2,10 +2,16 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { AppButton } from "../../../components/ui/AppButton";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 
-export function ProfileIntroTab() {
+type ProfileIntroTabProps = {
+  canCreateReel?: boolean;
+  onCreateReel?: () => void;
+};
+
+export function ProfileIntroTab({ canCreateReel = false, onCreateReel }: ProfileIntroTabProps) {
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
@@ -17,6 +23,14 @@ export function ProfileIntroTab() {
       <AppText style={styles.subtitle} variant="bodyMuted">
         Tanıtım videoların ve öne çıkan içeriklerin burada görünecek.
       </AppText>
+      {canCreateReel ? (
+        <AppButton
+          containerStyle={styles.createButton}
+          label="Tanıtım Ekle"
+          onPress={onCreateReel}
+          variant="secondary"
+        />
+      ) : null}
     </View>
   );
 }
@@ -45,5 +59,9 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     textAlign: "center",
+  },
+  createButton: {
+    marginTop: theme.spacing.md,
+    minWidth: 180,
   },
 });

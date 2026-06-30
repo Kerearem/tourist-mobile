@@ -21,6 +21,7 @@ export const ExploreRoutes = {
   ExploreFeedScreen: "ExploreFeedScreen",
   ExploreCameraScreen: "ExploreCameraScreen",
   PublishSnapScreen: "PublishSnapScreen",
+  CreateReelScreen: "CreateReelScreen",
 } as const;
 
 export const HelpRoutes = {
@@ -63,6 +64,7 @@ export const ProfileRoutes = {
   EventDetailScreen: "EventDetailScreen",
   EventAlbumScreen: "EventAlbumScreen",
   CreateMomentScreen: "CreateMomentScreen",
+  CreateReelScreen: "CreateReelScreen",
 } as const;
 
 export const TabRoutes = {
