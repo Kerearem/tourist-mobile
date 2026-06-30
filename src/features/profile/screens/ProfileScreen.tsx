@@ -115,6 +115,10 @@ export function ProfileScreen({ navigation }: Props) {
               isOrganizer={user.organizerStatus === "approved"}
               isOwnProfile
               onCreateReel={() => navigation.navigate(ProfileRoutes.CreateReelScreen)}
+              onEventPress={(eventId) =>
+                navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId })
+              }
+              organizerDisplayName={profileDisplay.displayName}
               refreshToken={snapsRefreshToken}
               userId={user.id}
             />

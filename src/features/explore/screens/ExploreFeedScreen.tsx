@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
@@ -122,7 +122,14 @@ export function ExploreFeedScreen() {
   const [selectedReportReason, setSelectedReportReason] = useState<ComplaintReason | null>(null);
   const [profileBlockStatus, setProfileBlockStatus] = useState<UserBlockStatus | null>(null);
   const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
+  const [profileContentRefreshToken, setProfileContentRefreshToken] = useState(0);
   const audienceAnim = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      setProfileContentRefreshToken((value) => value + 1);
+    }, []),
+  );
 
   useEffect(() => {
     if (!selectedSearchUser?.id) {
@@ -934,7 +941,10 @@ export function ExploreFeedScreen() {
                         ? () => navigation.navigate(ExploreRoutes.CreateReelScreen)
                         : undefined
                     }
+                    onEventPress={openExploreActiveEvent}
                     onPastEventPress={openExplorePastEvent}
+                    organizerDisplayName={selectedSearchUser.displayName}
+                    refreshToken={profileContentRefreshToken}
                     userId={selectedSearchUser.id}
                   />
                 </>

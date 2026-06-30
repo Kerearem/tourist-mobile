@@ -36,3 +36,30 @@ export async function createOrganizerReel(input: CreateReelInput): Promise<ReelI
     body: input,
   });
 }
+
+const withUserIdParam = (template: string, userId: string) => template.replace(":userId", userId);
+const withReelIdParam = (template: string, reelId: string) => template.replace(":reelId", reelId);
+
+export async function getOrganizerReels(userId: string): Promise<ReelItem[]> {
+  if (USE_MOCK_BACKEND) {
+    return [];
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ReelItem[]>(withUserIdParam(API_ENDPOINTS.users.organizerReels, userId), {
+    method: "GET",
+    token,
+  });
+}
+
+export async function deleteOrganizerReel(reelId: string): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  await apiRequest<{ success: boolean }>(withReelIdParam(API_ENDPOINTS.organizer.reel, reelId), {
+    method: "DELETE",
+    token,
+  });
+}

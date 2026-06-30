@@ -16,8 +16,10 @@ type ProfileContentTabsProps = {
   refreshToken?: number;
   isOrganizer?: boolean;
   isOwnProfile?: boolean;
+  organizerDisplayName?: string;
   onActiveEventPress?: (eventId: string) => void;
   onPastEventPress?: (eventId: string) => void;
+  onEventPress?: (eventId: string) => void;
   onCreateReel?: () => void;
 };
 
@@ -74,8 +76,10 @@ export function ProfileContentTabs({
   refreshToken,
   isOrganizer = false,
   isOwnProfile = true,
+  organizerDisplayName = "Organizatör",
   onActiveEventPress,
   onPastEventPress,
+  onEventPress,
   onCreateReel,
 }: ProfileContentTabsProps) {
   const [memberTab, setMemberTab] = useState<MemberTab>("snaps");
@@ -132,7 +136,12 @@ export function ProfileContentTabs({
             <View style={{ display: organizerTab === "intro" ? "flex" : "none" }}>
               <ProfileIntroTab
                 canCreateReel={Boolean(isOwnProfile && isOrganizer && onCreateReel)}
+                isOwnProfile={isOwnProfile}
                 onCreateReel={onCreateReel}
+                onEventPress={onEventPress}
+                organizerDisplayName={organizerDisplayName}
+                refreshToken={refreshToken}
+                userId={userId}
               />
             </View>
             <View style={{ display: organizerTab === "organizerEvents" ? "flex" : "none" }}>
