@@ -38,6 +38,8 @@ export const API_ENDPOINTS = {
     album: "/events/:eventId/album",
     rating: "/events/:eventId/rating",
     moments: "/events/:eventId/moments",
+    momentLike: "/events/:eventId/moments/:momentId/like",
+    momentComments: "/events/:eventId/moments/:momentId/comments",
     toggleAttendance: "/events/:eventId/attendance/toggle",
     create: "/events",
     myAttendances: "/events/my-attendances",

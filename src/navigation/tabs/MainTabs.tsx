@@ -104,7 +104,24 @@ export function MainTabs() {
           },
         })}
       />
-      <Tab.Screen component={EventsStack} name={TabRoutes.EventsTab} options={{ title: "Events" }} />
+      <Tab.Screen
+        component={EventsStack}
+        name={TabRoutes.EventsTab}
+        options={{ title: "Events" }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (event) => {
+            const nestedState = getNestedTabState(route);
+            if (!nestedState || nestedState.index === 0) {
+              return;
+            }
+            event.preventDefault();
+            navigation.dispatch({
+              ...StackActions.popToTop(),
+              target: nestedState.key,
+            });
+          },
+        })}
+      />
       <Tab.Screen component={ProfileStack} name={TabRoutes.ProfileTab} options={{ title: "Profile" }} />
     </Tab.Navigator>
   );

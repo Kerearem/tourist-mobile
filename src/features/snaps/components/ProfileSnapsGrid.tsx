@@ -7,6 +7,7 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { getMySnaps, getSnapsByUser } from "../services/snaps.service";
 import type { SnapItem } from "../types";
+import { getSnapGridTileMetrics } from "../utils/snapGridMetrics";
 import { ProfileSnapFeedViewer } from "./ProfileSnapFeedViewer";
 
 type ProfileSnapsGridProps = {
@@ -24,8 +25,7 @@ export function ProfileSnapsGrid({ userId, refreshToken = 0 }: ProfileSnapsGridP
   const [isFeedOpen, setIsFeedOpen] = useState(false);
 
   const isOwnProfile = user?.id === userId;
-  const tileSize = useMemo(() => Math.floor(width / 3), [width]);
-  const tileHeight = useMemo(() => Math.floor(tileSize / 0.58), [tileSize]);
+  const { tileSize, tileHeight } = useMemo(() => getSnapGridTileMetrics(width), [width]);
 
   const authorFallback = useMemo(() => {
     const firstWithAuthor = snaps.find((snap) => snap.author);

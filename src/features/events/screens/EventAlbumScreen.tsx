@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -9,8 +9,8 @@ import { AppButton } from "../../../components/ui/AppButton";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
-import { EventMomentCard } from "../components/EventMomentCard";
-import { getEventAlbum, rateEvent } from "../services/events.service";
+import { EventMomentsGrid } from "../components/EventMomentsGrid";
+import { getEventAlbum } from "../services/events.service";
 import type { EventAlbum } from "../types";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
 
@@ -18,6 +18,35 @@ type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
   "EventAlbumScreen"
 >;
+
+const STAR_COLOR = "#F59E0B";
+const STAR_SIZE = 24;
+
+type AlbumStarRatingProps = {
+  rating: number;
+  starCount?: number;
+};
+
+function AlbumStarRating({ rating, starCount = 5 }: AlbumStarRatingProps) {
+  const clampedRating = Math.min(starCount, Math.max(0, rating));
+
+  return (
+    <View style={styles.starRow}>
+      {Array.from({ length: starCount }, (_, index) => {
+        const filledThreshold = index + 1;
+        const halfThreshold = index + 0.5;
+        let iconName: keyof typeof Ionicons.glyphMap = "star-outline";
+        if (clampedRating >= filledThreshold) {
+          iconName = "star";
+        } else if (clampedRating >= halfThreshold) {
+          iconName = "star-half";
+        }
+
+        return <Ionicons key={index} color={STAR_COLOR} name={iconName} size={STAR_SIZE} />;
+      })}
+    </View>
+  );
+}
 
 const formatEventDate = (startsAt: string, endsAt?: string) => {
   const start = new Date(startsAt);
@@ -43,45 +72,16 @@ const formatEventDate = (startsAt: string, endsAt?: string) => {
   return `${startLabel} – ${endLabel}`;
 };
 
-type StarRatingProps = {
-  value: number;
-  onChange?: (value: number) => void;
-  size?: number;
-};
-
-function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
-  return (
-    <View style={styles.starRow}>
-      {[1, 2, 3, 4, 5].map((star) => {
-        const filled = star <= value;
-        return (
-          <Pressable
-            key={star}
-            disabled={!onChange}
-            onPress={() => onChange?.(star)}
-            style={styles.starButton}
-          >
-            <Ionicons color={filled ? "#F59E0B" : theme.colors.border} name="star" size={size} />
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 export function EventAlbumScreen({ navigation, route }: Props) {
   const [album, setAlbum] = useState<EventAlbum | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [draftRating, setDraftRating] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadAlbum = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getEventAlbum(route.params.eventId);
       setAlbum(data);
-      setDraftRating(data.viewerRating ?? 0);
       setError(null);
     } catch {
       setAlbum(null);
@@ -96,31 +96,6 @@ export function EventAlbumScreen({ navigation, route }: Props) {
       void loadAlbum();
     }, [loadAlbum]),
   );
-
-  const submitRating = async () => {
-    if (!album?.canRate || draftRating < 1 || isSubmitting) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const result = await rateEvent(route.params.eventId, draftRating);
-      setAlbum((current) =>
-        current
-          ? {
-              ...current,
-              viewerRating: result.rating,
-              averageRating: result.averageRating,
-              ratingCount: result.ratingCount,
-            }
-          : current,
-      );
-    } catch {
-      setError("Puan gönderilemedi.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -153,9 +128,9 @@ export function EventAlbumScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Albümü" />
+        <View style={styles.headerSection}>
+          <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Albümü" />
 
-        <View style={styles.heroCard}>
           <AppText style={styles.eventTitle} variant="title">
             {album.event.title}
           </AppText>
@@ -166,50 +141,16 @@ export function EventAlbumScreen({ navigation, route }: Props) {
             {locationLabel}
           </AppText>
 
-          <View style={styles.ratingSummary}>
-            <StarRating size={28} value={Math.round(album.averageRating ?? 0)} />
-            <AppText style={styles.ratingValue} variant="sectionTitle">
-              {album.averageRating != null ? album.averageRating.toFixed(1) : "—"}
+          {album.ratingCount > 0 && album.averageRating != null ? (
+            <AlbumStarRating rating={album.averageRating} />
+          ) : (
+            <AppText style={styles.ratingEmpty} variant="bodyMuted">
+              Henüz değerlendirme yok
             </AppText>
-            <AppText variant="bodyMuted">
-              {album.ratingCount > 0 ? `${album.ratingCount} değerlendirme` : "Henüz değerlendirme yok"}
-            </AppText>
-          </View>
+          )}
         </View>
 
-        {album.canRate ? (
-          <View style={styles.sectionCard}>
-            <AppText style={styles.sectionTitle} variant="label">
-              Etkinliği puanla
-            </AppText>
-            <AppText style={styles.sectionHint} variant="bodyMuted">
-              Katılımın için teşekkürler! Deneyimini 1-5 yıldız ile paylaş.
-            </AppText>
-            <StarRating onChange={setDraftRating} value={draftRating} />
-            <Pressable
-              disabled={draftRating < 1 || isSubmitting}
-              onPress={() => void submitRating()}
-              style={[styles.submitButton, draftRating < 1 && styles.submitButtonDisabled]}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <AppText style={styles.submitButtonText} variant="label">
-                  {album.viewerRating ? "Puanı güncelle" : "Puanı gönder"}
-                </AppText>
-              )}
-            </Pressable>
-          </View>
-        ) : album.viewerIsParticipant ? null : (
-          <View style={styles.noteCard}>
-            <Ionicons color={theme.colors.muted} name="information-circle-outline" size={20} />
-            <AppText style={styles.noteText} variant="bodyMuted">
-              Sadece katılanlar puan verebilir.
-            </AppText>
-          </View>
-        )}
-
-        <View style={styles.sectionCard}>
+        <View style={styles.momentsSection}>
           <View style={styles.momentsHeader}>
             <AppText style={styles.sectionTitle} variant="label">
               Etkinlik anıları
@@ -225,11 +166,7 @@ export function EventAlbumScreen({ navigation, route }: Props) {
           </View>
 
           {album.moments.length > 0 ? (
-            <View style={styles.momentsList}>
-              {album.moments.map((moment) => (
-                <EventMomentCard key={moment.id} moment={moment} />
-              ))}
-            </View>
+            <EventMomentsGrid eventId={route.params.eventId} moments={album.moments} />
           ) : (
             <View style={styles.momentsPlaceholder}>
               <Ionicons color={theme.colors.muted} name="images-outline" size={36} />
@@ -258,9 +195,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
   scrollContent: {
-    gap: theme.spacing.lg,
+    gap: theme.spacing.xl,
     paddingBottom: theme.spacing.xxl,
-    paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
   },
   centerState: {
@@ -270,89 +206,55 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: theme.spacing.lg,
   },
-  heroCard: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
+  headerSection: {
     gap: theme.spacing.sm,
-    padding: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
   },
   eventTitle: {
     color: theme.colors.textPrimary,
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 34,
+    marginTop: theme.spacing.sm,
+    textAlign: "center",
   },
   eventMeta: {
     color: theme.colors.textSecondary,
-  },
-  ratingSummary: {
-    alignItems: "center",
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.md,
-  },
-  ratingValue: {
-    color: theme.colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
   },
   starRow: {
+    alignSelf: "center",
     flexDirection: "row",
-    gap: theme.spacing.xs,
+    gap: 4,
+    marginTop: theme.spacing.md,
   },
-  starButton: {
-    padding: theme.spacing.xs,
+  ratingEmpty: {
+    marginTop: theme.spacing.md,
+    textAlign: "center",
   },
-  sectionCard: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
+  momentsSection: {
     gap: theme.spacing.md,
-    padding: theme.spacing.lg,
   },
   sectionTitle: {
     color: theme.colors.textPrimary,
-  },
-  sectionHint: {
-    color: theme.colors.textSecondary,
-  },
-  submitButton: {
-    alignItems: "center",
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    justifyContent: "center",
-    minHeight: 48,
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    color: "#FFFFFF",
-  },
-  noteCard: {
-    alignItems: "center",
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-    padding: theme.spacing.lg,
-  },
-  noteText: {
-    flex: 1,
   },
   momentsHeader: {
     alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing.sm,
     justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.lg,
   },
   shareMomentButton: {
     minHeight: 40,
     paddingHorizontal: theme.spacing.md,
   },
-  momentsList: {
-    gap: theme.spacing.md,
-  },
   momentsPlaceholder: {
     alignItems: "center",
     gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xl,
   },
   momentsTitle: {
