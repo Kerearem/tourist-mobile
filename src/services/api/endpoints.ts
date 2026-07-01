@@ -82,6 +82,9 @@ export const API_ENDPOINTS = {
     myFriends: "/users/me/friends",
     organizerEvents: "/users/:userId/events",
     organizerReels: "/users/:userId/reels",
+    userAttendances: "/users/:userId/attendances",
+    publicProfile: "/users/:userId/profile",
+    profileStats: "/users/:userId/stats",
   },
   complaints: {
     create: "/complaints",

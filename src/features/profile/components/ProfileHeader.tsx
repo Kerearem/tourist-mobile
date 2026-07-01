@@ -9,7 +9,7 @@ import { ProfileAvatarRing } from "./ProfileAvatarRing";
 type ProfileHeaderProps = {
   displayName: string;
   username: string;
-  location: string;
+  location?: string;
   bio: string;
   avatarUrl?: string;
   isAvatarUploading?: boolean;
@@ -49,12 +49,14 @@ export function ProfileHeader({
         <AppText style={styles.name} variant="title">
           {displayName}
         </AppText>
-        <View style={styles.locationRow}>
-          <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
-          <AppText style={styles.location} variant="bodyMuted">
-            {location}
-          </AppText>
-        </View>
+        {location ? (
+          <View style={styles.locationRow}>
+            <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
+            <AppText style={styles.location} variant="bodyMuted">
+              {location}
+            </AppText>
+          </View>
+        ) : null}
         <AppText style={styles.bio} variant="body">
           {bio}
         </AppText>

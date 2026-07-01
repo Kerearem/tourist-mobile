@@ -37,6 +37,8 @@ const mapFeedItemToPost = (item: ExploreFeedItem, scope: ExploreFeedScope): Expl
     scope,
     createdAt: item.createdAt,
     text: item.caption ?? "",
+    frontMediaUrl: item.frontMediaUrl,
+    backMediaUrl: item.backMediaUrl,
     media: [
       {
         id: `${item.id}_back`,

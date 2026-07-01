@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } 
 import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
@@ -14,6 +15,7 @@ import type { ExploreStackParamList, MainTabParamList } from "../../../navigatio
 import { ProfileContentTabs } from "../../profile/components/ProfileContentTabs";
 import { ProfileAvatarRing } from "../../profile/components/ProfileAvatarRing";
 import { ProfileStatsRow } from "../../profile/components/ProfileStatsRow";
+import { getUserProfileStats, getUserPublicProfile, type UserProfileStats } from "../../profile/services/userProfile.service";
 import { blockUser, getUserBlockStatus, unblockUser, type UserBlockStatus } from "../../profile/services/block.service";
 import {
   followUser,
@@ -34,6 +36,7 @@ import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
 import { loadExploreFeed } from "../services/explore.service";
 import { searchUsers } from "../services/userSearch.service";
+import { formatProfileLocation } from "../../../utils/formatProfileLocation";
 import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
 type ExploreSearchUser = {
@@ -123,6 +126,7 @@ export function ExploreFeedScreen() {
   const [profileBlockStatus, setProfileBlockStatus] = useState<UserBlockStatus | null>(null);
   const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
   const [profileContentRefreshToken, setProfileContentRefreshToken] = useState(0);
+  const [profileStats, setProfileStats] = useState<UserProfileStats | null>(null);
   const audienceAnim = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
@@ -135,23 +139,61 @@ export function ExploreFeedScreen() {
     if (!selectedSearchUser?.id) {
       setProfileBlockStatus(null);
       setFollowStatus(null);
+      setProfileStats(null);
       return;
     }
 
     void (async () => {
       try {
-        const [blockStatus, nextFollowStatus] = await Promise.all([
+        const [blockStatus, nextFollowStatus, publicProfile, stats] = await Promise.all([
           getUserBlockStatus(selectedSearchUser.id),
           getFollowStatus(selectedSearchUser.id),
+          getUserPublicProfile(selectedSearchUser.id),
+          getUserProfileStats(selectedSearchUser.id),
         ]);
         setProfileBlockStatus(blockStatus);
         setFollowStatus(nextFollowStatus);
+        setProfileStats(stats);
+        setSelectedSearchUser((current) =>
+          current?.id === selectedSearchUser.id
+            ? {
+                ...current,
+                username: publicProfile.username || current.username,
+                displayName: publicProfile.displayName || current.displayName,
+                avatarUrl: publicProfile.avatarUrl ?? current.avatarUrl,
+                bio: publicProfile.bio ?? current.bio,
+                city: publicProfile.city ?? current.city,
+                countryCode: publicProfile.countryCode ?? current.countryCode,
+                isOrganizer: publicProfile.isOrganizer,
+              }
+            : current,
+        );
       } catch {
         setProfileBlockStatus(null);
         setFollowStatus(null);
+        setProfileStats(null);
       }
     })();
   }, [selectedSearchUser?.id]);
+
+  useEffect(() => {
+    const tabNavigation = navigation.getParent<BottomTabNavigationProp<MainTabParamList>>();
+    if (!tabNavigation) {
+      return;
+    }
+
+    const unsubscribe = tabNavigation.addListener("tabPress", () => {
+      if (!navigation.isFocused()) {
+        return;
+      }
+      setSelectedSearchUser(null);
+      setIsProfileMenuOpen(false);
+      setIsReportModalOpen(false);
+      setIsSearchOpen(false);
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   useEffect(() => {
     const openUser = route.params?.openUser;
@@ -301,6 +343,16 @@ export function ExploreFeedScreen() {
   const searchableUsers = useMemo(
     () => searchResults.filter((item) => !dismissedSearchUserIds.includes(item.id)),
     [dismissedSearchUserIds, searchResults],
+  );
+  const selectedProfileLocation = useMemo(
+    () => formatProfileLocation(selectedSearchUser?.city, selectedSearchUser?.countryCode),
+    [selectedSearchUser?.city, selectedSearchUser?.countryCode],
+  );
+  const selectedProfileIsOrganizer = Boolean(
+    selectedSearchUser &&
+      (selectedSearchUser.id === user?.id
+        ? user?.organizerStatus === "approved"
+        : selectedSearchUser.isOrganizer),
   );
 
   useEffect(() => {
@@ -869,12 +921,14 @@ export function ExploreFeedScreen() {
                   </View>
                 ) : (
                   <>
-                    <View style={styles.searchProfileLocationRow}>
-                      <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
-                      <AppText style={styles.searchProfileLocation} variant="bodyMuted">
-                        {`${selectedSearchUser.city || "City"}, ${selectedSearchUser.countryCode || "Country"}`}
-                      </AppText>
-                    </View>
+                    {selectedProfileLocation ? (
+                      <View style={styles.searchProfileLocationRow}>
+                        <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
+                        <AppText style={styles.searchProfileLocation} variant="bodyMuted">
+                          {selectedProfileLocation}
+                        </AppText>
+                      </View>
+                    ) : null}
                     <AppText style={styles.searchProfileBio} variant="body">
                       {selectedSearchUser.bio ?? `${selectedSearchUser.displayName} is part of the Tourist community.`}
                     </AppText>
@@ -884,7 +938,12 @@ export function ExploreFeedScreen() {
 
               {!profileBlockStatus?.isBlocked ? (
                 <>
-                  <ProfileStatsRow events={14} helped={23} organized={5} />
+                  <ProfileStatsRow
+                    events={profileStats?.events}
+                    helped={profileStats?.helped}
+                    organized={profileStats?.organized}
+                    showOrganized={selectedProfileIsOrganizer}
+                  />
 
                   <Pressable style={styles.searchProfileInstagramButton}>
                     <Ionicons color={theme.colors.textPrimary} name="logo-instagram" size={22} />
@@ -929,11 +988,7 @@ export function ExploreFeedScreen() {
                   </View>
 
                   <ProfileContentTabs
-                    isOrganizer={
-                      selectedSearchUser.id === user?.id
-                        ? user?.organizerStatus === "approved"
-                        : Boolean(selectedSearchUser.isOrganizer)
-                    }
+                    isOrganizer={selectedProfileIsOrganizer}
                     isOwnProfile={selectedSearchUser.id === user?.id}
                     onActiveEventPress={openExploreActiveEvent}
                     onCreateReel={
@@ -942,6 +997,7 @@ export function ExploreFeedScreen() {
                         : undefined
                     }
                     onEventPress={openExploreActiveEvent}
+                    onMemberEventPress={openExplorePastEvent}
                     onPastEventPress={openExplorePastEvent}
                     organizerDisplayName={selectedSearchUser.displayName}
                     refreshToken={profileContentRefreshToken}

@@ -6,6 +6,7 @@ import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import { ProfileSnapsGrid } from "../../snaps/components/ProfileSnapsGrid";
 import { ProfileIntroTab } from "./ProfileIntroTab";
+import { ProfileMemberEventsTab } from "./ProfileMemberEventsTab";
 import { ProfileOrganizerEventsTab } from "./ProfileOrganizerEventsTab";
 
 type MemberTab = "snaps" | "events";
@@ -20,6 +21,7 @@ type ProfileContentTabsProps = {
   onActiveEventPress?: (eventId: string) => void;
   onPastEventPress?: (eventId: string) => void;
   onEventPress?: (eventId: string) => void;
+  onMemberEventPress?: (eventId: string) => void;
   onCreateReel?: () => void;
 };
 
@@ -33,44 +35,6 @@ const organizerTabs: Array<{ key: OrganizerTab; icon: keyof typeof Ionicons.glyp
   { key: "organizerEvents", icon: "calendar-outline", label: "Etkinlikler" },
 ];
 
-const memberEventItems = [
-  { month: "OCT", day: "24", title: "International Food Festival", city: "Berlin", isHost: true },
-  { month: "OCT", day: "29", title: "Startup Networking Night", city: "Berlin" },
-  { month: "NOV", day: "1", title: "Sunday Park Picnic", city: "Berlin" },
-];
-
-function MemberEventsTab() {
-  return (
-    <View style={styles.eventsList}>
-      {memberEventItems.map((event) => (
-        <View key={`${event.month}_${event.day}`} style={styles.eventCard}>
-          <View style={styles.dateBox}>
-            <AppText style={styles.dateMonth} variant="caption">
-              {event.month}
-            </AppText>
-            <AppText style={styles.dateDay} variant="sectionTitle">
-              {event.day}
-            </AppText>
-          </View>
-          <View style={styles.eventText}>
-            <AppText numberOfLines={1} style={styles.eventTitle} variant="label">
-              {event.title}
-            </AppText>
-            <AppText variant="bodyMuted">{event.city}</AppText>
-          </View>
-          {event.isHost ? (
-            <View style={styles.hostBadge}>
-              <AppText style={styles.hostText} variant="caption">
-                HOST
-              </AppText>
-            </View>
-          ) : null}
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export function ProfileContentTabs({
   userId,
   refreshToken,
@@ -80,6 +44,7 @@ export function ProfileContentTabs({
   onActiveEventPress,
   onPastEventPress,
   onEventPress,
+  onMemberEventPress,
   onCreateReel,
 }: ProfileContentTabsProps) {
   const [memberTab, setMemberTab] = useState<MemberTab>("snaps");
@@ -97,8 +62,7 @@ export function ProfileContentTabs({
     if (isOrganizer) {
       return 220;
     }
-    const eventsHeight = 3 * 92 + 2 * theme.spacing.md + 2 * theme.spacing.lg;
-    return Math.max(220, eventsHeight);
+    return 220;
   }, [isOrganizer]);
 
   const tabs = isOrganizer ? organizerTabs : memberTabs;
@@ -159,7 +123,12 @@ export function ProfileContentTabs({
               <ProfileSnapsGrid refreshToken={refreshToken} userId={userId} />
             </View>
             <View style={{ display: memberTab === "events" ? "flex" : "none" }}>
-              <MemberEventsTab />
+              <ProfileMemberEventsTab
+                isOwnProfile={isOwnProfile}
+                onEventPress={onMemberEventPress}
+                refreshToken={refreshToken}
+                userId={userId}
+              />
             </View>
           </>
         )}
@@ -192,52 +161,5 @@ const styles = StyleSheet.create({
     height: 3,
     position: "absolute",
     width: "100%",
-  },
-  eventsList: {
-    gap: theme.spacing.md,
-    padding: theme.spacing.lg,
-  },
-  eventCard: {
-    alignItems: "center",
-    backgroundColor: theme.colors.surfaceElevated,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: theme.spacing.md,
-    minHeight: 92,
-    padding: theme.spacing.md,
-  },
-  dateBox: {
-    alignItems: "center",
-    backgroundColor: "#EEF2FF",
-    borderRadius: theme.radius.md,
-    height: 64,
-    justifyContent: "center",
-    width: 64,
-  },
-  dateMonth: {
-    color: "#5B3CF6",
-    fontWeight: "800",
-  },
-  dateDay: {
-    color: "#5B3CF6",
-  },
-  eventText: {
-    flex: 1,
-  },
-  eventTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 17,
-  },
-  hostBadge: {
-    backgroundColor: "#FAE8FF",
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-  },
-  hostText: {
-    color: "#86198F",
-    fontWeight: "800",
   },
 });

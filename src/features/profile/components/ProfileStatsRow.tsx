@@ -5,9 +5,10 @@ import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 
 type ProfileStatsRowProps = {
-  helped: number;
-  events: number;
-  organized: number;
+  helped?: number | null;
+  events?: number | null;
+  organized?: number | null;
+  showOrganized?: boolean;
 };
 
 const Stat = ({ label, value }: { label: string; value: number }) => (
@@ -19,14 +20,31 @@ const Stat = ({ label, value }: { label: string; value: number }) => (
   </View>
 );
 
-export function ProfileStatsRow({ helped, events, organized }: ProfileStatsRowProps) {
+export function ProfileStatsRow({ helped, events, organized, showOrganized = false }: ProfileStatsRowProps) {
+  const items: Array<{ label: string; value: number }> = [];
+
+  if (typeof helped === "number") {
+    items.push({ label: "Helped", value: helped });
+  }
+  if (typeof events === "number") {
+    items.push({ label: "Events", value: events });
+  }
+  if (showOrganized && typeof organized === "number") {
+    items.push({ label: "Organized", value: organized });
+  }
+
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <View style={styles.row}>
-      <Stat label="Helped" value={helped} />
-      <View style={styles.divider} />
-      <Stat label="Events" value={events} />
-      <View style={styles.divider} />
-      <Stat label="Organized" value={organized} />
+      {items.map((item, index) => (
+        <React.Fragment key={item.label}>
+          {index > 0 ? <View style={styles.divider} /> : null}
+          <Stat label={item.label} value={item.value} />
+        </React.Fragment>
+      ))}
     </View>
   );
 }

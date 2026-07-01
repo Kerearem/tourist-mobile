@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import { BeRealSnapMedia } from "../../snaps/components/BeRealSnapMedia";
 import type { FollowStatus } from "../../profile/services/follow.service";
 import type { ExplorePost } from "../types";
 
@@ -70,9 +71,7 @@ export function ExplorePostCard({
   const initials = post.author.displayName.slice(0, 2).toUpperCase();
   const isOwnPost = Boolean(viewerId && post.author.id === viewerId);
   const isFollowing = Boolean(authorFollowStatus?.iFollow);
-  const [carouselWidth, setCarouselWidth] = useState(0);
-  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-  const hasMedia = post.media.length > 0;
+  const hasMedia = Boolean(post.frontMediaUrl && post.backMediaUrl);
   const liked = isLiked ?? post.viewerState.liked;
   const visibleLikeCount = likeCount ?? post.stats.likeCount;
   const visibleCommentCount = commentCount ?? post.stats.commentCount;
@@ -91,39 +90,7 @@ export function ExplorePostCard({
   return (
     <View style={[styles.card, height ? { height } : undefined]}>
       {hasMedia ? (
-        <View
-          onLayout={(event) => {
-            const width = event.nativeEvent.layout.width;
-            if (width > 0 && width !== carouselWidth) {
-              setCarouselWidth(width);
-            }
-          }}
-          style={styles.mediaLayer}
-        >
-          <ScrollView
-            horizontal
-            onMomentumScrollEnd={(event) => {
-              if (carouselWidth <= 0) {
-                return;
-              }
-              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / carouselWidth);
-              setActiveMediaIndex(nextIndex);
-            }}
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-          >
-            {post.media.map((media) => (
-              <Image key={media.id} resizeMode="cover" source={{ uri: media.url }} style={[styles.mediaImage, carouselWidth > 0 ? { width: carouselWidth } : undefined]} />
-            ))}
-          </ScrollView>
-          {post.media.length > 1 ? (
-            <View style={styles.mediaDots}>
-              {post.media.map((media, index) => (
-                <View key={`${media.id}_${index}`} style={[styles.mediaDot, activeMediaIndex === index && styles.mediaDotActive]} />
-              ))}
-            </View>
-          ) : null}
-        </View>
+        <BeRealSnapMedia backMediaUrl={post.backMediaUrl} frontMediaUrl={post.frontMediaUrl} />
       ) : (
         <View style={styles.visualCenter}>
           <AppText style={styles.visualNumber}>Snap</AppText>
@@ -186,32 +153,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-  },
-  mediaLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  mediaImage: {
-    height: "100%",
-  },
-  mediaDots: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 5,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    top: 72,
-    justifyContent: "center",
-  },
-  mediaDot: {
-    backgroundColor: "rgba(255, 255, 255, 0.36)",
-    borderRadius: 4,
-    height: 6,
-    width: 6,
-  },
-  mediaDotActive: {
-    backgroundColor: "#FFFFFF",
-    width: 16,
   },
   visualNumber: {
     color: "#FFFFFF",

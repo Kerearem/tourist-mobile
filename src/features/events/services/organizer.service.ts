@@ -86,3 +86,15 @@ export async function getMyAttendedEvents(): Promise<EventItem[]> {
     token,
   });
 }
+
+export async function getUserAttendedEvents(userId: string): Promise<EventItem[]> {
+  if (USE_MOCK_BACKEND) {
+    return [];
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EventItem[]>(withUserIdParam(API_ENDPOINTS.users.userAttendances, userId), {
+    method: "GET",
+    token,
+  });
+}

@@ -54,6 +54,8 @@ export type ExplorePost = {
   scope: ExploreFeedScope;
   createdAt: string;
   text: string;
+  frontMediaUrl: string;
+  backMediaUrl: string;
   media: ExplorePostMedia[];
   stats: ExplorePostStats;
   viewerState: ExplorePostViewerState;

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -9,9 +9,11 @@ import { ProfileRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ProfileStackParamList } from "../../../navigation/types";
+import { formatProfileLocation } from "../../../utils/formatProfileLocation";
 import { ProfileContentTabs } from "../components/ProfileContentTabs";
 import { ProfileHeader } from "../components/ProfileHeader";
 import { ProfileStatsRow } from "../components/ProfileStatsRow";
+import { getUserProfileStats, type UserProfileStats } from "../services/userProfile.service";
 import { uploadProfileAvatar } from "../services/profile.service";
 import type { ProfileImageSource } from "../utils/pickProfileImage";
 
@@ -22,6 +24,7 @@ export function ProfileScreen({ navigation }: Props) {
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
   const [snapsRefreshToken, setSnapsRefreshToken] = useState(0);
+  const [profileStats, setProfileStats] = useState<UserProfileStats | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -29,28 +32,49 @@ export function ProfileScreen({ navigation }: Props) {
     }, []),
   );
 
+  useEffect(() => {
+    if (!user?.id) {
+      setProfileStats(null);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const stats = await getUserProfileStats(user.id);
+        setProfileStats(stats);
+      } catch {
+        setProfileStats(null);
+      }
+    })();
+  }, [user?.id, snapsRefreshToken]);
+
   const profileDisplay = useMemo(() => {
     const fallbackName = "Tourist Member";
     if (!user) {
       return {
         displayName: fallbackName,
         username: "touristmember",
-        location: "Unknown location",
+        location: undefined as string | undefined,
         avatarUrl: undefined as string | undefined,
       };
     }
 
     const displayName = user.publicProfile.displayName || fallbackName;
     const username = user.publicProfile.username || displayName.replace(/\s+/g, "").toLowerCase();
-    const city = user.publicProfile.currentCity || "City";
-    const country = user.privateProfile.destinationCountryCode || "Country";
+    const location =
+      formatProfileLocation(
+        user.publicProfile.currentCity || user.privateProfile.destinationCity,
+        user.privateProfile.destinationCountryCode,
+      ) ?? undefined;
     return {
       displayName,
       username,
-      location: `${city}, ${country}`,
+      location,
       avatarUrl: user.publicProfile.avatarUrl,
     };
   }, [user]);
+
+  const isApprovedOrganizer = user?.organizerStatus === "approved";
 
   const handleAvatarUpload = useCallback(
     async (source: ProfileImageSource) => {
@@ -101,7 +125,12 @@ export function ProfileScreen({ navigation }: Props) {
 
           {avatarError ? <AppText style={styles.error}>{avatarError}</AppText> : null}
 
-          <ProfileStatsRow events={14} helped={23} organized={5} />
+          <ProfileStatsRow
+            events={profileStats?.events}
+            helped={profileStats?.helped}
+            organized={profileStats?.organized}
+            showOrganized={isApprovedOrganizer}
+          />
 
           <Pressable style={styles.instagramButton}>
             <Ionicons color={theme.colors.textPrimary} name="logo-instagram" size={22} />
@@ -117,6 +146,9 @@ export function ProfileScreen({ navigation }: Props) {
               onCreateReel={() => navigation.navigate(ProfileRoutes.CreateReelScreen)}
               onEventPress={(eventId) =>
                 navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId })
+              }
+              onMemberEventPress={(eventId) =>
+                navigation.navigate(ProfileRoutes.EventAlbumScreen, { eventId })
               }
               organizerDisplayName={profileDisplay.displayName}
               refreshToken={snapsRefreshToken}

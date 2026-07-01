@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Image, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { requireOptionalNativeModule } from "expo-modules-core";
+
+import { AppText } from "../ui/AppText";
+import type { CarouselVideoSlideProps } from "./CarouselVideoSlideNative";
+import { cloudinaryVideoPoster } from "./cloudinaryVideoPoster";
+
+export { cloudinaryVideoPoster } from "./cloudinaryVideoPoster";
 
 export type CarouselMediaItem = {
   id: string;
@@ -17,69 +23,48 @@ type MediaCarouselProps = {
   borderRadius?: number;
 };
 
-export const cloudinaryVideoPoster = (url: string) => {
-  if (!url.includes("/video/upload/")) {
-    return url;
+type CarouselVideoSlideComponent = React.ComponentType<CarouselVideoSlideProps>;
+
+const isExpoVideoNativeModuleAvailable = requireOptionalNativeModule("ExpoVideo") != null;
+
+const resolveNativeVideoSlide = (): CarouselVideoSlideComponent | null => {
+  if (!isExpoVideoNativeModuleAvailable) {
+    return null;
   }
-  return url.replace("/video/upload/", "/video/upload/so_0/").replace(/\.(mp4|mov|webm)(\?.*)?$/i, ".jpg$2");
+
+  try {
+    return require("./CarouselVideoSlideNative").CarouselVideoSlideNative as CarouselVideoSlideComponent;
+  } catch {
+    return null;
+  }
 };
 
-function CarouselVideoSlide({
+const NativeVideoSlide = resolveNativeVideoSlide();
+
+function CarouselVideoSlideFallback({
   url,
   width,
   height,
-  isActive,
-  autoPlayVideo,
-}: {
-  url: string;
-  width: number;
-  height: number;
-  isActive: boolean;
-  autoPlayVideo: boolean;
-}) {
-  const player = useVideoPlayer(url, (instance) => {
-    instance.loop = true;
-    instance.muted = false;
-  });
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  useEffect(() => {
-    if (!isActive) {
-      player.pause();
-      setIsPlaying(false);
-      return;
-    }
-
-    if (autoPlayVideo) {
-      player.play();
-      setIsPlaying(true);
-    }
-  }, [autoPlayVideo, isActive, player]);
-
-  const togglePlayback = () => {
-    if (isPlaying) {
-      player.pause();
-      setIsPlaying(false);
-      return;
-    }
-    player.play();
-    setIsPlaying(true);
-  };
-
+}: Pick<CarouselVideoSlideProps, "url" | "width" | "height">) {
   return (
-    <Pressable onPress={togglePlayback} style={[styles.slide, { width, height }]}>
-      {!isPlaying ? (
-        <>
-          <Image resizeMode="cover" source={{ uri: cloudinaryVideoPoster(url) }} style={styles.mediaFill} />
-          <View style={styles.playOverlay}>
-            <Ionicons color="#FFFFFF" name="play-circle" size={56} />
-          </View>
-        </>
-      ) : (
-        <VideoView contentFit="cover" nativeControls={!autoPlayVideo} player={player} style={styles.mediaFill} />
-      )}
-    </Pressable>
+    <View style={[styles.slide, styles.fallbackSlide, { width, height }]}>
+      <Image resizeMode="cover" source={{ uri: cloudinaryVideoPoster(url) }} style={styles.mediaFill} />
+      <View style={styles.fallbackOverlay}>
+        <Ionicons color="#FFFFFF" name="videocam-outline" size={40} />
+        <AppText style={styles.fallbackText} variant="caption">
+          Video telefonda oynatılır
+        </AppText>
+      </View>
+    </View>
   );
+}
+
+function CarouselVideoSlide(props: CarouselVideoSlideProps) {
+  if (NativeVideoSlide) {
+    return <NativeVideoSlide {...props} />;
+  }
+
+  return <CarouselVideoSlideFallback height={props.height} url={props.url} width={props.width} />;
 }
 
 export function MediaCarousel({
@@ -172,15 +157,24 @@ const styles = StyleSheet.create({
   slide: {
     overflow: "hidden",
   },
+  fallbackSlide: {
+    backgroundColor: "#111111",
+  },
   mediaFill: {
     height: "100%",
     width: "100%",
   },
-  playOverlay: {
+  fallbackOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    gap: 8,
     justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  fallbackText: {
+    color: "#FFFFFF",
+    textAlign: "center",
   },
   dots: {
     bottom: 12,
