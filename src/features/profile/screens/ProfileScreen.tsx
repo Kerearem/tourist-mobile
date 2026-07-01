@@ -113,14 +113,18 @@ export function ProfileScreen({ navigation }: Props) {
       >
         <View style={styles.container}>
           <ProfileHeader
+            accountType={user?.accountType}
             avatarUrl={profileDisplay.avatarUrl}
             bio="Software Engineer living in Berlin since 2023. Love hiking, photography, and finding the best doner in town!"
             displayName={profileDisplay.displayName}
             isAvatarUploading={isAvatarUploading}
+            isOrganizer={isApprovedOrganizer}
             location={profileDisplay.location}
             onAvatarPress={handleAvatarPress}
             onMenuPress={() => navigation.navigate(ProfileRoutes.SettingsScreen)}
+            organizerStatus={user?.organizerStatus}
             username={profileDisplay.username}
+            verificationBadge={user?.verificationBadge}
           />
 
           {avatarError ? <AppText style={styles.error}>{avatarError}</AppText> : null}

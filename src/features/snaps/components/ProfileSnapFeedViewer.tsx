@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText } from "../../../components/ui/AppText";
+import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { theme } from "../../../constants/theme";
 import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKeyboardLayout";
 import { ApiRequestError } from "../../../services/api/client";
@@ -110,9 +111,15 @@ function ProfileSnapFeedPage({
       </Pressable>
 
       <View style={[styles.captionBlock, { bottom: captionBottom }]}>
-        <AppText style={styles.username} variant="label">
-          @{authorUsername || authorDisplayName}
-        </AppText>
+        <VerifiedNameRow
+          accountType={snap.author?.accountType}
+          badgeSize={15}
+          isOrganizer={snap.author?.isOrganizer}
+          name={`@${authorUsername || authorDisplayName}`}
+          style={styles.usernameRow}
+          textStyle={styles.username}
+          verificationBadge={snap.author?.verificationBadge}
+        />
         {caption ? (
           <AppText numberOfLines={3} style={styles.caption} variant="body">
             {caption}
@@ -538,6 +545,9 @@ const styles = StyleSheet.create({
     maxWidth: "68%",
     position: "absolute",
     zIndex: 5,
+  },
+  usernameRow: {
+    maxWidth: "100%",
   },
   username: {
     color: "#FFFFFF",

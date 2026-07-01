@@ -2,8 +2,12 @@ import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import type { VerificationBadgeType } from "../../../utils/verificationBadge";
+import type { AccountType } from "../../../utils/verificationBadge";
+import type { OrganizerStatus } from "../../../models/user";
 import { ProfileAvatarRing } from "./ProfileAvatarRing";
 
 type ProfileHeaderProps = {
@@ -15,6 +19,10 @@ type ProfileHeaderProps = {
   isAvatarUploading?: boolean;
   onAvatarPress?: () => void;
   onMenuPress: () => void;
+  verificationBadge?: VerificationBadgeType | null;
+  accountType?: AccountType | null;
+  organizerStatus?: OrganizerStatus | null;
+  isOrganizer?: boolean;
 };
 
 export function ProfileHeader({
@@ -26,13 +34,24 @@ export function ProfileHeader({
   isAvatarUploading = false,
   onAvatarPress,
   onMenuPress,
+  verificationBadge,
+  accountType,
+  organizerStatus,
+  isOrganizer,
 }: ProfileHeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <AppText style={styles.username} variant="sectionTitle">
-          @{username}
-        </AppText>
+        <VerifiedNameRow
+          accountType={accountType}
+          badgeSize={18}
+          isOrganizer={isOrganizer}
+          name={`@${username}`}
+          organizerStatus={organizerStatus}
+          style={styles.usernameRow}
+          textStyle={styles.username}
+          verificationBadge={verificationBadge}
+        />
         <Pressable onPress={onMenuPress} style={styles.menuButton}>
           <Ionicons color={theme.colors.textPrimary} name="menu" size={28} />
         </Pressable>
@@ -46,9 +65,16 @@ export function ProfileHeader({
       />
 
       <View style={styles.identity}>
-        <AppText style={styles.name} variant="title">
-          {displayName}
-        </AppText>
+        <VerifiedNameRow
+          accountType={accountType}
+          badgeSize={20}
+          isOrganizer={isOrganizer}
+          name={displayName}
+          organizerStatus={organizerStatus}
+          style={styles.nameRow}
+          textStyle={styles.name}
+          verificationBadge={verificationBadge}
+        />
         {location ? (
           <View style={styles.locationRow}>
             <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
@@ -75,8 +101,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: theme.spacing.lg,
   },
+  usernameRow: {
+    flex: 1,
+    marginRight: theme.spacing.sm,
+  },
   username: {
     color: theme.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "700",
   },
   menuButton: {
     padding: theme.spacing.xs,
@@ -85,8 +117,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.xs,
   },
+  nameRow: {
+    justifyContent: "center",
+  },
   name: {
     color: theme.colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "700",
     textAlign: "center",
   },
   locationRow: {

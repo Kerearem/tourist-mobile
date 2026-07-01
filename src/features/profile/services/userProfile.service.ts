@@ -11,7 +11,9 @@ export type UserPublicProfile = {
   bio?: string;
   city?: string;
   countryCode?: string;
+  accountType: "personal" | "business";
   isOrganizer: boolean;
+  verificationBadge?: "organizer" | "business";
 };
 
 export type UserProfileStats = {
@@ -36,6 +38,7 @@ export async function getUserPublicProfile(userId: string): Promise<UserPublicPr
       id: userId,
       username: "tourist",
       displayName: "Tourist Member",
+      accountType: "personal",
       isOrganizer: false,
     };
   }

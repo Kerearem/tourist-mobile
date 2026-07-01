@@ -8,7 +8,9 @@ export type SearchUserResult = {
   username: string;
   displayName: string;
   avatarUrl?: string;
+  accountType: "personal" | "business";
   isOrganizer: boolean;
+  verificationBadge?: "organizer" | "business";
 };
 
 const getAccessToken = async () => {

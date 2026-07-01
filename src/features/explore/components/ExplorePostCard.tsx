@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar } from "../../../components/ui/Avatar";
+import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import { BeRealSnapMedia } from "../../snaps/components/BeRealSnapMedia";
@@ -128,9 +129,15 @@ export function ExplorePostCard({
 
       <View style={styles.captionBlock}>
         <Pressable onPress={onAuthorPress}>
-          <AppText style={styles.username} variant="label">
-            @{authorLabel}
-          </AppText>
+          <VerifiedNameRow
+            accountType={post.author.accountType}
+            badgeSize={15}
+            isOrganizer={post.author.isOrganizer}
+            name={`@${authorLabel}`}
+            style={styles.usernameRow}
+            textStyle={styles.username}
+            verificationBadge={post.author.verificationBadge}
+          />
         </Pressable>
         <AppText style={styles.caption} variant="body">
           {post.text}
@@ -197,6 +204,9 @@ const styles = StyleSheet.create({
   captionBlock: {
     alignItems: "flex-start",
     paddingRight: 84,
+  },
+  usernameRow: {
+    maxWidth: "100%",
   },
   username: {
     color: "#FFFFFF",

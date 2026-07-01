@@ -14,7 +14,9 @@ export type ExplorePostAuthor = {
   displayName: string;
   username?: string;
   avatarUrl?: string;
+  accountType?: "personal" | "business";
   isOrganizer?: boolean;
+  verificationBadge?: "organizer" | "business";
 };
 
 export type ExplorePostStats = {
@@ -77,6 +79,9 @@ export type SnapCommentItem = {
     displayName: string;
     username: string;
     avatarUrl?: string;
+    accountType?: "personal" | "business";
+    isOrganizer?: boolean;
+    verificationBadge?: "organizer" | "business";
   };
   stats: {
     likeCount: number;

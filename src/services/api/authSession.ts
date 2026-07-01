@@ -26,6 +26,10 @@ const normalizeUser = (raw: unknown): AppUser | null => {
       id: String(legacy.id ?? ""),
       roles: Array.isArray(legacy.roles) ? (legacy.roles as AppUser["roles"]) : ["user"],
       organizerStatus: (legacy.organizerStatus as AppUser["organizerStatus"]) ?? "not_applied",
+      accountType: legacy.accountType === "business" ? "business" : "personal",
+      ...(legacy.verificationBadge === "business" || legacy.verificationBadge === "organizer"
+        ? { verificationBadge: legacy.verificationBadge as AppUser["verificationBadge"] }
+        : {}),
       hasPhoneVerification: Boolean(legacy.hasPhoneVerification),
       hasEmailVerification: Boolean(legacy.hasEmailVerification),
       consentAccepted: Boolean(legacy.consentAccepted),
@@ -48,6 +52,10 @@ const normalizeUser = (raw: unknown): AppUser | null => {
     id: String(legacy.id ?? ""),
     roles: ["user"],
     organizerStatus: (legacy.organizerStatus as AppUser["organizerStatus"]) ?? "not_applied",
+    accountType: legacy.accountType === "business" ? "business" : "personal",
+    ...(legacy.verificationBadge === "business" || legacy.verificationBadge === "organizer"
+      ? { verificationBadge: legacy.verificationBadge as AppUser["verificationBadge"] }
+      : {}),
     hasPhoneVerification: Boolean(legacy.hasPhoneVerification),
     hasEmailVerification: Boolean(legacy.hasEmailVerification),
     consentAccepted: false,

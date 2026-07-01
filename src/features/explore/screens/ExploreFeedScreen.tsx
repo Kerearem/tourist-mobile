@@ -6,6 +6,7 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
+import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { AppText } from "../../../components/ui/AppText";
 import { EventsRoutes, ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
@@ -47,9 +48,11 @@ type ExploreSearchUser = {
   city?: string;
   bio?: string;
   avatarUrl?: string;
+  accountType?: "personal" | "business";
   isFollowing?: boolean;
   hasNewPosts?: boolean;
   isOrganizer?: boolean;
+  verificationBadge?: "organizer" | "business";
 };
 
 type CommentReplyTarget = {
@@ -164,7 +167,9 @@ export function ExploreFeedScreen() {
                 bio: publicProfile.bio ?? current.bio,
                 city: publicProfile.city ?? current.city,
                 countryCode: publicProfile.countryCode ?? current.countryCode,
+                accountType: publicProfile.accountType,
                 isOrganizer: publicProfile.isOrganizer,
+                verificationBadge: publicProfile.verificationBadge,
               }
             : current,
         );
@@ -380,7 +385,9 @@ export function ExploreFeedScreen() {
               displayName: item.displayName,
               countryCode: "",
               avatarUrl: item.avatarUrl,
+              accountType: item.accountType,
               isOrganizer: item.isOrganizer,
+              verificationBadge: item.verificationBadge,
             })),
           );
         } catch {
@@ -541,7 +548,9 @@ export function ExploreFeedScreen() {
       countryCode: "",
       avatarUrl: post.author.avatarUrl,
       bio: post.text || `${post.author.displayName} Tourist topluluğunda Snap paylaşıyor.`,
+      accountType: post.author.accountType,
       isOrganizer: post.author.isOrganizer ?? false,
+      verificationBadge: post.author.verificationBadge,
     });
   };
 
@@ -729,9 +738,15 @@ export function ExploreFeedScreen() {
             </AppText>
           </View>
           <View style={styles.commentBody}>
-            <AppText style={styles.commentUser} variant="label">
-              {item.author.displayName}
-            </AppText>
+            <VerifiedNameRow
+              accountType={item.author.accountType}
+              badgeSize={14}
+              isOrganizer={item.author.isOrganizer}
+              name={item.author.displayName}
+              style={styles.commentUserRow}
+              textStyle={styles.commentUser}
+              verificationBadge={item.author.verificationBadge}
+            />
             <AppText style={styles.commentText} variant="body">
               {item.text}
             </AppText>
@@ -901,9 +916,15 @@ export function ExploreFeedScreen() {
 
               <View style={styles.searchProfileIdentity}>
                 <ProfileAvatarRing displayName={selectedSearchUser.displayName} showPlus={false} />
-                <AppText style={styles.searchProfileDisplayName} variant="title">
-                  {selectedSearchUser.displayName}
-                </AppText>
+                <VerifiedNameRow
+                  accountType={selectedSearchUser.accountType}
+                  badgeSize={20}
+                  isOrganizer={selectedProfileIsOrganizer}
+                  name={selectedSearchUser.displayName}
+                  style={styles.searchProfileDisplayNameRow}
+                  textStyle={styles.searchProfileDisplayName}
+                  verificationBadge={selectedSearchUser.verificationBadge}
+                />
                 <AppText muted style={styles.searchProfileUsername} variant="bodyMuted">
                   @{selectedSearchUser.username}
                 </AppText>
@@ -1157,9 +1178,15 @@ export function ExploreFeedScreen() {
                 <Pressable onPress={() => openSearchUserProfile(item)} style={styles.searchUserRow}>
                   <Avatar initials={item.displayName.slice(0, 2).toUpperCase()} size={42} uri={item.avatarUrl} />
                   <View style={styles.searchUserText}>
-                    <AppText style={styles.searchUsername} variant="label">
-                      {item.username}
-                    </AppText>
+                    <VerifiedNameRow
+                      accountType={item.accountType}
+                      badgeSize={14}
+                      isOrganizer={item.isOrganizer}
+                      name={item.username}
+                      style={styles.searchUsernameRow}
+                      textStyle={styles.searchUsername}
+                      verificationBadge={item.verificationBadge}
+                    />
                     <AppText style={styles.searchMeta} variant="caption">
                       {item.displayName}
                       {item.hasNewPosts ? " · yeni gönderi" : ""}
@@ -1634,7 +1661,12 @@ const styles = StyleSheet.create({
   },
   searchProfileDisplayName: {
     color: theme.colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "700",
     textAlign: "center",
+  },
+  searchProfileDisplayNameRow: {
+    justifyContent: "center",
   },
   searchProfileUsername: {
     textAlign: "center",
@@ -1755,6 +1787,10 @@ const styles = StyleSheet.create({
   searchUsername: {
     color: "#111827",
     fontSize: 17,
+    fontWeight: "600",
+  },
+  searchUsernameRow: {
+    maxWidth: "100%",
   },
   searchMeta: {
     color: "#64748B",
@@ -1920,6 +1956,10 @@ const styles = StyleSheet.create({
   commentUser: {
     color: theme.colors.textPrimary,
     fontSize: 16,
+    fontWeight: "600",
+  },
+  commentUserRow: {
+    maxWidth: "100%",
   },
   commentText: {
     color: theme.colors.textPrimary,

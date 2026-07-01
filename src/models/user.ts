@@ -32,10 +32,15 @@ export type AppUserPrivateProfile = {
   spokenLanguages: UserLanguage[];
 };
 
+export type AccountType = "personal" | "business";
+export type VerificationBadgeType = "organizer" | "business";
+
 export type AppUser = {
   id: ID;
   roles: UserRole[];
   organizerStatus: OrganizerStatus;
+  accountType: AccountType;
+  verificationBadge?: VerificationBadgeType;
   hasPhoneVerification: boolean;
   hasEmailVerification: boolean;
   consentAccepted: boolean;

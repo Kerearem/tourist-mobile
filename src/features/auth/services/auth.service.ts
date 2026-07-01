@@ -132,6 +132,7 @@ const buildMockUser = (input: {
     id: input.id,
     roles: ["user"],
     organizerStatus: "not_applied",
+    accountType: "personal",
     hasPhoneVerification: input.hasPhoneVerification ?? false,
     hasEmailVerification: input.hasEmailVerification ?? false,
     consentAccepted: input.consentAccepted,

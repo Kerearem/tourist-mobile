@@ -11,6 +11,9 @@ export type SnapItem = {
     username: string;
     displayName: string;
     avatarUrl?: string;
+    accountType?: "personal" | "business";
+    isOrganizer?: boolean;
+    verificationBadge?: "organizer" | "business";
   };
 };
 
