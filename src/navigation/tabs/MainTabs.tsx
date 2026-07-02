@@ -4,8 +4,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { getFocusedRouteNameFromRoute, StackActions, type PartialState } from "@react-navigation/native";
 import type { NavigationState, RouteProp } from "@react-navigation/native";
 
-import { ExploreRoutes, TabRoutes } from "../../constants/routes";
+import { ExploreRoutes, EventsRoutes, TabRoutes } from "../../constants/routes";
 import { theme } from "../../constants/theme";
+import { createEventsFeedResetAction } from "../events/resetEventsStack";
 import { EventsStack } from "../events/EventsStack";
 import { ExploreStack } from "../explore/ExploreStack";
 import { HelpStack } from "../help/HelpStack";
@@ -21,6 +22,37 @@ type TabRouteWithNestedState = RouteProp<MainTabParamList, keyof MainTabParamLis
 
 const getNestedTabState = (route: RouteProp<MainTabParamList, keyof MainTabParamList>) =>
   (route as TabRouteWithNestedState).state;
+
+const getEventsNestedState = (
+  navigation: { getState: () => NavigationState },
+  route: RouteProp<MainTabParamList, keyof MainTabParamList>,
+) => {
+  const fromRoute = getNestedTabState(route);
+  if (fromRoute?.routes?.length) {
+    return fromRoute;
+  }
+
+  const eventsTabRoute = navigation.getState().routes.find((tabRoute) => tabRoute.name === TabRoutes.EventsTab);
+  return eventsTabRoute?.state;
+};
+
+const isEventsStackAtFeed = (
+  navigation: { getState: () => NavigationState },
+  route: RouteProp<MainTabParamList, keyof MainTabParamList>,
+) => {
+  const nestedState = getEventsNestedState(navigation, route);
+  if (!nestedState?.routes?.length) {
+    return true;
+  }
+
+  const index = nestedState.index ?? 0;
+  const activeRoute = nestedState.routes[index];
+  return (
+    index === 0 &&
+    nestedState.routes.length === 1 &&
+    activeRoute?.name === EventsRoutes.EventsListScreen
+  );
+};
 
 type TabIconName = keyof typeof Ionicons.glyphMap;
 
@@ -110,13 +142,18 @@ export function MainTabs() {
         options={{ title: "Events" }}
         listeners={({ navigation, route }) => ({
           tabPress: (event) => {
-            const nestedState = getNestedTabState(route);
-            if (!nestedState || nestedState.index === 0) {
+            if (!navigation.isFocused()) {
               return;
             }
+
+            const nestedState = getEventsNestedState(navigation, route);
+            if (!nestedState || isEventsStackAtFeed(navigation, route)) {
+              return;
+            }
+
             event.preventDefault();
             navigation.dispatch({
-              ...StackActions.popToTop(),
+              ...createEventsFeedResetAction(),
               target: nestedState.key,
             });
           },
