@@ -359,6 +359,15 @@ export function ExploreFeedScreen() {
         ? user?.organizerStatus === "approved"
         : selectedSearchUser.isOrganizer),
   );
+  const isApprovedOrganizerUser = user?.organizerStatus === "approved";
+
+  const openExploreShare = useCallback(() => {
+    if (isApprovedOrganizerUser) {
+      navigation.navigate(ExploreRoutes.CreateReelScreen);
+      return;
+    }
+    navigation.navigate(ExploreRoutes.ExploreCameraScreen);
+  }, [isApprovedOrganizerUser, navigation]);
 
   useEffect(() => {
     if (!isSearchOpen) {
@@ -1107,8 +1116,16 @@ export function ExploreFeedScreen() {
                 </Pressable>
               </Animated.View>
             </View>
-            <Pressable onPress={() => navigation.navigate(ExploreRoutes.ExploreCameraScreen)} style={styles.cameraButton}>
-              <Ionicons color="#FFFFFF" name="camera-outline" size={20} />
+            <Pressable
+              accessibilityLabel={isApprovedOrganizerUser ? "Tanıtım ekle" : "Snap oluştur"}
+              onPress={openExploreShare}
+              style={styles.cameraButton}
+            >
+              <Ionicons
+                color="#FFFFFF"
+                name={isApprovedOrganizerUser ? "add" : "camera-outline"}
+                size={isApprovedOrganizerUser ? 24 : 20}
+              />
             </Pressable>
             <Pressable
               onPress={() => {
