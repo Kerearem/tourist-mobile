@@ -19,6 +19,13 @@ export type ReelItem = {
   event: ReelEventSummary | null;
   createdAt: string;
   media: ReelMediaItem[];
+  stats: {
+    likeCount: number;
+    commentCount: number;
+  };
+  viewerState: {
+    liked: boolean;
+  };
 };
 
 export type CreateReelInput = {

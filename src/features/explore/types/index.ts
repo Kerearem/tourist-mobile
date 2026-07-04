@@ -65,6 +65,10 @@ export type ExploreFeedReelItem = {
     city: string;
   };
   author: ExplorePostAuthor & { username: string; isOrganizer: boolean };
+  stats: ExplorePostStats;
+  viewerState: {
+    liked: boolean;
+  };
 };
 
 export type ExploreFeedItem = ExploreFeedSnapItem | ExploreFeedReelItem;

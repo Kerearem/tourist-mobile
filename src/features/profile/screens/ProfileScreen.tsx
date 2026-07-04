@@ -96,13 +96,29 @@ export function ProfileScreen({ navigation }: Props) {
     [updateAvatarUrl],
   );
 
-  const handleAvatarPress = useCallback(() => {
+  const handleAvatarSourcePicker = useCallback(() => {
     Alert.alert("Profil fotoğrafı", "Fotoğraf kaynağını seçin", [
       { text: "Kamera", onPress: () => void handleAvatarUpload("camera") },
       { text: "Galeri", onPress: () => void handleAvatarUpload("gallery") },
       { text: "İptal", style: "cancel" },
     ]);
   }, [handleAvatarUpload]);
+
+  const handleAvatarPress = useCallback(() => {
+    if (isApprovedOrganizer) {
+      Alert.alert("Ekle", "Ne yapmak istersin?", [
+        {
+          text: "Tanıtım ekle",
+          onPress: () => navigation.navigate(ProfileRoutes.CreateReelScreen),
+        },
+        { text: "Profil fotoğrafı", onPress: handleAvatarSourcePicker },
+        { text: "İptal", style: "cancel" },
+      ]);
+      return;
+    }
+
+    handleAvatarSourcePicker();
+  }, [handleAvatarSourcePicker, isApprovedOrganizer, navigation]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -147,7 +163,6 @@ export function ProfileScreen({ navigation }: Props) {
             <ProfileContentTabs
               isOrganizer={user.organizerStatus === "approved"}
               isOwnProfile
-              onCreateReel={() => navigation.navigate(ProfileRoutes.CreateReelScreen)}
               onEventPress={(eventId) =>
                 navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId })
               }

@@ -133,19 +133,15 @@ export function ExplorePostCard({
             )
           ) : null}
         </View>
-        {!isReel ? (
-          <Pressable onPress={onLikePress} style={styles.actionButton}>
-            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-              <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
-            </Animated.View>
-            <AppText style={styles.actionLabel} variant="caption">
-              {formatCount(visibleLikeCount)}
-            </AppText>
-          </Pressable>
-        ) : null}
-        {!isReel ? (
-          <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
-        ) : null}
+        <Pressable onPress={onLikePress} style={styles.actionButton}>
+          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+            <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
+          </Animated.View>
+          <AppText style={styles.actionLabel} variant="caption">
+            {formatCount(visibleLikeCount)}
+          </AppText>
+        </Pressable>
+        <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
         <ActionButton icon="paper-plane-outline" label="Mesaj" onPress={onMessagePress} />
         {!isOwnPost && !isReel && onReportPress ? (
           <ActionButton icon="flag-outline" label="Şikayet" onPress={onReportPress} />

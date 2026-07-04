@@ -42,11 +42,11 @@ const mapFeedItemToPost = (item: ExploreFeedItem, scope: ExploreFeedScope): Expl
       })),
       ...(item.event ? { event: item.event } : {}),
       stats: {
-        likeCount: 0,
-        commentCount: 0,
+        likeCount: item.stats.likeCount,
+        commentCount: item.stats.commentCount,
       },
       viewerState: {
-        liked: false,
+        liked: item.viewerState.liked,
       },
     };
   }

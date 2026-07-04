@@ -34,6 +34,13 @@ import {
 } from "../../profile/services/complaints.service";
 import { getOrCreateDirectConversation } from "../../messages/services/messages.service";
 import { addSnapComment, getSnapComments, likeSnap, likeSnapComment, unlikeSnap, unlikeSnapComment } from "../../snaps/services/snaps.service";
+import {
+  addReelComment,
+  getReelComments,
+  likeReel,
+  unlikeReel,
+} from "../../profile/services/reelEngagement.service";
+import type { ReelCommentItem } from "../../profile/types/reelEngagement";
 import { ExplorePostCard } from "../components/ExplorePostCard";
 import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
@@ -102,6 +109,7 @@ export function ExploreFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeCommentsPost, setActiveCommentsPost] = useState<ExplorePost | null>(null);
   const [snapComments, setSnapComments] = useState<SnapCommentItem[]>([]);
+  const [reelComments, setReelComments] = useState<ReelCommentItem[]>([]);
   const [isCommentsLoading, setIsCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [postLikesById, setPostLikesById] = useState<Record<string, { liked: boolean; count: number }>>({});
@@ -497,11 +505,20 @@ export function ExploreFeedScreen() {
     setIsCommentsLoading(true);
     setCommentsError(null);
     try {
-      const comments = await getSnapComments(post.id);
-      setSnapComments(comments);
-      setCommentLikesById(syncCommentLikes(comments));
+      if (post.type === "reel") {
+        const comments = await getReelComments(post.id);
+        setReelComments(comments);
+        setSnapComments([]);
+        setCommentLikesById({});
+      } else {
+        const comments = await getSnapComments(post.id);
+        setSnapComments(comments);
+        setReelComments([]);
+        setCommentLikesById(syncCommentLikes(comments));
+      }
     } catch (err) {
       setSnapComments([]);
+      setReelComments([]);
       setCommentLikesById({});
       setCommentsError(err instanceof Error ? err.message : "Yorumlar yüklenemedi.");
     } finally {
@@ -512,6 +529,7 @@ export function ExploreFeedScreen() {
   useEffect(() => {
     if (!activeCommentsPost) {
       setSnapComments([]);
+      setReelComments([]);
       setCommentLikesById({});
       setCommentsError(null);
       setReplyTarget(null);
@@ -648,7 +666,7 @@ export function ExploreFeedScreen() {
   };
 
   const togglePostLike = (post: ExplorePost) => {
-    if (post.type !== "snap" || isLikeActionLoading === post.id) {
+    if (isLikeActionLoading === post.id) {
       return;
     }
 
@@ -660,7 +678,14 @@ export function ExploreFeedScreen() {
     void (async () => {
       setIsLikeActionLoading(post.id);
       try {
-        const result = current.liked ? await unlikeSnap(post.id) : await likeSnap(post.id);
+        const result =
+          post.type === "reel"
+            ? current.liked
+              ? await unlikeReel(post.id)
+              : await likeReel(post.id)
+            : current.liked
+              ? await unlikeSnap(post.id)
+              : await likeSnap(post.id);
         setPostLikesById((prev) => ({
           ...prev,
           [post.id]: {
@@ -724,18 +749,27 @@ export function ExploreFeedScreen() {
     void (async () => {
       setIsCommentSubmitting(true);
       try {
-        await addSnapComment(activeCommentsPost.id, clean, parentCommentId);
-        if (parentCommentId) {
-          await loadCommentsForPost(activeCommentsPost);
+        if (activeCommentsPost.type === "reel") {
+          const comments = await addReelComment(activeCommentsPost.id, clean);
+          setReelComments(comments);
+          setPostCommentCountsById((prev) => ({
+            ...prev,
+            [activeCommentsPost.id]: comments.length,
+          }));
         } else {
-          const comments = await getSnapComments(activeCommentsPost.id);
-          setSnapComments(comments);
-          setCommentLikesById(syncCommentLikes(comments));
+          await addSnapComment(activeCommentsPost.id, clean, parentCommentId);
+          if (parentCommentId) {
+            await loadCommentsForPost(activeCommentsPost);
+          } else {
+            const comments = await getSnapComments(activeCommentsPost.id);
+            setSnapComments(comments);
+            setCommentLikesById(syncCommentLikes(comments));
+          }
+          setPostCommentCountsById((prev) => ({
+            ...prev,
+            [activeCommentsPost.id]: (prev[activeCommentsPost.id] ?? activeCommentsPost.stats.commentCount) + 1,
+          }));
         }
-        setPostCommentCountsById((prev) => ({
-          ...prev,
-          [activeCommentsPost.id]: (prev[activeCommentsPost.id] ?? activeCommentsPost.stats.commentCount) + 1,
-        }));
         setDraftComment("");
         setReplyTarget(null);
       } catch (err) {
@@ -755,7 +789,8 @@ export function ExploreFeedScreen() {
   };
 
   const composerInitials = (user?.publicProfile?.displayName || "TM").slice(0, 2).toUpperCase();
-  const totalCommentCount = countSnapComments(snapComments);
+  const totalCommentCount =
+    activeCommentsPost?.type === "reel" ? reelComments.length : countSnapComments(snapComments);
 
   const renderCommentItem = (item: SnapCommentItem, isReply = false) => {
     const likeState = commentLikesById[item.id] ?? {
@@ -903,9 +938,6 @@ export function ExploreFeedScreen() {
             likeCount={postLikesById[item.id]?.count ?? item.stats.likeCount}
             onAuthorPress={() => openPostAuthorProfile(item)}
             onCommentPress={() => {
-              if (item.type !== "snap") {
-                return;
-              }
               setActiveCommentsPost(item);
               setDraftComment("");
               setReplyTarget(null);
@@ -1050,11 +1082,6 @@ export function ExploreFeedScreen() {
                     isOrganizer={selectedProfileIsOrganizer}
                     isOwnProfile={selectedSearchUser.id === user?.id}
                     onActiveEventPress={openExploreActiveEvent}
-                    onCreateReel={
-                      selectedSearchUser.id === user?.id && user?.organizerStatus === "approved"
-                        ? () => navigation.navigate(ExploreRoutes.CreateReelScreen)
-                        : undefined
-                    }
                     onEventPress={openExploreActiveEvent}
                     onMemberEventPress={openExplorePastEvent}
                     onPastEventPress={openExplorePastEvent}
@@ -1401,6 +1428,29 @@ export function ExploreFeedScreen() {
                   <View style={styles.commentsLoadingWrap}>
                     <AppText variant="bodyMuted">{commentsError}</AppText>
                   </View>
+                ) : activeCommentsPost?.type === "reel" ? (
+                  <FlatList
+                    contentContainerStyle={styles.commentsList}
+                    data={reelComments}
+                    keyboardShouldPersistTaps="handled"
+                    keyExtractor={(item) => item.id}
+                    ListEmptyComponent={
+                      <AppText style={styles.commentsEmpty} variant="bodyMuted">
+                        Henüz yorum yok. İlk yorumu sen yaz.
+                      </AppText>
+                    }
+                    renderItem={({ item }) => (
+                      <View style={styles.commentRow}>
+                        <AppText style={styles.commentUser} variant="label">
+                          @{item.author.username || item.author.displayName}
+                        </AppText>
+                        <AppText style={styles.commentText} variant="body">
+                          {item.text}
+                        </AppText>
+                      </View>
+                    )}
+                    showsVerticalScrollIndicator={false}
+                  />
                 ) : (
                   <FlatList
                     contentContainerStyle={styles.commentsList}
@@ -1419,7 +1469,7 @@ export function ExploreFeedScreen() {
               </View>
 
               <View style={styles.composerDock}>
-                {replyTarget ? (
+                {replyTarget && activeCommentsPost?.type !== "reel" ? (
                   <View style={styles.replyBanner}>
                     <AppText style={styles.replyBannerText} variant="caption">
                       @{replyTarget.authorUsername} yanıtlanıyor

@@ -26,6 +26,8 @@ export async function createOrganizerReel(input: CreateReelInput): Promise<ReelI
         type: item.type,
         order: item.order,
       })),
+      stats: { likeCount: 0, commentCount: 0 },
+      viewerState: { liked: false },
     };
   }
 

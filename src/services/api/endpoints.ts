@@ -107,4 +107,8 @@ export const API_ENDPOINTS = {
     reels: "/organizer/reels",
     reel: "/organizer/reels/:reelId",
   },
+  reels: {
+    like: "/reels/:reelId/like",
+    comments: "/reels/:reelId/comments",
+  },
 } as const;

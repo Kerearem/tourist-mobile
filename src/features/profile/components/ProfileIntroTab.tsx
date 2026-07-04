@@ -10,7 +10,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { cloudinaryVideoPoster } from "../../../components/media/MediaCarousel";
-import { AppButton } from "../../../components/ui/AppButton";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import { getOrganizerReels } from "../services/reels.service";
@@ -21,9 +20,8 @@ type ProfileIntroTabProps = {
   userId: string;
   refreshToken?: number;
   isOwnProfile?: boolean;
-  canCreateReel?: boolean;
+  showAddHint?: boolean;
   organizerDisplayName?: string;
-  onCreateReel?: () => void;
   onEventPress?: (eventId: string) => void;
 };
 
@@ -42,9 +40,8 @@ export function ProfileIntroTab({
   userId,
   refreshToken = 0,
   isOwnProfile = false,
-  canCreateReel = false,
+  showAddHint = false,
   organizerDisplayName = "Organizatör",
-  onCreateReel,
   onEventPress,
 }: ProfileIntroTabProps) {
   const { width } = useWindowDimensions();
@@ -126,34 +123,17 @@ export function ProfileIntroTab({
         </AppText>
         <AppText style={styles.subtitle} variant="bodyMuted">
           {isOwnProfile
-            ? "Etkinliklerini ve markanı tanıtan fotoğraf veya videolar paylaş."
+            ? showAddHint
+              ? "Avatarındaki + veya Explore sekmesindeki + ile tanıtım içeriği ekleyebilirsin."
+              : "Etkinliklerini ve markanı tanıtan fotoğraf veya videolar paylaş."
             : "Bu organizatör henüz tanıtım içeriği paylaşmadı."}
         </AppText>
-        {canCreateReel ? (
-          <AppButton
-            containerStyle={styles.createButton}
-            label="Tanıtım Ekle"
-            onPress={onCreateReel}
-            variant="secondary"
-          />
-        ) : null}
       </View>
     );
   }
 
   return (
     <>
-      {canCreateReel ? (
-        <View style={styles.toolbar}>
-          <AppButton
-            containerStyle={styles.toolbarButton}
-            label="Tanıtım Ekle"
-            onPress={onCreateReel}
-            variant="secondary"
-          />
-        </View>
-      ) : null}
-
       <View style={styles.grid}>
         {reels.map((reel, index) => {
           const previewUrl = getReelPreviewUrl(reel);
@@ -237,19 +217,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     textAlign: "center",
-  },
-  createButton: {
-    marginTop: theme.spacing.md,
-    minWidth: 180,
-  },
-  toolbar: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-  },
-  toolbarButton: {
-    alignSelf: "flex-start",
-    minHeight: 40,
-    paddingHorizontal: theme.spacing.md,
   },
   grid: {
     flexDirection: "row",
