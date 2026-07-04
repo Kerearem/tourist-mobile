@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MediaCarousel } from "../../../components/media/MediaCarousel";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import { ComplaintReasonSheet } from "./ComplaintReasonSheet";
+import { createContentComplaint, type ComplaintReason } from "../services/complaints.service";
 import { deleteOrganizerReel } from "../services/reels.service";
 import type { ReelItem } from "../types/reels";
 
@@ -40,6 +42,8 @@ type ReelFeedPageProps = {
   onEventPress?: (eventId: string) => void;
   onDelete: () => void;
   onShare: () => void;
+  onReport?: () => void;
+  showReport?: boolean;
 };
 
 function ReelFeedPage({
@@ -52,6 +56,8 @@ function ReelFeedPage({
   onEventPress,
   onDelete,
   onShare,
+  onReport,
+  showReport = false,
 }: ReelFeedPageProps) {
   const insets = useSafeAreaInsets();
   const sortedMedia = useMemo(
@@ -109,6 +115,14 @@ function ReelFeedPage({
             Paylaş
           </AppText>
         </Pressable>
+        {showReport && onReport ? (
+          <Pressable onPress={onReport} style={styles.actionButton}>
+            <Ionicons color="#FFFFFF" name="flag-outline" size={30} style={styles.actionIconShadow} />
+            <AppText style={styles.actionLabel} variant="caption">
+              Şikayet
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -129,6 +143,8 @@ export function ProfileReelsFeedViewer({
   const listRef = useRef<FlatList<ReelItem>>(null);
   const [activeReelId, setActiveReelId] = useState<string | null>(null);
   const [localReels, setLocalReels] = useState(reels);
+  const [reportReel, setReportReel] = useState<ReelItem | null>(null);
+  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
 
   const clampedInitialIndex = useMemo(
     () => Math.min(Math.max(initialIndex, 0), Math.max(localReels.length - 1, 0)),
@@ -190,6 +206,27 @@ export function ProfileReelsFeedViewer({
     ]);
   };
 
+  const submitReelReport = async (reason: ComplaintReason) => {
+    if (!reportReel || isReportSubmitting) {
+      return;
+    }
+
+    setIsReportSubmitting(true);
+    try {
+      await createContentComplaint({
+        targetType: "REEL",
+        targetId: reportReel.id,
+        reason,
+      });
+      setReportReel(null);
+      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
+    } catch (err) {
+      Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
+    } finally {
+      setIsReportSubmitting(false);
+    }
+  };
+
   const shareReel = async (reel: ReelItem) => {
     const preview = reel.media.slice().sort((a, b) => a.order - b.order)[0];
     const message = reel.caption?.trim() || `${organizerDisplayName} tanıtım içeriği paylaştı`;
@@ -209,7 +246,8 @@ export function ProfileReelsFeedViewer({
   }
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+    <>
+      <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <View style={styles.viewer}>
         <FlatList
           data={localReels}
@@ -236,11 +274,13 @@ export function ProfileReelsFeedViewer({
               isPageActive={activeReelId === item.id}
               onDelete={() => confirmDelete(item)}
               onEventPress={onEventPress}
+              onReport={() => setReportReel(item)}
               onShare={() => void shareReel(item)}
               organizerDisplayName={organizerDisplayName}
               pageHeight={windowHeight}
               pageWidth={windowWidth}
               reel={item}
+              showReport={!isOwnProfile}
             />
           )}
           showsVerticalScrollIndicator={false}
@@ -255,7 +295,15 @@ export function ProfileReelsFeedViewer({
           <Ionicons color="#FFFFFF" name="chevron-back" size={30} />
         </Pressable>
       </View>
-    </Modal>
+      </Modal>
+
+      <ComplaintReasonSheet
+        isSubmitting={isReportSubmitting}
+        onClose={() => setReportReel(null)}
+        onSubmit={submitReelReport}
+        visible={reportReel != null}
+      />
+    </>
   );
 }
 

@@ -14,6 +14,7 @@ import { useAnimatedKeyboardHeight } from "../../../hooks/useAnimatedKeyboardHei
 import { useAuth } from "../../../hooks/useAuth";
 import type { ExploreStackParamList, MainTabParamList } from "../../../navigation/types";
 import { ProfileContentTabs } from "../../profile/components/ProfileContentTabs";
+import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
 import { ProfileAvatarRing } from "../../profile/components/ProfileAvatarRing";
 import { ProfileStatsRow } from "../../profile/components/ProfileStatsRow";
 import { getUserProfileStats, getUserPublicProfile, type UserProfileStats } from "../../profile/services/userProfile.service";
@@ -28,6 +29,7 @@ import {
 import {
   COMPLAINT_REASON_OPTIONS,
   createUserComplaint,
+  createContentComplaint,
   type ComplaintReason,
 } from "../../profile/services/complaints.service";
 import { getOrCreateDirectConversation } from "../../messages/services/messages.service";
@@ -126,6 +128,8 @@ export function ExploreFeedScreen() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedReportReason, setSelectedReportReason] = useState<ComplaintReason | null>(null);
+  const [reportingPost, setReportingPost] = useState<ExplorePost | null>(null);
+  const [isContentReportSubmitting, setIsContentReportSubmitting] = useState(false);
   const [profileBlockStatus, setProfileBlockStatus] = useState<UserBlockStatus | null>(null);
   const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
   const [profileContentRefreshToken, setProfileContentRefreshToken] = useState(0);
@@ -325,6 +329,27 @@ export function ExploreFeedScreen() {
       Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
     } finally {
       setIsProfileActionLoading(false);
+    }
+  };
+
+  const submitContentReport = async (reason: ComplaintReason) => {
+    if (!reportingPost || isContentReportSubmitting) {
+      return;
+    }
+
+    setIsContentReportSubmitting(true);
+    try {
+      await createContentComplaint({
+        targetType: "SNAP",
+        targetId: reportingPost.id,
+        reason,
+      });
+      setReportingPost(null);
+      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
+    } catch (err) {
+      Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
+    } finally {
+      setIsContentReportSubmitting(false);
     }
   };
 
@@ -885,6 +910,7 @@ export function ExploreFeedScreen() {
             onFollowPress={() => toggleFollowOnAuthor(item.author.id)}
             onLikePress={() => togglePostLike(item)}
             onMessagePress={() => void openPostDirectMessage(item)}
+            onReportPress={() => setReportingPost(item)}
             post={item}
             viewerId={user?.id}
           />
@@ -1425,6 +1451,12 @@ export function ExploreFeedScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <ComplaintReasonSheet
+        isSubmitting={isContentReportSubmitting}
+        onClose={() => setReportingPost(null)}
+        onSubmit={submitContentReport}
+        visible={reportingPost != null}
+      />
     </SafeAreaView>
   );
 }

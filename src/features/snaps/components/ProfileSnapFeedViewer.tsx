@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -19,8 +20,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "../../../components/ui/AppText";
 import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { theme } from "../../../constants/theme";
+import { useAuth } from "../../../hooks/useAuth";
 import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKeyboardLayout";
 import { ApiRequestError } from "../../../services/api/client";
+import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
+import { createContentComplaint, type ComplaintReason } from "../../profile/services/complaints.service";
 import {
   addSnapComment,
   getSnapComments,
@@ -77,6 +81,8 @@ type ProfileSnapFeedPageProps = {
   onToggleLike: () => void;
   onOpenComments: () => void;
   onShare: () => void;
+  onReport?: () => void;
+  showReport?: boolean;
 };
 
 function ProfileSnapFeedPage({
@@ -91,6 +97,8 @@ function ProfileSnapFeedPage({
   onToggleLike,
   onOpenComments,
   onShare,
+  onReport,
+  showReport = false,
 }: ProfileSnapFeedPageProps) {
   const insets = useSafeAreaInsets();
   const [isSwapped, setIsSwapped] = useState(false);
@@ -153,6 +161,15 @@ function ProfileSnapFeedPage({
             Paylaş
           </AppText>
         </Pressable>
+
+        {showReport && onReport ? (
+          <Pressable onPress={onReport} style={styles.actionButton}>
+            <Ionicons color="#FFFFFF" name="flag-outline" size={30} style={styles.actionIconShadow} />
+            <AppText style={styles.actionLabel} variant="caption">
+              Şikayet
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -165,6 +182,7 @@ export function ProfileSnapFeedViewer({
   onClose,
   authorFallback,
 }: ProfileSnapFeedViewerProps) {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { isKeyboardVisible, keyboardPadding, sheetBottomPadding } = useModalCommentKeyboardLayout({
@@ -183,6 +201,8 @@ export function ProfileSnapFeedViewer({
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [draftComment, setDraftComment] = useState("");
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
+  const [reportSnap, setReportSnap] = useState<SnapItem | null>(null);
+  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
 
   const pageHeight = windowHeight;
 
@@ -340,6 +360,32 @@ export function ProfileSnapFeedViewer({
     }
   };
 
+  const canReportSnap = (snap: SnapItem) => {
+    const ownerId = snap.author?.id ?? snap.userId;
+    return Boolean(user?.id && ownerId !== user.id);
+  };
+
+  const submitSnapReport = async (reason: ComplaintReason) => {
+    if (!reportSnap || isReportSubmitting) {
+      return;
+    }
+
+    setIsReportSubmitting(true);
+    try {
+      await createContentComplaint({
+        targetType: "SNAP",
+        targetId: reportSnap.id,
+        reason,
+      });
+      setReportSnap(null);
+      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
+    } catch (err) {
+      Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
+    } finally {
+      setIsReportSubmitting(false);
+    }
+  };
+
   const shareSnap = async (snap: SnapItem) => {
     const author = resolveAuthor(snap, authorFallback);
     const message = snap.caption?.trim() || `${author.displayName} Snap paylaştı`;
@@ -359,7 +405,8 @@ export function ProfileSnapFeedViewer({
   }
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+    <>
+      <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <View style={styles.viewer}>
         <FlatList
           data={snaps}
@@ -397,9 +444,11 @@ export function ProfileSnapFeedViewer({
                 isLiked={engagement.liked}
                 likeCount={engagement.likeCount}
                 onOpenComments={() => void openComments(item)}
+                onReport={() => setReportSnap(item)}
                 onShare={() => void shareSnap(item)}
                 onToggleLike={() => toggleLike(item)}
                 pageHeight={pageHeight}
+                showReport={canReportSnap(item)}
                 snap={item}
               />
             );
@@ -498,7 +547,15 @@ export function ProfileSnapFeedViewer({
           </View>
         </View>
       </Modal>
-    </Modal>
+      </Modal>
+
+      <ComplaintReasonSheet
+        isSubmitting={isReportSubmitting}
+        onClose={() => setReportSnap(null)}
+        onSubmit={submitSnapReport}
+        visible={reportSnap != null}
+      />
+    </>
   );
 }
 

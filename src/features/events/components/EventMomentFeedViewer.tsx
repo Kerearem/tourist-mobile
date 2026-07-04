@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Modal,
@@ -18,7 +19,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MediaCarousel } from "../../../components/media/MediaCarousel";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import { useAuth } from "../../../hooks/useAuth";
 import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKeyboardLayout";
+import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
+import { createContentComplaint, type ComplaintReason } from "../../profile/services/complaints.service";
 import {
   addMomentComment,
   getMomentComments,
@@ -64,6 +68,8 @@ type EventMomentFeedPageProps = {
   onToggleLike: () => void;
   onOpenComments: () => void;
   onShare: () => void;
+  onReport?: () => void;
+  showReport?: boolean;
 };
 
 function EventMomentFeedPage({
@@ -78,6 +84,8 @@ function EventMomentFeedPage({
   onToggleLike,
   onOpenComments,
   onShare,
+  onReport,
+  showReport = false,
 }: EventMomentFeedPageProps) {
   const insets = useSafeAreaInsets();
   const actionRailBottom = Math.max(insets.bottom, theme.spacing.lg) + 96;
@@ -140,6 +148,15 @@ function EventMomentFeedPage({
             Paylaş
           </AppText>
         </Pressable>
+
+        {showReport && onReport ? (
+          <Pressable onPress={onReport} style={styles.actionButton}>
+            <Ionicons color="#FFFFFF" name="flag-outline" size={30} style={styles.actionIconShadow} />
+            <AppText style={styles.actionLabel} variant="caption">
+              Şikayet
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -152,6 +169,7 @@ export function EventMomentFeedViewer({
   initialIndex,
   onClose,
 }: EventMomentFeedViewerProps) {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isKeyboardVisible, keyboardPadding, sheetBottomPadding } = useModalCommentKeyboardLayout({
@@ -170,6 +188,8 @@ export function EventMomentFeedViewer({
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [draftComment, setDraftComment] = useState("");
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
+  const [reportMoment, setReportMoment] = useState<EventAlbumMoment | null>(null);
+  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
 
   const pageHeight = windowHeight;
 
@@ -317,6 +337,30 @@ export function EventMomentFeedViewer({
     }
   };
 
+  const canReportMoment = (moment: EventAlbumMoment) =>
+    Boolean(user?.id && moment.author.id !== user.id);
+
+  const submitMomentReport = async (reason: ComplaintReason) => {
+    if (!reportMoment || isReportSubmitting) {
+      return;
+    }
+
+    setIsReportSubmitting(true);
+    try {
+      await createContentComplaint({
+        targetType: "MOMENT",
+        targetId: reportMoment.id,
+        reason,
+      });
+      setReportMoment(null);
+      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
+    } catch (err) {
+      Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
+    } finally {
+      setIsReportSubmitting(false);
+    }
+  };
+
   const shareMoment = async (moment: EventAlbumMoment) => {
     const message = moment.caption?.trim() || `${moment.author.displayName} bir an paylaştı`;
     const firstMedia = moment.media[0];
@@ -336,7 +380,8 @@ export function EventMomentFeedViewer({
   }
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+    <>
+      <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <View style={styles.viewer}>
         <FlatList
           data={moments}
@@ -374,10 +419,12 @@ export function EventMomentFeedViewer({
                 likeCount={engagement.likeCount}
                 moment={item}
                 onOpenComments={() => void openComments(item)}
+                onReport={() => setReportMoment(item)}
                 onShare={() => void shareMoment(item)}
                 onToggleLike={() => toggleLike(item)}
                 pageHeight={pageHeight}
                 pageWidth={windowWidth}
+                showReport={canReportMoment(item)}
               />
             );
           }}
@@ -475,7 +522,15 @@ export function EventMomentFeedViewer({
           </View>
         </View>
       </Modal>
-    </Modal>
+      </Modal>
+
+      <ComplaintReasonSheet
+        isSubmitting={isReportSubmitting}
+        onClose={() => setReportMoment(null)}
+        onSubmit={submitMomentReport}
+        visible={reportMoment != null}
+      />
+    </>
   );
 }
 

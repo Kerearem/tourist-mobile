@@ -94,6 +94,7 @@ export type EventAlbumMoment = {
   caption: string | null;
   createdAt: string;
   author: {
+    id: string;
     displayName: string;
     avatarUrl: string | null;
   };

@@ -20,6 +20,7 @@ type ExplorePostCardProps = {
   onAuthorPress?: () => void;
   onMessagePress?: () => void;
   onFollowPress?: () => void;
+  onReportPress?: () => void;
   isFollowLoading?: boolean;
   isLiked?: boolean;
   likeCount?: number;
@@ -63,6 +64,7 @@ export function ExplorePostCard({
   onAuthorPress,
   onMessagePress,
   onFollowPress,
+  onReportPress,
   isFollowLoading,
   isLiked,
   likeCount,
@@ -125,6 +127,9 @@ export function ExplorePostCard({
         </Pressable>
         <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
         <ActionButton icon="paper-plane-outline" label="Mesaj" onPress={onMessagePress} />
+        {!isOwnPost && onReportPress ? (
+          <ActionButton icon="flag-outline" label="Şikayet" onPress={onReportPress} />
+        ) : null}
       </View>
 
       <View style={styles.captionBlock}>

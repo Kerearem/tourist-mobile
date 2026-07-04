@@ -11,8 +11,17 @@ export type ComplaintReason =
   | "fake_account"
   | "other";
 
+export type ComplaintContentTargetType = "SNAP" | "MOMENT" | "REEL";
+
 export type CreateUserComplaintInput = {
   targetUserId: string;
+  reason: ComplaintReason;
+  description?: string;
+};
+
+export type CreateContentComplaintInput = {
+  targetType: ComplaintContentTargetType;
+  targetId: string;
   reason: ComplaintReason;
   description?: string;
 };
@@ -54,11 +63,13 @@ const getAccessToken = async () => {
   return state.tokens.accessToken;
 };
 
-export async function createUserComplaint(input: CreateUserComplaintInput): Promise<void> {
-  const reasonLabel = REASON_LABELS[input.reason];
+const buildComplaintBody = (reason: ComplaintReason, description?: string) => ({
+  reason: REASON_LABELS[reason],
+  ...(description?.trim() ? { description: description.trim() } : {}),
+});
 
+export async function createUserComplaint(input: CreateUserComplaintInput): Promise<void> {
   if (USE_MOCK_BACKEND) {
-    void reasonLabel;
     return;
   }
 
@@ -67,9 +78,30 @@ export async function createUserComplaint(input: CreateUserComplaintInput): Prom
     method: "POST",
     token,
     body: {
+      targetType: "USER",
       targetUserId: input.targetUserId,
-      reason: reasonLabel,
-      ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+      ...buildComplaintBody(input.reason, input.description),
     },
+  });
+}
+
+export async function createContentComplaint(input: CreateContentComplaintInput): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    return;
+  }
+
+  const token = await getAccessToken();
+  const body = {
+    targetType: input.targetType,
+    ...buildComplaintBody(input.reason, input.description),
+    ...(input.targetType === "SNAP" ? { targetSnapId: input.targetId } : {}),
+    ...(input.targetType === "MOMENT" ? { targetMomentId: input.targetId } : {}),
+    ...(input.targetType === "REEL" ? { targetReelId: input.targetId } : {}),
+  };
+
+  await apiRequest<{ success: boolean }>(API_ENDPOINTS.complaints.create, {
+    method: "POST",
+    token,
+    body,
   });
 }

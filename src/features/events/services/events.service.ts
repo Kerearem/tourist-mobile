@@ -183,6 +183,7 @@ export async function createEventMoment(eventId: string, input: CreateMomentInpu
       caption: input.caption ?? null,
       createdAt: new Date().toISOString(),
       author: {
+        id: "mock_user",
         displayName: "Mock User",
         avatarUrl: null,
       },
