@@ -5,7 +5,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  Share,
   StyleSheet,
   TextInput,
   useWindowDimensions,
@@ -27,6 +26,8 @@ import {
   likeReel,
   unlikeReel,
 } from "../services/reelEngagement.service";
+import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
+import { buildReelSharePayload } from "../../share/utils/buildSharePayloads";
 import { deleteOrganizerReel } from "../services/reels.service";
 import type { ReelCommentItem } from "../types/reelEngagement";
 import type { ReelItem } from "../types/reels";
@@ -200,6 +201,7 @@ export function ProfileReelsFeedViewer({
   const { isKeyboardVisible, keyboardPadding, sheetBottomPadding } = useModalCommentKeyboardLayout({
     extraOffset: theme.spacing.sm,
   });
+  const { openShare, contentShareSheet } = useContentShareSheet();
   const listRef = useRef<FlatList<ReelItem>>(null);
   const loadedCommentReelIds = useRef(new Set<string>());
 
@@ -424,18 +426,8 @@ export function ProfileReelsFeedViewer({
     }
   };
 
-  const shareReel = async (reel: ReelItem) => {
-    const preview = reel.media.slice().sort((a, b) => a.order - b.order)[0];
-    const message = reel.caption?.trim() || `${organizerDisplayName} tanıtım içeriği paylaştı`;
-
-    try {
-      await Share.share({
-        message,
-        url: preview?.url,
-      });
-    } catch {
-      // User dismissed share sheet.
-    }
+  const shareReel = (reel: ReelItem) => {
+    openShare(buildReelSharePayload(reel, organizerDisplayName));
   };
 
   if (!visible || localReels.length === 0) {
@@ -484,7 +476,7 @@ export function ProfileReelsFeedViewer({
                   onEventPress={onEventPress}
                   onOpenComments={() => void openComments(item)}
                   onReport={() => setReportReel(item)}
-                  onShare={() => void shareReel(item)}
+                  onShare={() => shareReel(item)}
                   onToggleLike={() => toggleLike(item)}
                   organizerDisplayName={organizerDisplayName}
                   pageHeight={windowHeight}
@@ -596,6 +588,7 @@ export function ProfileReelsFeedViewer({
         onSubmit={submitReelReport}
         visible={reportReel != null}
       />
+      {contentShareSheet}
     </>
   );
 }

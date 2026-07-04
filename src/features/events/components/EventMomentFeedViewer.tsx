@@ -6,7 +6,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  Share,
   StyleSheet,
   TextInput,
   useWindowDimensions,
@@ -21,6 +20,8 @@ import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKeyboardLayout";
+import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
+import { buildMomentSharePayload } from "../../share/utils/buildSharePayloads";
 import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
 import { createContentComplaint, type ComplaintReason } from "../../profile/services/complaints.service";
 import {
@@ -175,6 +176,7 @@ export function EventMomentFeedViewer({
   const { isKeyboardVisible, keyboardPadding, sheetBottomPadding } = useModalCommentKeyboardLayout({
     extraOffset: theme.spacing.sm,
   });
+  const { openShare, contentShareSheet } = useContentShareSheet();
   const listRef = useRef<FlatList<EventAlbumMoment>>(null);
   const loadedCommentMomentIds = useRef(new Set<string>());
 
@@ -361,18 +363,8 @@ export function EventMomentFeedViewer({
     }
   };
 
-  const shareMoment = async (moment: EventAlbumMoment) => {
-    const message = moment.caption?.trim() || `${moment.author.displayName} bir an paylaştı`;
-    const firstMedia = moment.media[0];
-
-    try {
-      await Share.share({
-        message,
-        url: firstMedia?.url,
-      });
-    } catch {
-      // User dismissed share sheet.
-    }
+  const shareMoment = (moment: EventAlbumMoment) => {
+    openShare(buildMomentSharePayload(moment));
   };
 
   if (!visible || moments.length === 0) {
@@ -420,7 +412,7 @@ export function EventMomentFeedViewer({
                 moment={item}
                 onOpenComments={() => void openComments(item)}
                 onReport={() => setReportMoment(item)}
-                onShare={() => void shareMoment(item)}
+                onShare={() => shareMoment(item)}
                 onToggleLike={() => toggleLike(item)}
                 pageHeight={pageHeight}
                 pageWidth={windowWidth}
@@ -530,6 +522,7 @@ export function EventMomentFeedViewer({
         onSubmit={submitMomentReport}
         visible={reportMoment != null}
       />
+      {contentShareSheet}
     </>
   );
 }

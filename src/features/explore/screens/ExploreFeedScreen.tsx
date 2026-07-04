@@ -41,6 +41,8 @@ import {
   unlikeReel,
 } from "../../profile/services/reelEngagement.service";
 import type { ReelCommentItem } from "../../profile/types/reelEngagement";
+import { buildExplorePostSharePayload } from "../../share/utils/buildSharePayloads";
+import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
 import { ExplorePostCard } from "../components/ExplorePostCard";
 import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
@@ -89,6 +91,7 @@ const syncCommentLikes = (items: SnapCommentItem[]): Record<string, { liked: boo
 
 export function ExploreFeedScreen() {
   const { user } = useAuth();
+  const { openShare, contentShareSheet } = useContentShareSheet();
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const route = useRoute<RouteProp<ExploreStackParamList, "ExploreFeedScreen">>();
   const { height } = useWindowDimensions();
@@ -628,19 +631,6 @@ export function ExploreFeedScreen() {
     [navigation],
   );
 
-  const openPostDirectMessage = async (post: ExplorePost) => {
-    if (!user?.id || post.author.id === user.id) {
-      return;
-    }
-    await openDirectMessage({
-      id: post.author.id,
-      username: post.author.username || post.author.displayName,
-      displayName: post.author.displayName,
-      countryCode: "",
-      avatarUrl: post.author.avatarUrl,
-    });
-  };
-
   const toggleFollowOnAuthor = (authorId: string) => {
     if (followLoadingByAuthorId[authorId]) {
       return;
@@ -944,7 +934,7 @@ export function ExploreFeedScreen() {
             }}
             onFollowPress={() => toggleFollowOnAuthor(item.author.id)}
             onLikePress={() => togglePostLike(item)}
-            onMessagePress={() => void openPostDirectMessage(item)}
+            onSharePress={() => openShare(buildExplorePostSharePayload(item))}
             onReportPress={item.type === "snap" ? () => setReportingPost(item) : undefined}
             post={item}
             viewerId={user?.id}
@@ -1510,6 +1500,7 @@ export function ExploreFeedScreen() {
         onSubmit={submitContentReport}
         visible={reportingPost != null}
       />
+      {contentShareSheet}
     </SafeAreaView>
   );
 }

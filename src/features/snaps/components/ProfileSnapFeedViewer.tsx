@@ -7,7 +7,6 @@ import {
   Image,
   Modal,
   Pressable,
-  Share,
   StyleSheet,
   TextInput,
   useWindowDimensions,
@@ -23,6 +22,8 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKeyboardLayout";
 import { ApiRequestError } from "../../../services/api/client";
+import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
+import { buildSnapSharePayload } from "../../share/utils/buildSharePayloads";
 import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
 import { createContentComplaint, type ComplaintReason } from "../../profile/services/complaints.service";
 import {
@@ -188,6 +189,7 @@ export function ProfileSnapFeedViewer({
   const { isKeyboardVisible, keyboardPadding, sheetBottomPadding } = useModalCommentKeyboardLayout({
     extraOffset: theme.spacing.sm,
   });
+  const { openShare, contentShareSheet } = useContentShareSheet();
   const listRef = useRef<FlatList<SnapItem>>(null);
   const loadedCommentSnapIds = useRef(new Set<string>());
 
@@ -386,18 +388,9 @@ export function ProfileSnapFeedViewer({
     }
   };
 
-  const shareSnap = async (snap: SnapItem) => {
+  const shareSnap = (snap: SnapItem) => {
     const author = resolveAuthor(snap, authorFallback);
-    const message = snap.caption?.trim() || `${author.displayName} Snap paylaştı`;
-
-    try {
-      await Share.share({
-        message,
-        url: snap.backMediaUrl,
-      });
-    } catch {
-      // User dismissed share sheet.
-    }
+    openShare(buildSnapSharePayload(snap, author));
   };
 
   if (!visible || snaps.length === 0) {
@@ -445,7 +438,7 @@ export function ProfileSnapFeedViewer({
                 likeCount={engagement.likeCount}
                 onOpenComments={() => void openComments(item)}
                 onReport={() => setReportSnap(item)}
-                onShare={() => void shareSnap(item)}
+                onShare={() => shareSnap(item)}
                 onToggleLike={() => toggleLike(item)}
                 pageHeight={pageHeight}
                 showReport={canReportSnap(item)}
@@ -555,6 +548,7 @@ export function ProfileSnapFeedViewer({
         onSubmit={submitSnapReport}
         visible={reportSnap != null}
       />
+      {contentShareSheet}
     </>
   );
 }
