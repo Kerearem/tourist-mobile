@@ -1,14 +1,20 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
+  TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -16,6 +22,7 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import { loadShareFriendTargets, sendContentToFriend, shareContentSystem } from "../services/contentShare.service";
 import type { ContentSharePayload, ShareFriendTarget } from "../types/contentShare";
+import { buildContentShareMessage } from "../utils/buildContentShareMessage";
 
 type ContentShareSheetProps = {
   visible: boolean;
@@ -23,52 +30,178 @@ type ContentShareSheetProps = {
   onClose: () => void;
 };
 
-type ShareStep = "menu" | "friends";
+type ShareIconOptionProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  disabled?: boolean;
+  circleColor?: string;
+  onPress: () => void;
+};
+
+const SHEET_SLIDE_DISTANCE = 480;
+const ANIMATION_OPEN_MS = 240;
+const ANIMATION_CLOSE_MS = 200;
+const GRID_COLUMNS = 3;
+const AVATAR_SIZE = 70;
+
+const SHEET_COLORS = {
+  background: theme.colors.surfaceElevated,
+  surface: theme.colors.surface,
+  textPrimary: theme.colors.textPrimary,
+  textSecondary: theme.colors.textSecondary,
+  handle: theme.colors.border,
+  placeholder: theme.colors.muted,
+};
+
+function ShareIconOption({
+  icon,
+  label,
+  disabled = false,
+  circleColor = SHEET_COLORS.surface,
+  onPress,
+}: ShareIconOptionProps) {
+  return (
+    <Pressable disabled={disabled} onPress={onPress} style={styles.iconOption}>
+      <View style={[styles.iconCircle, { backgroundColor: circleColor }]}>
+        <Ionicons color={SHEET_COLORS.textPrimary} name={icon} size={24} />
+      </View>
+      <AppText numberOfLines={2} style={styles.iconLabel} variant="caption">
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
 
 export function ContentShareSheet({ visible, payload, onClose }: ContentShareSheetProps) {
   const { user } = useAuth();
-  const [step, setStep] = useState<ShareStep>("menu");
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+
   const [friends, setFriends] = useState<ShareFriendTarget[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoadingFriends, setIsLoadingFriends] = useState(false);
   const [friendsError, setFriendsError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(SHEET_SLIDE_DISTANCE)).current;
+
+  const gridCellWidth = (windowWidth - theme.spacing.lg * 2) / GRID_COLUMNS;
+
+  const filteredFriends = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return friends;
+    }
+
+    return friends.filter(
+      (friend) =>
+        friend.displayName.toLowerCase().includes(query) ||
+        (friend.username?.toLowerCase().includes(query) ?? false),
+    );
+  }, [friends, searchQuery]);
+
+  const animateOpen = () => {
+    backdropOpacity.setValue(0);
+    sheetTranslateY.setValue(SHEET_SLIDE_DISTANCE);
+
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: ANIMATION_OPEN_MS,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: 0,
+        duration: ANIMATION_OPEN_MS,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const animateClose = (onFinished?: () => void) => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: ANIMATION_CLOSE_MS,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: SHEET_SLIDE_DISTANCE,
+        duration: ANIMATION_CLOSE_MS,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onFinished?.();
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (visible) {
+      setModalVisible(true);
+      requestAnimationFrame(() => {
+        animateOpen();
+      });
+      return;
+    }
+
+    if (modalVisible) {
+      animateClose(() => setModalVisible(false));
+    }
+  }, [visible, modalVisible]);
 
   useEffect(() => {
     if (!visible) {
-      setStep("menu");
       setFriends([]);
+      setSearchQuery("");
       setFriendsError(null);
       setIsLoadingFriends(false);
       setIsSending(false);
+      return;
     }
-  }, [visible]);
+
+    if (!user?.id) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFriends = async () => {
+      setIsLoadingFriends(true);
+      setFriendsError(null);
+
+      try {
+        const targets = await loadShareFriendTargets(user.id);
+        if (!cancelled) {
+          setFriends(targets);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFriends([]);
+          setFriendsError(error instanceof Error ? error.message : "Arkadaş listesi yüklenemedi.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingFriends(false);
+        }
+      }
+    };
+
+    void loadFriends();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, user?.id]);
 
   const handleClose = () => {
     if (isSending) {
       return;
     }
     onClose();
-  };
-
-  const openFriendsStep = async () => {
-    if (!user?.id) {
-      Alert.alert("Giriş gerekli", "Arkadaşına göndermek için giriş yapmalısın.");
-      return;
-    }
-
-    setStep("friends");
-    setIsLoadingFriends(true);
-    setFriendsError(null);
-
-    try {
-      const targets = await loadShareFriendTargets(user.id);
-      setFriends(targets);
-    } catch (error) {
-      setFriends([]);
-      setFriendsError(error instanceof Error ? error.message : "Arkadaş listesi yüklenemedi.");
-    } finally {
-      setIsLoadingFriends(false);
-    }
   };
 
   const handleSystemShare = async () => {
@@ -80,8 +213,21 @@ export function ContentShareSheet({ visible, payload, onClose }: ContentShareShe
     await shareContentSystem(payload);
   };
 
+  const handleCopyLink = async () => {
+    if (!payload) {
+      return;
+    }
+
+    const text = buildContentShareMessage(payload);
+    await Clipboard.setStringAsync(text);
+    Alert.alert("Kopyalandı", "Bağlantı panoya kopyalandı.");
+  };
+
   const handleSendToFriend = async (target: ShareFriendTarget) => {
     if (!payload || !user?.id || isSending) {
+      if (!user?.id) {
+        Alert.alert("Giriş gerekli", "Arkadaşına göndermek için giriş yapmalısın.");
+      }
       return;
     }
 
@@ -104,197 +250,267 @@ export function ContentShareSheet({ visible, payload, onClose }: ContentShareShe
     }
   };
 
+  const renderFriendGrid = () => {
+    if (!user?.id) {
+      return (
+        <View style={styles.stateWrap}>
+          <AppText style={styles.stateText} variant="bodyMuted">
+            Arkadaşına göndermek için giriş yapmalısın.
+          </AppText>
+        </View>
+      );
+    }
+
+    if (isLoadingFriends) {
+      return (
+        <View style={styles.stateWrap}>
+          <ActivityIndicator color={theme.colors.primary} />
+        </View>
+      );
+    }
+
+    if (friendsError) {
+      return (
+        <View style={styles.stateWrap}>
+          <AppText style={styles.stateText} variant="bodyMuted">
+            {friendsError}
+          </AppText>
+        </View>
+      );
+    }
+
+    if (friends.length === 0) {
+      return (
+        <View style={styles.stateWrap}>
+          <AppText style={styles.stateText} variant="bodyMuted">
+            Henüz mesajlaştığın bir arkadaş yok.
+          </AppText>
+        </View>
+      );
+    }
+
+    if (filteredFriends.length === 0) {
+      return (
+        <View style={styles.stateWrap}>
+          <AppText style={styles.stateText} variant="bodyMuted">
+            Sonuç bulunamadı.
+          </AppText>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        contentContainerStyle={styles.gridContent}
+        data={filteredFriends}
+        keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
+        numColumns={GRID_COLUMNS}
+        renderItem={({ item }) => {
+          const initials = item.displayName.slice(0, 2).toUpperCase();
+          return (
+            <Pressable
+              disabled={isSending}
+              onPress={() => void handleSendToFriend(item)}
+              style={[styles.gridCell, { width: gridCellWidth }]}
+            >
+              <Avatar initials={initials} size={AVATAR_SIZE} uri={item.avatarUrl} />
+              <AppText numberOfLines={2} style={styles.gridName} variant="caption">
+                {item.displayName}
+              </AppText>
+            </Pressable>
+          );
+        }}
+        showsVerticalScrollIndicator={false}
+        style={styles.gridList}
+      />
+    );
+  };
+
   return (
-    <Modal animationType="slide" onRequestClose={handleClose} transparent visible={visible}>
-      <Pressable onPress={handleClose} style={styles.backdrop}>
-        <Pressable onPress={() => undefined} style={styles.wrap}>
-          <View style={styles.sheet}>
-            {step === "menu" ? (
-              <>
-                <View style={styles.handle} />
-                <AppText style={styles.title} variant="sectionTitle">
-                  Paylaş
-                </AppText>
-                <Pressable disabled={isSending} onPress={() => void openFriendsStep()} style={styles.optionRow}>
-                  <Ionicons color={theme.colors.textPrimary} name="paper-plane-outline" size={22} />
-                  <AppText style={styles.optionText} variant="body">
-                    Arkadaşına gönder
-                  </AppText>
-                </Pressable>
-                <Pressable disabled={isSending} onPress={() => void handleSystemShare()} style={styles.optionRow}>
-                  <Ionicons color={theme.colors.textPrimary} name="share-outline" size={22} />
-                  <AppText style={styles.optionText} variant="body">
-                    Paylaş
-                  </AppText>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <View style={styles.friendsHeader}>
-                  <Pressable disabled={isSending} onPress={() => setStep("menu")} style={styles.backButton}>
-                    <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={22} />
-                  </Pressable>
-                  <AppText style={styles.title} variant="sectionTitle">
-                    Arkadaşına gönder
-                  </AppText>
-                  <View style={styles.backButton} />
-                </View>
-                {isLoadingFriends ? (
-                  <View style={styles.stateWrap}>
-                    <ActivityIndicator color={theme.colors.primary} />
-                  </View>
-                ) : friendsError ? (
-                  <View style={styles.stateWrap}>
-                    <AppText style={styles.stateText} variant="bodyMuted">
-                      {friendsError}
-                    </AppText>
-                  </View>
-                ) : friends.length === 0 ? (
-                  <View style={styles.stateWrap}>
-                    <AppText style={styles.stateText} variant="bodyMuted">
-                      Henüz mesajlaştığın bir arkadaş yok.
-                    </AppText>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={friends}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => {
-                      const initials = item.displayName.slice(0, 2).toUpperCase();
-                      return (
-                        <Pressable
-                          disabled={isSending}
-                          onPress={() => void handleSendToFriend(item)}
-                          style={styles.friendRow}
-                        >
-                          <Avatar initials={initials} size="md" uri={item.avatarUrl} />
-                          <View style={styles.friendBody}>
-                            <AppText style={styles.friendName} variant="label">
-                              {item.displayName}
-                            </AppText>
-                            {item.username ? (
-                              <AppText style={styles.friendUsername} variant="caption">
-                                @{item.username}
-                              </AppText>
-                            ) : null}
-                          </View>
-                        </Pressable>
-                      );
-                    }}
-                    style={styles.friendList}
-                  />
-                )}
-              </>
-            )}
-          </View>
-          <Pressable disabled={isSending} onPress={handleClose} style={styles.cancelButton}>
-            <AppText style={styles.cancelText} variant="body">
-              İptal
-            </AppText>
-          </Pressable>
+    <Modal animationType="none" onRequestClose={handleClose} transparent visible={modalVisible}>
+      <View style={styles.root}>
+        <Pressable disabled={isSending} onPress={handleClose} style={StyleSheet.absoluteFill}>
+          <Animated.View pointerEvents="none" style={[styles.backdrop, { opacity: backdropOpacity }]} />
         </Pressable>
-      </Pressable>
+
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              paddingBottom: Math.max(insets.bottom, theme.spacing.md),
+              transform: [{ translateY: sheetTranslateY }],
+            },
+          ]}
+        >
+          <View style={styles.handle} />
+
+          <View style={styles.searchRow}>
+            <View style={styles.searchInputWrap}>
+              <Ionicons color={SHEET_COLORS.placeholder} name="search" size={18} style={styles.searchIcon} />
+              <TextInput
+                editable={!isSending}
+                placeholder="Ara"
+                placeholderTextColor={SHEET_COLORS.placeholder}
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+            <Pressable disabled={isSending} style={styles.groupButton}>
+              <Ionicons color={SHEET_COLORS.textPrimary} name="person-add-outline" size={22} />
+            </Pressable>
+          </View>
+
+          <View style={styles.gridSection}>{renderFriendGrid()}</View>
+
+          <ScrollView
+            contentContainerStyle={styles.iconRowContent}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.iconRow}
+          >
+            <ShareIconOption
+              disabled={isSending}
+              icon="link-outline"
+              label="Bağlantıyı kopyala"
+              onPress={() => void handleCopyLink()}
+            />
+            <ShareIconOption
+              disabled={isSending}
+              icon="share-outline"
+              label="Paylaş"
+              onPress={() => void handleSystemShare()}
+            />
+          </ScrollView>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+  root: {
     flex: 1,
     justifyContent: "flex-end",
   },
-  wrap: {
-    gap: theme.spacing.sm,
-    paddingBottom: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.lg,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   sheet: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.radius.lg,
-    maxHeight: "62%",
+    backgroundColor: SHEET_COLORS.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "78%",
+    minHeight: 420,
     overflow: "hidden",
   },
   handle: {
     alignSelf: "center",
-    backgroundColor: theme.colors.border,
+    backgroundColor: SHEET_COLORS.handle,
     borderRadius: 999,
     height: 4,
+    marginBottom: theme.spacing.sm,
     marginTop: theme.spacing.sm,
-    width: 40,
+    width: 36,
   },
-  title: {
-    color: theme.colors.textPrimary,
-    paddingBottom: theme.spacing.sm,
-    paddingTop: theme.spacing.md,
-    textAlign: "center",
-  },
-  optionRow: {
+  searchRow: {
     alignItems: "center",
-    borderTopColor: theme.colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
   },
-  optionText: {
-    color: theme.colors.textPrimary,
+  searchInputWrap: {
+    alignItems: "center",
+    backgroundColor: SHEET_COLORS.surface,
+    borderRadius: 999,
     flex: 1,
-  },
-  friendsHeader: {
-    alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.sm,
-    paddingTop: theme.spacing.sm,
+    height: 40,
+    paddingHorizontal: theme.spacing.md,
   },
-  backButton: {
+  searchIcon: {
+    marginRight: theme.spacing.xs,
+  },
+  searchInput: {
+    color: SHEET_COLORS.textPrimary,
+    flex: 1,
+    fontSize: 15,
+    height: 40,
+    padding: 0,
+  },
+  groupButton: {
     alignItems: "center",
+    backgroundColor: SHEET_COLORS.surface,
+    borderRadius: 20,
     height: 40,
     justifyContent: "center",
     width: 40,
   },
-  stateWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 160,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
+  gridSection: {
+    flex: 1,
+    minHeight: 180,
   },
-  stateText: {
+  gridList: {
+    flex: 1,
+  },
+  gridContent: {
+    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  gridCell: {
+    alignItems: "center",
+    marginBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  gridName: {
+    color: SHEET_COLORS.textPrimary,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: theme.spacing.sm,
     textAlign: "center",
   },
-  friendList: {
-    maxHeight: 360,
-  },
-  friendRow: {
+  stateWrap: {
     alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.xl,
+  },
+  stateText: {
+    color: SHEET_COLORS.textSecondary,
+    textAlign: "center",
+  },
+  iconRow: {
+    flexGrow: 0,
     borderTopColor: theme.colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: theme.spacing.md,
+  },
+  iconRowContent: {
+    gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
   },
-  friendBody: {
-    flex: 1,
-    gap: 2,
-  },
-  friendName: {
-    color: theme.colors.textPrimary,
-  },
-  friendUsername: {
-    color: theme.colors.textSecondary,
-  },
-  cancelButton: {
+  iconOption: {
     alignItems: "center",
-    backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.radius.lg,
-    paddingVertical: theme.spacing.md,
+    maxWidth: 88,
+    width: 80,
   },
-  cancelText: {
-    color: theme.colors.textPrimary,
-    fontWeight: "600",
+  iconCircle: {
+    alignItems: "center",
+    borderRadius: 30,
+    height: 56,
+    justifyContent: "center",
+    marginBottom: theme.spacing.xs,
+    width: 56,
+  },
+  iconLabel: {
+    color: SHEET_COLORS.textPrimary,
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: "center",
   },
 });
