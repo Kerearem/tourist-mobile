@@ -26,6 +26,7 @@ type Props = NativeStackScreenProps<
 type TabKey = "created" | "attended";
 
 import { eventStatusLabel } from "../utils/eventStatusLabel";
+import { isActiveOrganizerProfileEvent } from "../../profile/utils/organizerProfileEvents";
 
 const attendanceLabel = (event: EventItem) => {
   if (event.attendanceStatus === "approved") return "Katıldın";
@@ -84,7 +85,7 @@ export function MyOrganizerEventsScreen({ navigation }: Props) {
     <View style={styles.itemWrap}>
       <View style={styles.statusRow}>
         <Badge label={activeTab === "created" ? eventStatusLabel(item) : attendanceLabel(item)} />
-        {activeTab === "created" && item.metadata?.status === "APPROVED" ? (
+        {activeTab === "created" && isActiveOrganizerProfileEvent(item) ? (
           <Pressable onPress={() => void onGroupPress(item)} style={styles.groupLink}>
             <AppText style={styles.groupLinkText} variant="caption">
               Grup

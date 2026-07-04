@@ -7,12 +7,15 @@ export const isProfileVisibleOrganizerEvent = (event: EventItem) =>
 
 export const isPastOrganizerProfileEvent = (event: EventItem, now = Date.now()) => {
   const status = String(event.metadata?.status ?? "");
-  if (status === "COMPLETED") {
+  if (status === "COMPLETED" || status === "CANCELLED") {
     return true;
   }
   const endMs = event.endsAt ? new Date(event.endsAt).getTime() : new Date(event.startsAt).getTime();
   return endMs < now;
 };
+
+export const isActiveOrganizerProfileEvent = (event: EventItem, now = Date.now()) =>
+  isProfileVisibleOrganizerEvent(event) && !isPastOrganizerProfileEvent(event, now);
 
 export const splitOrganizerProfileEvents = (events: EventItem[], now = Date.now()) => {
   const visible = events.filter(isProfileVisibleOrganizerEvent);
