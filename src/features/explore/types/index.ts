@@ -29,10 +29,10 @@ export type ExplorePostViewerState = {
   saved?: boolean;
 };
 
-export type ExploreFeedItemType = "snap";
+export type ExploreFeedItemType = "snap" | "reel";
 
 export type ExploreFeedSnapItem = {
-  type: ExploreFeedItemType;
+  type: "snap";
   id: string;
   frontMediaUrl: string;
   backMediaUrl: string;
@@ -46,7 +46,28 @@ export type ExploreFeedSnapItem = {
   };
 };
 
-export type ExploreFeedItem = ExploreFeedSnapItem;
+export type ExploreFeedReelMediaItem = {
+  id: string;
+  url: string;
+  type: "IMAGE" | "VIDEO";
+};
+
+export type ExploreFeedReelItem = {
+  type: "reel";
+  id: string;
+  caption?: string;
+  createdAt: string;
+  media: ExploreFeedReelMediaItem[];
+  event?: {
+    id: string;
+    title: string;
+    startsAt: string;
+    city: string;
+  };
+  author: ExplorePostAuthor & { username: string; isOrganizer: boolean };
+};
+
+export type ExploreFeedItem = ExploreFeedSnapItem | ExploreFeedReelItem;
 
 export type ExplorePost = {
   id: string;
@@ -56,9 +77,15 @@ export type ExplorePost = {
   scope: ExploreFeedScope;
   createdAt: string;
   text: string;
-  frontMediaUrl: string;
-  backMediaUrl: string;
+  frontMediaUrl?: string;
+  backMediaUrl?: string;
   media: ExplorePostMedia[];
+  event?: {
+    id: string;
+    title: string;
+    startsAt: string;
+    city: string;
+  };
   stats: ExplorePostStats;
   viewerState: ExplorePostViewerState;
 };

@@ -23,7 +23,7 @@ import type { ExploreStackParamList, ProfileStackParamList } from "../../../navi
 import { getMyOrganizerEvents } from "../../events/services/organizer.service";
 import type { EventItem } from "../../events/types";
 import { createOrganizerReel } from "../services/reels.service";
-import { canPublishOrganizerReel, getReelsPublishBlockMessage } from "../services/reelsPublishing";
+import { getReelsPublishBlockMessage } from "../services/reelsPublishing";
 import { uploadImage, uploadVideo } from "../../../services/media/cloudinary";
 
 type Props = NativeStackScreenProps<
@@ -51,28 +51,40 @@ export function CreateReelScreen({ navigation }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
-  const publishCheck = canPublishOrganizerReel({
-    organizerStatus: user?.organizerStatus,
-  });
+  const organizerStatus = user?.organizerStatus;
+  const publishAllowed = organizerStatus === "approved";
 
   useEffect(() => {
-    if (!publishCheck.allowed) {
-      setAccessError(getReelsPublishBlockMessage(publishCheck.reason));
+    if (!publishAllowed) {
+      setAccessError(getReelsPublishBlockMessage("not_organizer"));
       return;
     }
+
+    setAccessError(null);
+    let cancelled = false;
 
     void (async () => {
       setIsLoadingEvents(true);
       try {
         const organizerEvents = await getMyOrganizerEvents();
-        setEvents(organizerEvents);
+        if (!cancelled) {
+          setEvents(organizerEvents);
+        }
       } catch {
-        setEvents([]);
+        if (!cancelled) {
+          setEvents([]);
+        }
       } finally {
-        setIsLoadingEvents(false);
+        if (!cancelled) {
+          setIsLoadingEvents(false);
+        }
       }
     })();
-  }, [publishCheck]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [publishAllowed]);
 
   const pickMedia = async () => {
     if (media.length >= MAX_MEDIA) {
@@ -126,7 +138,7 @@ export function CreateReelScreen({ navigation }: Props) {
   }, []);
 
   const submitReel = async () => {
-    if (media.length === 0 || isSubmitting || !publishCheck.allowed) {
+    if (media.length === 0 || isSubmitting || !publishAllowed) {
       setError("En az bir fotoğraf veya video seçmelisin.");
       return;
     }

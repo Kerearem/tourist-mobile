@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { MediaCarousel } from "../../../components/media/MediaCarousel";
 import { Avatar } from "../../../components/ui/Avatar";
 import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { AppText } from "../../../components/ui/AppText";
@@ -73,8 +74,10 @@ export function ExplorePostCard({
   const authorLabel = post.author.username || post.author.displayName;
   const initials = post.author.displayName.slice(0, 2).toUpperCase();
   const isOwnPost = Boolean(viewerId && post.author.id === viewerId);
+  const isReel = post.type === "reel";
   const isFollowing = Boolean(authorFollowStatus?.iFollow);
-  const hasMedia = Boolean(post.frontMediaUrl && post.backMediaUrl);
+  const hasSnapMedia = Boolean(post.frontMediaUrl && post.backMediaUrl);
+  const hasReelMedia = isReel && post.media.length > 0;
   const liked = isLiked ?? post.viewerState.liked;
   const visibleLikeCount = likeCount ?? post.stats.likeCount;
   const visibleCommentCount = commentCount ?? post.stats.commentCount;
@@ -92,11 +95,24 @@ export function ExplorePostCard({
 
   return (
     <View style={[styles.card, height ? { height } : undefined]}>
-      {hasMedia ? (
-        <BeRealSnapMedia backMediaUrl={post.backMediaUrl} frontMediaUrl={post.frontMediaUrl} />
+      {hasReelMedia ? (
+        <View style={styles.reelMediaWrap}>
+          <MediaCarousel
+            autoPlayVideo
+            height={height}
+            isFocused
+            media={post.media.map((item) => ({
+              id: item.id,
+              url: item.url,
+              type: item.type === "video" ? "VIDEO" : "IMAGE",
+            }))}
+          />
+        </View>
+      ) : hasSnapMedia ? (
+        <BeRealSnapMedia backMediaUrl={post.backMediaUrl!} frontMediaUrl={post.frontMediaUrl!} />
       ) : (
         <View style={styles.visualCenter}>
-          <AppText style={styles.visualNumber}>Snap</AppText>
+          <AppText style={styles.visualNumber}>{isReel ? "Reel" : "Snap"}</AppText>
         </View>
       )}
 
@@ -117,17 +133,21 @@ export function ExplorePostCard({
             )
           ) : null}
         </View>
-        <Pressable onPress={onLikePress} style={styles.actionButton}>
-          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-            <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
-          </Animated.View>
-          <AppText style={styles.actionLabel} variant="caption">
-            {formatCount(visibleLikeCount)}
-          </AppText>
-        </Pressable>
-        <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
+        {!isReel ? (
+          <Pressable onPress={onLikePress} style={styles.actionButton}>
+            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+              <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
+            </Animated.View>
+            <AppText style={styles.actionLabel} variant="caption">
+              {formatCount(visibleLikeCount)}
+            </AppText>
+          </Pressable>
+        ) : null}
+        {!isReel ? (
+          <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
+        ) : null}
         <ActionButton icon="paper-plane-outline" label="Mesaj" onPress={onMessagePress} />
-        {!isOwnPost && onReportPress ? (
+        {!isOwnPost && !isReel && onReportPress ? (
           <ActionButton icon="flag-outline" label="Şikayet" onPress={onReportPress} />
         ) : null}
       </View>
@@ -147,6 +167,11 @@ export function ExplorePostCard({
         <AppText style={styles.caption} variant="body">
           {post.text}
         </AppText>
+        {post.event ? (
+          <AppText numberOfLines={1} style={styles.eventTag} variant="caption">
+            {post.event.title}
+          </AppText>
+        ) : null}
       </View>
     </View>
   );
@@ -160,6 +185,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xxl,
+  },
+  reelMediaWrap: {
+    ...StyleSheet.absoluteFillObject,
   },
   visualCenter: {
     ...StyleSheet.absoluteFillObject,
@@ -220,5 +248,10 @@ const styles = StyleSheet.create({
   },
   caption: {
     color: "#F3F4F6",
+  },
+  eventTag: {
+    color: "#E5E7EB",
+    marginTop: theme.spacing.xs,
+    opacity: 0.9,
   },
 });

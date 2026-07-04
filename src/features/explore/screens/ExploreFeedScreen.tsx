@@ -648,7 +648,7 @@ export function ExploreFeedScreen() {
   };
 
   const togglePostLike = (post: ExplorePost) => {
-    if (isLikeActionLoading === post.id) {
+    if (post.type !== "snap" || isLikeActionLoading === post.id) {
       return;
     }
 
@@ -883,7 +883,7 @@ export function ExploreFeedScreen() {
           const length = feedViewportHeight > 0 ? feedViewportHeight : height;
           return { index, length, offset: length * index };
         }}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => `${item.type}:${item.id}`}
         onLayout={(event) => {
           const nextHeight = Math.round(event.nativeEvent.layout.height);
           if (nextHeight > 0 && nextHeight !== feedViewportHeight) {
@@ -903,6 +903,9 @@ export function ExploreFeedScreen() {
             likeCount={postLikesById[item.id]?.count ?? item.stats.likeCount}
             onAuthorPress={() => openPostAuthorProfile(item)}
             onCommentPress={() => {
+              if (item.type !== "snap") {
+                return;
+              }
               setActiveCommentsPost(item);
               setDraftComment("");
               setReplyTarget(null);
@@ -910,7 +913,7 @@ export function ExploreFeedScreen() {
             onFollowPress={() => toggleFollowOnAuthor(item.author.id)}
             onLikePress={() => togglePostLike(item)}
             onMessagePress={() => void openPostDirectMessage(item)}
-            onReportPress={() => setReportingPost(item)}
+            onReportPress={item.type === "snap" ? () => setReportingPost(item) : undefined}
             post={item}
             viewerId={user?.id}
           />

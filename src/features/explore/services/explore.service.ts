@@ -19,8 +19,36 @@ const getAccessToken = async () => {
 };
 
 const mapFeedItemToPost = (item: ExploreFeedItem, scope: ExploreFeedScope): ExplorePost => {
-  if (item.type !== "snap") {
-    throw new Error("Unsupported feed item type.");
+  if (item.type === "reel") {
+    return {
+      id: item.id,
+      type: "reel",
+      author: {
+        id: item.author.id,
+        displayName: item.author.displayName,
+        username: item.author.username,
+        avatarUrl: item.author.avatarUrl,
+        accountType: item.author.accountType,
+        isOrganizer: item.author.isOrganizer,
+        verificationBadge: item.author.verificationBadge,
+      },
+      scope,
+      createdAt: item.createdAt,
+      text: item.caption ?? "",
+      media: item.media.map((mediaItem) => ({
+        id: mediaItem.id,
+        type: mediaItem.type === "VIDEO" ? "video" : "image",
+        url: mediaItem.url,
+      })),
+      ...(item.event ? { event: item.event } : {}),
+      stats: {
+        likeCount: 0,
+        commentCount: 0,
+      },
+      viewerState: {
+        liked: false,
+      },
+    };
   }
 
   return {
