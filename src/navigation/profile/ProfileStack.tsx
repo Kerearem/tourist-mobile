@@ -17,6 +17,7 @@ import { FollowConnectionsScreen } from "../../features/profile/screens/FollowCo
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ReportProblemScreen } from "../../features/profile/screens/ReportProblemScreen";
 import { SettingsScreen } from "../../features/profile/screens/SettingsScreen";
+import { TokenWalletScreen } from "../../features/token/screens/TokenWalletScreen";
 import type { ProfileStackParamList } from "../types";
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -26,6 +27,7 @@ export function ProfileStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen component={ProfileScreen} name={ProfileRoutes.ProfileScreen} />
       <Stack.Screen component={SettingsScreen} name={ProfileRoutes.SettingsScreen} />
+      <Stack.Screen component={TokenWalletScreen} name={ProfileRoutes.TokenWalletScreen} />
       <Stack.Screen component={AccountManagementScreen} name={ProfileRoutes.AccountManagementScreen} />
       <Stack.Screen component={ChangePasswordScreen} name={ProfileRoutes.ChangePasswordScreen} />
       <Stack.Screen component={DeleteAccountScreen} name={ProfileRoutes.DeleteAccountScreen} />

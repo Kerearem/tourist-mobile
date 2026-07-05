@@ -111,4 +111,10 @@ export const API_ENDPOINTS = {
     like: "/reels/:reelId/like",
     comments: "/reels/:reelId/comments",
   },
+  token: {
+    wallet: "/token/wallet",
+    packages: "/token/packages",
+    purchase: "/token/purchase",
+    transactions: "/token/transactions",
+  },
 } as const;

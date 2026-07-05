@@ -125,6 +125,21 @@ export function SettingsScreen({ navigation }: Props) {
           title="Hesap Yönetimi"
         />
 
+        {user?.accountType !== "business" ? (
+          <>
+            <View style={styles.sectionDivider} />
+            <AppText style={styles.sectionTitle} variant="label">
+              Cüzdan
+            </AppText>
+            <SettingsRow
+              icon="wallet-outline"
+              onPress={() => navigation.navigate(ProfileRoutes.TokenWalletScreen)}
+              subtitle="Token bakiyen ve satın alma"
+              title="Cüzdanım"
+            />
+          </>
+        ) : null}
+
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">
           Organizatör
