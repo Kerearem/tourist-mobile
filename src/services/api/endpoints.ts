@@ -116,5 +116,8 @@ export const API_ENDPOINTS = {
     packages: "/token/packages",
     purchase: "/token/purchase",
     transactions: "/token/transactions",
+    earnings: "/token/earnings",
+    withdraw: "/token/withdraw",
+    withdrawals: "/token/withdrawals",
   },
 } as const;

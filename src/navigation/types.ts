@@ -95,6 +95,7 @@ export type ProfileStackParamList = {
   CreateMomentScreen: { eventId: string };
   CreateReelScreen: undefined;
   TokenWalletScreen: undefined;
+  FinanceScreen: undefined;
 };
 
 export type MainTabParamList = {

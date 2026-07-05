@@ -46,6 +46,45 @@ export type TransactionsPage = {
   nextCursor: string | null;
 };
 
+export type EarningWaitTier = "EARLY" | "MID" | "PATIENT";
+
+export type EarningEvent = {
+  eventId: string;
+  eventTitle: string;
+  availableTokens: number;
+  availableAt: string;
+  waitTier: EarningWaitTier;
+  previewNetAmount: number;
+};
+
+export type EarningsSummary = {
+  totalPending: number;
+  totalAvailable: number;
+  events: EarningEvent[];
+};
+
+export type WithdrawResult = {
+  success: boolean;
+  withdrawal: {
+    tokenAmount: number;
+    baseValue: number;
+    platformFeePct: number;
+    serviceFeePct: number;
+    netAmount: number;
+    waitTier: EarningWaitTier;
+  };
+};
+
+export type WithdrawalHistoryItem = {
+  id: string;
+  tokenAmount: number;
+  netAmount: number;
+  serviceFeePct: number;
+  platformFeePct: number;
+  waitTier: EarningWaitTier;
+  createdAt: string;
+};
+
 const getAccessToken = async () => {
   const state = await loadAuthState();
   if (!state?.tokens.accessToken) {
@@ -83,6 +122,49 @@ let mockTransactions: TokenTransaction[] = [
     amount: 50,
     balanceAfter: 50,
     description: "Arkadaş daveti ödülü",
+    createdAt: new Date(Date.now() - 172_800_000).toISOString(),
+  },
+];
+
+let mockEarnings: EarningsSummary = {
+  totalPending: 150,
+  totalAvailable: 300,
+  events: [
+    {
+      eventId: "mock_event_early",
+      eventTitle: "Berlin Rooftop Networking",
+      availableTokens: 100,
+      availableAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+      waitTier: "EARLY",
+      previewNetAmount: 50,
+    },
+    {
+      eventId: "mock_event_mid",
+      eventTitle: "Berlin Jazz Gecesi",
+      availableTokens: 100,
+      availableAt: new Date(Date.now() - 15 * 86_400_000).toISOString(),
+      waitTier: "MID",
+      previewNetAmount: 60,
+    },
+    {
+      eventId: "mock_event_patient",
+      eventTitle: "Münih Tech Meetup",
+      availableTokens: 100,
+      availableAt: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+      waitTier: "PATIENT",
+      previewNetAmount: 65,
+    },
+  ],
+};
+
+let mockWithdrawals: WithdrawalHistoryItem[] = [
+  {
+    id: "mock_wd_1",
+    tokenAmount: 50,
+    netAmount: 25,
+    serviceFeePct: 20,
+    platformFeePct: 30,
+    waitTier: "EARLY",
     createdAt: new Date(Date.now() - 172_800_000).toISOString(),
   },
 ];
@@ -173,4 +255,85 @@ export async function getTransactions(limit = 20, cursor?: string): Promise<Tran
     method: "GET",
     token,
   });
+}
+
+export async function getEarnings(): Promise<EarningsSummary> {
+  if (USE_MOCK_BACKEND) {
+    return {
+      ...mockEarnings,
+      events: mockEarnings.events.filter((event) => event.availableTokens > 0),
+    };
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<EarningsSummary>(API_ENDPOINTS.token.earnings, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function withdrawFromEvent(eventId: string, tokenAmount: number): Promise<WithdrawResult> {
+  if (USE_MOCK_BACKEND) {
+    const event = mockEarnings.events.find((item) => item.eventId === eventId);
+    if (!event || event.availableTokens <= 0) {
+      throw new Error("Bu etkinlikte çekilebilir kazanç yok");
+    }
+    if (tokenAmount <= 0 || tokenAmount > event.availableTokens) {
+      throw new Error("Etkinlik kazancından fazla çekemezsin");
+    }
+
+    const netAmount = Math.floor((tokenAmount * event.previewNetAmount) / event.availableTokens);
+    const serviceFeePct = event.waitTier === "EARLY" ? 20 : event.waitTier === "MID" ? 10 : 5;
+
+    event.availableTokens -= tokenAmount;
+    mockEarnings.totalAvailable -= tokenAmount;
+
+    const withdrawal: WithdrawalHistoryItem = {
+      id: `mock_wd_${Date.now()}`,
+      tokenAmount,
+      netAmount,
+      serviceFeePct,
+      platformFeePct: 30,
+      waitTier: event.waitTier,
+      createdAt: new Date().toISOString(),
+    };
+    mockWithdrawals = [withdrawal, ...mockWithdrawals];
+
+    return {
+      success: true,
+      withdrawal: {
+        tokenAmount,
+        baseValue: tokenAmount,
+        platformFeePct: 30,
+        serviceFeePct,
+        netAmount,
+        waitTier: event.waitTier,
+      },
+    };
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<WithdrawResult>(API_ENDPOINTS.token.withdraw, {
+    method: "POST",
+    token,
+    body: { eventId, tokenAmount },
+  });
+}
+
+export async function getWithdrawals(limit = 20): Promise<WithdrawalHistoryItem[]> {
+  if (USE_MOCK_BACKEND) {
+    return mockWithdrawals.slice(0, limit);
+  }
+
+  const token = await getAccessToken();
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+
+  return apiRequest<WithdrawalHistoryItem[]>(
+    `${API_ENDPOINTS.token.withdrawals}?${params.toString()}`,
+    {
+      method: "GET",
+      token,
+    },
+  );
 }

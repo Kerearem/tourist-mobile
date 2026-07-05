@@ -66,6 +66,7 @@ export const ProfileRoutes = {
   CreateMomentScreen: "CreateMomentScreen",
   CreateReelScreen: "CreateReelScreen",
   TokenWalletScreen: "TokenWalletScreen",
+  FinanceScreen: "FinanceScreen",
 } as const;
 
 export const TabRoutes = {

@@ -140,6 +140,21 @@ export function SettingsScreen({ navigation }: Props) {
           </>
         ) : null}
 
+        {organizerStatus === "approved" || user?.accountType === "business" ? (
+          <>
+            <View style={styles.sectionDivider} />
+            <AppText style={styles.sectionTitle} variant="label">
+              Finans
+            </AppText>
+            <SettingsRow
+              icon="cash-outline"
+              onPress={() => navigation.navigate(ProfileRoutes.FinanceScreen)}
+              subtitle="Kazançların ve para çekme"
+              title="Finans"
+            />
+          </>
+        ) : null}
+
         <View style={styles.sectionDivider} />
         <AppText style={styles.sectionTitle} variant="label">
           Organizatör
