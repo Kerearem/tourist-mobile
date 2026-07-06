@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -19,6 +19,15 @@ import { ConversationListItem } from "../components/ConversationListItem";
 import { getConversations, getMessageRequests } from "../services/messages.service";
 import { getUnreadNotificationCount } from "../../notifications/services/notifications.service";
 import type { ConversationThread } from "../types";
+import {
+  resolveInboxFocusLoadMode,
+  shouldClearInboxOnLoadError,
+  shouldSetInboxLoadingState,
+  shouldSetInboxRefreshingState,
+  shouldShowInboxFullScreenError,
+  shouldShowInboxFullScreenLoader,
+  type InboxLoadMode,
+} from "../utils/inboxLoadPresentation";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessagesInboxScreen">;
 
@@ -33,8 +42,10 @@ export function MessagesInboxScreen({ navigation }: Props) {
   const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
   const [requestCount, setRequestCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
+  const hasLoadedOnceRef = useRef(false);
 
   const viewerId = user?.id ?? "";
+  const hasCachedData = items.length > 0;
 
   const visibleConversations = useMemo(() => {
     if (!viewerId) {
@@ -46,10 +57,12 @@ export function MessagesInboxScreen({ navigation }: Props) {
     );
   }, [hiddenIds, items, viewerId]);
 
-  const loadData = async (mode: "initial" | "refresh") => {
-    if (mode === "initial") {
+  const loadData = async (mode: InboxLoadMode) => {
+    const cachedData = items.length > 0;
+
+    if (shouldSetInboxLoadingState(mode, cachedData)) {
       setIsLoading(true);
-    } else {
+    } else if (shouldSetInboxRefreshingState(mode)) {
       setRefreshing(true);
     }
 
@@ -63,22 +76,21 @@ export function MessagesInboxScreen({ navigation }: Props) {
       setRequestCount(requests.length);
       setNotificationCount(unreadNotifications);
       setError(null);
+      hasLoadedOnceRef.current = true;
     } catch {
-      setItems([]);
-      setError("Failed to load conversations.");
+      if (shouldClearInboxOnLoadError(hasLoadedOnceRef.current)) {
+        setItems([]);
+        setError("Failed to load conversations.");
+      }
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    void loadData("initial");
-  }, []);
-
   useFocusEffect(
-    React.useCallback(() => {
-      void loadData("refresh");
+    useCallback(() => {
+      void loadData(resolveInboxFocusLoadMode(hasLoadedOnceRef.current));
       return undefined;
     }, []),
   );
@@ -194,7 +206,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
     hideConversation(conversation.id);
   };
 
-  if (isLoading) {
+  if (shouldShowInboxFullScreenLoader(isLoading, hasCachedData)) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
@@ -204,11 +216,11 @@ export function MessagesInboxScreen({ navigation }: Props) {
     );
   }
 
-  if (error) {
+  if (shouldShowInboxFullScreenError(error, hasCachedData)) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <ErrorState onRetry={() => void loadData("initial")} subtitle={error} title="Mesajlar yüklenemedi" />
+          <ErrorState onRetry={() => void loadData("initial")} subtitle={error ?? ""} title="Mesajlar yüklenemedi" />
         </Card>
       </Screen>
     );

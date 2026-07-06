@@ -99,23 +99,27 @@ export function MessageThreadScreen({ route, navigation }: Props) {
 
   const loadThread = async () => {
     setIsLoading(true);
+    let loadedThread: ConversationThread | null = null;
+
     try {
       const [thread, threadMessages] = await Promise.all([
         getConversationById(route.params.threadId),
         getMessages(route.params.threadId),
       ]);
+      loadedThread = thread;
       setConversation(thread);
       setMessages(threadMessages.messages);
       setError(null);
-      if (thread) {
-        await markConversationRead(route.params.threadId);
-      }
     } catch {
       setConversation(null);
       setMessages([]);
       setError("Sohbet yüklenemedi.");
     } finally {
       setIsLoading(false);
+    }
+
+    if (loadedThread) {
+      void markConversationRead(route.params.threadId).catch(() => undefined);
     }
   };
 
@@ -240,7 +244,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Pressable onPress={() => navigation.navigate(MessagesRoutes.MessagesInboxScreen)} style={styles.backButton}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={30} />
           </Pressable>
 
