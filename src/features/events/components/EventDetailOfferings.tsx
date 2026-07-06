@@ -5,9 +5,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import type { EventItem } from "../types";
+import { formatEventTicketOfferingLabel } from "../utils/eventTicketPricing";
 
 type EventDetailOfferingsProps = {
-  event: Pick<EventItem, "minAge" | "hasAlcohol" | "smokingAllowed" | "metadata">;
+  event: Pick<EventItem, "minAge" | "hasAlcohol" | "smokingAllowed" | "tokenPrice">;
 };
 
 type OfferingItem = {
@@ -39,11 +40,12 @@ function buildOfferingItems(event: EventDetailOfferingsProps["event"]): Offering
     items.push({ key: "smoking", icon: "ban-outline", label: "Sigara içilmez" });
   }
 
-  if (event.metadata?.isPaid === true) {
-    items.push({ key: "price", icon: "ticket-outline", label: "Ücretli" });
-  } else {
-    items.push({ key: "price", icon: "pricetag-outline", label: "Ücretsiz" });
-  }
+  const ticketLabel = formatEventTicketOfferingLabel(event);
+  items.push({
+    key: "price",
+    icon: ticketLabel === "Ücretsiz" ? "pricetag-outline" : "ticket-outline",
+    label: ticketLabel,
+  });
 
   return items;
 }

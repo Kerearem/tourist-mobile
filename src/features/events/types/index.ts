@@ -34,6 +34,8 @@ export type EventItem = {
   smokingAllowed?: boolean;
   averageRating?: number | null;
   ratingCount?: number;
+  tokenPrice: number;
+  ticketAvailable: boolean;
   metadata?: Record<string, unknown>;
 };
 
@@ -51,11 +53,10 @@ export type CreateEventInput = {
   startsAt: string;
   endsAt: string;
   coverImageUrl?: string;
-  requiresApproval?: boolean;
+  requiresApproval?: false;
   type: import("../constants/eventTypes").EventType;
   isPaid?: boolean;
-  price?: number;
-  priceCurrency?: "EUR" | "USD" | "TRY" | "GBP";
+  tokenPrice?: number;
   visibility?: EventVisibility;
   capacity?: number;
   timezone?: string;

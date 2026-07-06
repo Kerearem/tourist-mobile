@@ -8,6 +8,7 @@ import { Card } from "../../../components/ui/Card";
 import { theme } from "../../../constants/theme";
 import type { EventItem } from "../types";
 import { getEventTypeLabel } from "../constants/eventTypes";
+import { formatEventTicketCardLabel } from "../utils/eventTicketPricing";
 
 type EventCardProps = {
   event: EventItem;
@@ -50,18 +51,12 @@ const formatDateBadge = (startsAt: string) => {
 
 const typeLabel = (event: EventItem) => getEventTypeLabel(event.type);
 
-const priceLabel = (event: EventItem) => {
-  if (event.metadata?.isPaid === true) {
-    return "Ücretli";
-  }
-  return "Ücretsiz";
-};
-
 const ratingLabel = (_event: EventItem) => "4.8";
 
 export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJoin, onPress }: EventCardProps) {
   const dateBadge = formatDateBadge(event.startsAt);
   const attendeePreview = ["U1", "U2", "U3", `+${Math.max(0, event.attendeeCount - 3)}`];
+  const ticketLabel = formatEventTicketCardLabel(event);
 
   return (
     <Pressable onPress={onPress}>
@@ -126,9 +121,8 @@ export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJ
 
           <View style={styles.footer}>
             <AppText style={styles.priceText} variant="label">
-              {priceLabel(event) === "Ücretsiz" ? "Ücretsiz · bilet gerekmez" : `${priceLabel(event)} · kişi başı`}
+              {ticketLabel}
             </AppText>
-            <Badge label={priceLabel(event)} />
           </View>
 
           <View style={styles.attendees}>

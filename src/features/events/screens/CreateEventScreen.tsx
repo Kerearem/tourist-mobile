@@ -34,15 +34,15 @@ import {
   calculateAgeFromBirthDate,
   isEventMinAgeAllowedForOrganizer,
 } from "../utils/viewerAge";
+import { buildCreateEventTicketPayload, parseTokenPriceInput } from "../utils/eventTicketPricing";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
   "CreateEventScreen"
 >;
 
-type FieldKey = "title" | "description" | "endsAt" | "venueName" | "location" | "eventType" | "price" | "ageRestriction";
+type FieldKey = "title" | "description" | "endsAt" | "venueName" | "location" | "eventType" | "tokenPrice" | "ageRestriction";
 type FieldErrors = Partial<Record<FieldKey, string>>;
-type PriceCurrency = "EUR" | "USD" | "TRY" | "GBP";
 type EventMinAgeOption = null | 18 | 21;
 
 const MIN_AGE_OPTIONS: Array<{ value: EventMinAgeOption; label: string }> = [
@@ -57,13 +57,6 @@ const SELECTED_CHIP_BG = "#DBEAFE";
 const SELECTED_CHIP_BORDER = "#93C5FD";
 const SELECTED_CHIP_TEXT = "#2563EB";
 const inputFieldStyle = { borderRadius: FIELD_RADIUS };
-
-const CURRENCY_OPTIONS: Array<{ value: PriceCurrency; label: string }> = [
-  { value: "EUR", label: "EUR (€)" },
-  { value: "USD", label: "USD ($)" },
-  { value: "TRY", label: "TRY (₺)" },
-  { value: "GBP", label: "GBP (£)" },
-];
 
 const buildDefaultStart = () => {
   const date = new Date();
@@ -86,15 +79,6 @@ const formatDateTimeLabel = (date: Date) =>
     hour: "2-digit",
     minute: "2-digit",
   });
-
-const parsePriceAmount = (value: string) => {
-  const normalized = value.trim().replace(",", ".");
-  if (!normalized) {
-    return null;
-  }
-  const amount = Number(normalized);
-  return Number.isFinite(amount) ? amount : null;
-};
 
 function FieldError({ message }: { message?: string }) {
   if (!message) {
@@ -119,15 +103,13 @@ export function CreateEventScreen({ navigation }: Props) {
   const [city, setCity] = useState(user?.privateProfile.destinationCity ?? user?.publicProfile.currentCity ?? "");
   const [countryCode, setCountryCode] = useState(user?.privateProfile.destinationCountryCode ?? "");
   const [coverUri, setCoverUri] = useState<string | null>(null);
-  const [requiresApproval, setRequiresApproval] = useState(false);
   const [eventType, setEventType] = useState<EventType | null>(null);
   const [minAge, setMinAge] = useState<EventMinAgeOption>(null);
   const [hasAlcohol, setHasAlcohol] = useState(false);
   const [smokingAllowed, setSmokingAllowed] = useState(false);
   const [alcoholWarning, setAlcoholWarning] = useState<string | null>(null);
   const [isPaid, setIsPaid] = useState(false);
-  const [priceAmount, setPriceAmount] = useState("");
-  const [priceCurrency, setPriceCurrency] = useState<PriceCurrency>("EUR");
+  const [tokenPriceInput, setTokenPriceInput] = useState("");
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingLimit, setIsCheckingLimit] = useState(true);
@@ -195,9 +177,8 @@ export function CreateEventScreen({ navigation }: Props) {
       errors.eventType = "Etkinlik türü seçmelisin.";
     }
     if (isPaid) {
-      const amount = parsePriceAmount(priceAmount);
-      if (amount == null || amount <= 0) {
-        errors.price = "Geçerli bir tutar gir.";
+      if (parseTokenPriceInput(tokenPriceInput) == null) {
+        errors.tokenPrice = "Geçerli bir token fiyatı gir (pozitif tam sayı).";
       }
     }
     if (hasAlcohol && minAge == null) {
@@ -255,11 +236,11 @@ export function CreateEventScreen({ navigation }: Props) {
 
   const onSelectFree = () => {
     setIsPaid(false);
-    setPriceAmount("");
-    clearFieldError("price");
+    setTokenPriceInput("");
+    clearFieldError("tokenPrice");
   };
 
-  const onSelectPaid = () => {
+  const onSelectTokenTicket = () => {
     setIsPaid(true);
   };
 
@@ -307,7 +288,12 @@ export function CreateEventScreen({ navigation }: Props) {
     const trimmedVenue = venueName.trim();
     const trimmedCity = city.trim();
     const trimmedCountryCode = countryCode.trim().toUpperCase();
-    const parsedPrice = parsePriceAmount(priceAmount);
+    const ticketPayload = buildCreateEventTicketPayload(isPaid ? "token" : "free", tokenPriceInput);
+
+    if (!ticketPayload) {
+      setFieldErrors({ tokenPrice: "Geçerli bir token fiyatı gir (pozitif tam sayı)." });
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -325,15 +311,10 @@ export function CreateEventScreen({ navigation }: Props) {
         venueName: trimmedVenue,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
-        requiresApproval,
+        requiresApproval: false,
         type: eventType!,
-        isPaid,
-        ...(isPaid && parsedPrice != null
-          ? {
-              price: parsedPrice,
-              priceCurrency,
-            }
-          : {}),
+        isPaid: ticketPayload.isPaid,
+        tokenPrice: ticketPayload.tokenPrice,
         ...(coverImageUrl ? { coverImageUrl } : {}),
         ...(minAge != null ? { minAge } : {}),
         hasAlcohol: minAge != null ? hasAlcohol : false,
@@ -500,7 +481,7 @@ export function CreateEventScreen({ navigation }: Props) {
             </View>
 
             <View style={styles.fieldBlock}>
-              <AppText variant="label">Fiyat</AppText>
+              <AppText variant="label">Bilet</AppText>
               <View style={styles.choiceRow}>
                 <Pressable
                   onPress={onSelectFree}
@@ -514,14 +495,14 @@ export function CreateEventScreen({ navigation }: Props) {
                   </AppText>
                 </Pressable>
                 <Pressable
-                  onPress={onSelectPaid}
+                  onPress={onSelectTokenTicket}
                   style={[styles.choiceChip, isPaid && styles.choiceChipActive]}
                 >
                   <AppText
                     style={[styles.choiceChipText, isPaid && styles.choiceChipTextActive]}
                     variant="caption"
                   >
-                    Ücretli
+                    Token ile biletli
                   </AppText>
                 </Pressable>
               </View>
@@ -529,39 +510,18 @@ export function CreateEventScreen({ navigation }: Props) {
               {isPaid ? (
                 <View style={styles.paidFields}>
                   <AppInput
-                    error={fieldErrors.price}
-                    keyboardType="decimal-pad"
-                    label="Tutar"
+                    error={fieldErrors.tokenPrice}
+                    keyboardType="number-pad"
+                    label="Bilet Fiyatı"
                     onChangeText={(value) => {
-                      setPriceAmount(value);
-                      clearFieldError("price");
+                      setTokenPriceInput(value);
+                      clearFieldError("tokenPrice");
                     }}
-                    placeholder="25.00"
+                    placeholder="25"
                     style={inputFieldStyle}
-                    value={priceAmount}
+                    value={tokenPriceInput}
                   />
-                  <View style={styles.fieldBlock}>
-                    <AppText variant="label">Para Birimi</AppText>
-                    <View style={styles.currencyRow}>
-                      {CURRENCY_OPTIONS.map((item) => {
-                        const active = priceCurrency === item.value;
-                        return (
-                          <Pressable
-                            key={item.value}
-                            onPress={() => {
-                              setPriceCurrency(item.value);
-                              clearFieldError("price");
-                            }}
-                            style={[styles.currencyChip, active && styles.currencyChipActive]}
-                          >
-                            <AppText style={active ? styles.currencyChipTextActive : styles.currencyChipText} variant="caption">
-                              {item.label}
-                            </AppText>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
+                  <AppText variant="caption">token</AppText>
                 </View>
               ) : null}
             </View>
@@ -668,34 +628,6 @@ export function CreateEventScreen({ navigation }: Props) {
                 >
                   <AppText style={[styles.choiceChipText, smokingAllowed && styles.choiceChipTextActive]} variant="caption">
                     Evet
-                  </AppText>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Katılım Tipi</AppText>
-              <View style={styles.choiceRow}>
-                <Pressable
-                  onPress={() => setRequiresApproval(false)}
-                  style={[styles.choiceChip, !requiresApproval && styles.choiceChipActive]}
-                >
-                  <AppText
-                    style={[styles.choiceChipText, !requiresApproval && styles.choiceChipTextActive]}
-                    variant="caption"
-                  >
-                    Anında Katılım
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setRequiresApproval(true)}
-                  style={[styles.choiceChip, requiresApproval && styles.choiceChipActive]}
-                >
-                  <AppText
-                    style={[styles.choiceChipText, requiresApproval && styles.choiceChipTextActive]}
-                    variant="caption"
-                  >
-                    Onaylı Katılım
                   </AppText>
                 </Pressable>
               </View>
@@ -822,36 +754,6 @@ const styles = StyleSheet.create({
   paidFields: {
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
-  },
-  currencyRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.sm,
-  },
-  currencyChip: {
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderColor: theme.colors.border,
-    borderRadius: CHIP_RADIUS,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 40,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  currencyChipActive: {
-    backgroundColor: SELECTED_CHIP_BG,
-    borderColor: SELECTED_CHIP_BORDER,
-  },
-  currencyChipText: {
-    color: theme.colors.textPrimary,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  currencyChipTextActive: {
-    color: SELECTED_CHIP_TEXT,
-    fontWeight: "700",
-    textAlign: "center",
   },
   typeGrid: {
     borderColor: "transparent",

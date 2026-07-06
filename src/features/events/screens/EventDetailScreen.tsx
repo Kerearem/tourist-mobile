@@ -20,6 +20,8 @@ import { HELP_FILTER_APPLY_GREEN } from "../../help/constants/helpCategories";
 import { createEventGroup, getEventGroup, type EventGroupInfo } from "../services/eventGroup.service";
 import { getEventById, toggleEventAttendance } from "../services/events.service";
 import type { EventAttendanceStatus, EventItem } from "../types";
+import { formatEventJoinCtaLabel, canAttemptEventJoin, resolveEventTokenPrice, resolveEventTicketAvailable } from "../utils/eventTicketPricing";
+import { resolveEventAttendanceError } from "../utils/resolveEventAttendanceError";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventDetailScreen">;
 
@@ -96,6 +98,7 @@ export function EventDetailScreen({ route }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [attendanceState, setAttendanceState] = useState<AttendanceUiState>("idle");
   const [isTogglingAttendance, setIsTogglingAttendance] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadEvent = async () => {
@@ -149,6 +152,7 @@ export function EventDetailScreen({ route }: Props) {
     }
 
     setIsTogglingAttendance(true);
+    setAttendanceError(null);
     try {
       const updated = await toggleEventAttendance({ eventId: event.id, userId: user.id });
       if (!updated) {
@@ -158,9 +162,9 @@ export function EventDetailScreen({ route }: Props) {
 
       setEvent(updated);
       setAttendanceState(toAttendanceUiState(updated.attendanceStatus));
-      setError(null);
-    } catch {
-      setError("Could not update attendance.");
+      setAttendanceError(null);
+    } catch (toggleError) {
+      setAttendanceError(resolveEventAttendanceError(toggleError));
     } finally {
       setIsTogglingAttendance(false);
     }
@@ -232,12 +236,16 @@ export function EventDetailScreen({ route }: Props) {
   const locationLabel = event.venueName
     ? `${event.venueName} - ${event.city}, ${event.countryCode}`
     : `${event.city}, ${event.countryCode}`;
-  const attendanceLabel =
-    attendanceState === "approved" ? "Ayrıl" : attendanceState === "pending" ? "İptal Et" : "Başvur";
+  const tokenPrice = resolveEventTokenPrice(event);
+  const ticketAvailable = resolveEventTicketAvailable(event);
+  const canAttemptJoin = canAttemptEventJoin(event, attendanceState);
+  const attendanceLabel = formatEventJoinCtaLabel(tokenPrice, attendanceState);
   const isHost = Boolean(user && event.host.id === user.id);
   const isApproved = event.metadata?.status === "APPROVED";
   const canJoin = event.canJoin !== false;
   const joinBlockReason = event.joinBlockReason ?? "Bu etkinliğe tekrar katılamazsın";
+  const isJoinBlocked =
+    isTogglingAttendance || !user || (!canJoin && attendanceState === "idle") || !canAttemptJoin;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -331,14 +339,24 @@ export function EventDetailScreen({ route }: Props) {
                 {joinBlockReason}
               </AppText>
             ) : null}
+            {!ticketAvailable && attendanceState === "idle" ? (
+              <AppText style={styles.joinBlockText} variant="caption">
+                Bilet fiyatı güncelleniyor. Lütfen daha sonra tekrar dene.
+              </AppText>
+            ) : null}
+            {attendanceError ? (
+              <AppText style={styles.joinBlockText} variant="caption">
+                {attendanceError}
+              </AppText>
+            ) : null}
             <Pressable
-              disabled={isTogglingAttendance || !user || (!canJoin && attendanceState === "idle")}
+              disabled={isJoinBlocked}
               onPress={() => void onToggleAttend()}
               style={[
                 styles.attendButton,
                 attendanceState === "pending" && styles.pendingButton,
                 attendanceState === "approved" && styles.approvedButton,
-                (isTogglingAttendance || (!canJoin && attendanceState === "idle")) && styles.disabledButton,
+                isJoinBlocked && styles.disabledButton,
               ]}
             >
               <AppText style={styles.attendButtonLabel} variant="label">
