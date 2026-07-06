@@ -11,6 +11,7 @@ export type SignupDraft = {
   email: string;
   password: string;
   consentAccepted: boolean;
+  inviteCode?: string;
 };
 
 type SignupDraftContextValue = {
@@ -30,6 +31,7 @@ const initialDraft: SignupDraft = {
   email: "",
   password: "",
   consentAccepted: false,
+  inviteCode: "",
 };
 
 const SignupDraftContext = createContext<SignupDraftContextValue | null>(null);

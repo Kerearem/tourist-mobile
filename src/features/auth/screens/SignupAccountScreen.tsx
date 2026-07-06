@@ -20,6 +20,7 @@ export function SignupAccountScreen({ navigation }: Props) {
   const { draft, updateDraft } = useSignupDraft();
   const [email, setEmail] = useState(draft.email);
   const [password, setPassword] = useState(draft.password);
+  const [inviteCode, setInviteCode] = useState(draft.inviteCode ?? "");
   const [consentAccepted, setConsentAccepted] = useState(draft.consentAccepted);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,11 +50,13 @@ export function SignupAccountScreen({ navigation }: Props) {
       email: cleanEmail,
       password,
       consentAccepted: true,
+      inviteCode: inviteCode.trim().toUpperCase(),
     });
 
     setError("");
     setIsSubmitting(true);
     try {
+      const normalizedInviteCode = inviteCode.trim().toUpperCase();
       const result = await signUp({
         displayName: draft.displayName,
         username: draft.username,
@@ -61,6 +64,7 @@ export function SignupAccountScreen({ navigation }: Props) {
         password,
         birthDate: draft.birthDate,
         consentAccepted: true,
+        ...(normalizedInviteCode ? { inviteCode: normalizedInviteCode } : {}),
       });
       navigation.reset({
         index: 0,
@@ -105,6 +109,17 @@ export function SignupAccountScreen({ navigation }: Props) {
       />
       <AppInput onChangeText={setPassword} placeholder="Password" secureTextEntry value={password} />
 
+      <AppInput
+        autoCapitalize="characters"
+        maxLength={6}
+        onChangeText={(value) => setInviteCode(value.toUpperCase())}
+        placeholder="Davet kodu (isteğe bağlı)"
+        value={inviteCode}
+      />
+      <AppText muted style={styles.inviteHint}>
+        Seni davet eden kişinin kodunu gir.
+      </AppText>
+
       <Pressable onPress={() => setConsentAccepted((prev) => !prev)} style={styles.checkboxRow}>
         <View style={[styles.checkbox, consentAccepted && styles.checkboxChecked]}>
           {consentAccepted ? <Ionicons color="#FFFFFF" name="checkmark" size={14} /> : null}
@@ -118,6 +133,9 @@ export function SignupAccountScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  inviteHint: {
+    marginTop: -4,
+  },
   checkboxRow: {
     alignItems: "center",
     flexDirection: "row",

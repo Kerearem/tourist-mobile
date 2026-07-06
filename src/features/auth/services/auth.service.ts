@@ -62,11 +62,13 @@ type SignUpInput = {
   password: string;
   birthDate: string;
   consentAccepted: boolean;
+  inviteCode?: string;
 };
 
 const buildSignUpRequestBody = (input: SignUpInput) => {
   const phoneCountryCode = input.phoneCountryCode?.trim();
   const phoneNumber = input.phoneNumber?.trim();
+  const inviteCode = input.inviteCode?.trim().toUpperCase();
 
   return {
     displayName: input.displayName,
@@ -76,6 +78,7 @@ const buildSignUpRequestBody = (input: SignUpInput) => {
     birthDate: input.birthDate,
     consentAccepted: input.consentAccepted,
     ...(phoneCountryCode && phoneNumber ? { phoneCountryCode, phoneNumber } : {}),
+    ...(inviteCode ? { inviteCode } : {}),
   };
 };
 
