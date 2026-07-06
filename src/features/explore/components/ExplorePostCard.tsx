@@ -10,6 +10,7 @@ import { theme } from "../../../constants/theme";
 import { BeRealSnapMedia } from "../../snaps/components/BeRealSnapMedia";
 import type { FollowStatus } from "../../profile/services/follow.service";
 import type { ExplorePost } from "../types";
+import { shouldShowExploreReelEventTag } from "../utils/exploreReelEventNavigation";
 
 type ExplorePostCardProps = {
   post: ExplorePost;
@@ -21,6 +22,7 @@ type ExplorePostCardProps = {
   onAuthorPress?: () => void;
   onSharePress?: () => void;
   onMorePress?: () => void;
+  onEventPress?: () => void;
   onFollowPress?: () => void;
   isFollowLoading?: boolean;
   isLiked?: boolean;
@@ -73,6 +75,7 @@ export function ExplorePostCard({
   onAuthorPress,
   onSharePress,
   onMorePress,
+  onEventPress,
   onFollowPress,
   isFollowLoading,
   isLiked,
@@ -94,6 +97,7 @@ export function ExplorePostCard({
   const likeScale = useRef(new Animated.Value(1)).current;
   const showMoreAction = !isOwnPost && Boolean(onMorePress) && !isReportedHidden;
   const showInteractions = !isReportedHidden;
+  const showEventTag = shouldShowExploreReelEventTag(isReel, post.event, isReportedHidden);
 
   useEffect(() => {
     if (!liked) {
@@ -176,10 +180,13 @@ export function ExplorePostCard({
           <AppText style={styles.caption} variant="body">
             {post.text}
           </AppText>
-          {post.event ? (
-            <AppText numberOfLines={1} style={styles.eventTag} variant="caption">
-              {post.event.title}
-            </AppText>
+          {showEventTag ? (
+            <Pressable onPress={onEventPress} style={styles.eventTag}>
+              <Ionicons color="#FFFFFF" name="calendar-outline" size={14} />
+              <AppText numberOfLines={1} style={styles.eventTagText} variant="caption">
+                {post.event!.title}
+              </AppText>
+            </Pressable>
           ) : null}
         </View>
       ) : null}
@@ -274,9 +281,20 @@ const styles = StyleSheet.create({
     color: "#F3F4F6",
   },
   eventTag: {
-    color: "#E5E7EB",
-    marginTop: theme.spacing.xs,
-    opacity: 0.9,
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: theme.radius.md,
+    flexDirection: "row",
+    gap: 6,
+    marginTop: theme.spacing.sm,
+    maxWidth: "100%",
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+  },
+  eventTagText: {
+    color: "#FFFFFF",
+    flexShrink: 1,
   },
   reportedOverlay: {
     ...StyleSheet.absoluteFillObject,

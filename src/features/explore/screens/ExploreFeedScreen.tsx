@@ -56,6 +56,7 @@ import {
   isExplorePostReportedHidden,
   markExplorePostReported,
 } from "../utils/exploreContentComplaint";
+import { resolveExploreReelEventNavigationTarget } from "../utils/exploreReelEventNavigation";
 import { formatProfileLocation } from "../../../utils/formatProfileLocation";
 import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
@@ -703,6 +704,22 @@ export function ExploreFeedScreen() {
     [navigation],
   );
 
+  const openExploreReelEvent = useCallback(
+    (event: NonNullable<ExplorePost["event"]>) => {
+      const target = resolveExploreReelEventNavigationTarget(event.status);
+
+      if (target === "detail") {
+        openExploreActiveEvent(event.id);
+        return;
+      }
+
+      if (target === "album") {
+        openExplorePastEvent(event.id);
+      }
+    },
+    [openExploreActiveEvent, openExplorePastEvent],
+  );
+
   const toggleFollowOnAuthor = (authorId: string) => {
     if (followLoadingByAuthorId[authorId]) {
       return;
@@ -1012,6 +1029,9 @@ export function ExploreFeedScreen() {
             }}
             onFollowPress={() => toggleFollowOnAuthor(item.author.id)}
             onLikePress={() => togglePostLike(item)}
+            onEventPress={
+              item.event ? () => openExploreReelEvent(item.event!) : undefined
+            }
             onMorePress={
               shouldShowExplorePostMoreAction(user?.id, item.author.id, isPostReportedHidden)
                 ? () => setMoreMenuPost(item)

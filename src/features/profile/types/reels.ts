@@ -9,7 +9,9 @@ export type ReelEventSummary = {
   id: string;
   title: string;
   startsAt: string;
+  endsAt: string;
   city: string;
+  status: string;
 };
 
 export type ReelItem = {

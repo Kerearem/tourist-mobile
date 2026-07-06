@@ -62,7 +62,9 @@ export type ExploreFeedReelItem = {
     id: string;
     title: string;
     startsAt: string;
+    endsAt: string;
     city: string;
+    status: string;
   };
   author: ExplorePostAuthor & { username: string; isOrganizer: boolean };
   stats: ExplorePostStats;
@@ -88,7 +90,9 @@ export type ExplorePost = {
     id: string;
     title: string;
     startsAt: string;
+    endsAt: string;
     city: string;
+    status: string;
   };
   stats: ExplorePostStats;
   viewerState: ExplorePostViewerState;
