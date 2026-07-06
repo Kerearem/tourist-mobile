@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -14,14 +13,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppText } from "../../../components/ui/AppText";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { ProfileRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import type { ProfileStackParamList } from "../../../navigation/types";
 import {
-  getPackages,
   getTransactions,
   getWallet,
-  purchaseTokens,
-  type TokenPackage,
   type TokenTransaction,
   type TokenTransactionType,
   type TokenWallet,
@@ -74,25 +71,18 @@ function formatTransactionDate(iso: string) {
 
 export function TokenWalletScreen({ navigation }: Props) {
   const [wallet, setWallet] = useState<TokenWallet | null>(null);
-  const [packages, setPackages] = useState<TokenPackage[]>([]);
   const [transactions, setTransactions] = useState<TokenTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [purchasingPackageId, setPurchasingPackageId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
 
     try {
-      const [walletResult, packagesResult, transactionsResult] = await Promise.all([
-        getWallet(),
-        getPackages(),
-        getTransactions(),
-      ]);
+      const [walletResult, transactionsResult] = await Promise.all([getWallet(), getTransactions()]);
 
       setWallet(walletResult);
-      setPackages(packagesResult);
       setTransactions(transactionsResult.items);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Cüzdan bilgileri yüklenemedi.");
@@ -106,29 +96,6 @@ export function TokenWalletScreen({ navigation }: Props) {
       void loadData();
     }, [loadData]),
   );
-
-  const refreshTransactions = async () => {
-    const transactionsResult = await getTransactions();
-    setTransactions(transactionsResult.items);
-  };
-
-  const handlePurchase = async (tokenPackage: TokenPackage) => {
-    if (purchasingPackageId) {
-      return;
-    }
-
-    setPurchasingPackageId(tokenPackage.id);
-    try {
-      const result = await purchaseTokens(tokenPackage.id);
-      setWallet(result.wallet);
-      await refreshTransactions();
-      Alert.alert("Başarılı", `${result.addedTokens} token eklendi`);
-    } catch (error) {
-      Alert.alert("Satın alınamadı", error instanceof Error ? error.message : "İşlem tamamlanamadı.");
-    } finally {
-      setPurchasingPackageId(null);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -174,45 +141,17 @@ export function TokenWalletScreen({ navigation }: Props) {
               <AppText style={styles.balanceSubtext} variant="caption">
                 Satın alınan: {wallet?.paidBalance ?? 0} • Ödül: {wallet?.bonusBalance ?? 0}
               </AppText>
+              <Pressable
+                onPress={() => navigation.navigate(ProfileRoutes.TokenPackagesScreen)}
+                style={styles.addBalanceButton}
+              >
+                <Ionicons color="#FFFFFF" name="add-circle-outline" size={20} />
+                <AppText style={styles.addBalanceButtonText} variant="label">
+                  Bakiye Ekle
+                </AppText>
+              </Pressable>
             </View>
 
-            <AppText style={styles.sectionTitle} variant="label">
-              Token Satın Al
-            </AppText>
-            <AppText style={styles.sectionNote} variant="caption">
-              Test modu — gerçek ödeme yapılmaz
-            </AppText>
-
-            {packages.map((tokenPackage) => {
-              const isPurchasing = purchasingPackageId === tokenPackage.id;
-              return (
-                <View key={tokenPackage.id} style={styles.packageRow}>
-                  <View style={styles.packageLeft}>
-                    <AppText style={styles.packageAmount} variant="label">
-                      {tokenPackage.tokenAmount} token
-                    </AppText>
-                  </View>
-                  <AppText style={styles.packagePrice} variant="body">
-                    ${tokenPackage.priceUsdFormatted}
-                  </AppText>
-                  <Pressable
-                    disabled={Boolean(purchasingPackageId)}
-                    onPress={() => void handlePurchase(tokenPackage)}
-                    style={[styles.purchaseButton, isPurchasing && styles.purchaseButtonDisabled]}
-                  >
-                    {isPurchasing ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <AppText style={styles.purchaseButtonText} variant="label">
-                        Satın Al
-                      </AppText>
-                    )}
-                  </Pressable>
-                </View>
-              );
-            })}
-
-            <View style={styles.sectionDivider} />
             <AppText style={styles.sectionTitle} variant="label">
               Geçmiş
             </AppText>
@@ -327,60 +266,27 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
   },
+  addBalanceButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "center",
+    marginTop: theme.spacing.lg,
+    minHeight: 48,
+    width: "100%",
+  },
+  addBalanceButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
   sectionTitle: {
     color: "#6B7280",
     fontSize: 15,
     marginBottom: theme.spacing.xs,
     marginHorizontal: theme.spacing.lg,
     marginTop: theme.spacing.lg,
-  },
-  sectionNote: {
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.sm,
-    marginHorizontal: theme.spacing.lg,
-  },
-  sectionDivider: {
-    backgroundColor: "#ECEEF2",
-    height: 1,
-    marginBottom: theme.spacing.sm,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.lg,
-  },
-  packageRow: {
-    alignItems: "center",
-    borderBottomColor: "#ECEEF2",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-    marginHorizontal: theme.spacing.lg,
-    minHeight: 58,
-    paddingVertical: theme.spacing.sm,
-  },
-  packageLeft: {
-    flex: 1,
-  },
-  packageAmount: {
-    color: theme.colors.textPrimary,
-  },
-  packagePrice: {
-    color: theme.colors.textSecondary,
-    minWidth: 56,
-    textAlign: "center",
-  },
-  purchaseButton: {
-    alignItems: "center",
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    justifyContent: "center",
-    minHeight: 36,
-    minWidth: 92,
-    paddingHorizontal: theme.spacing.md,
-  },
-  purchaseButtonDisabled: {
-    opacity: 0.7,
-  },
-  purchaseButtonText: {
-    color: "#FFFFFF",
   },
   emptyHistory: {
     paddingHorizontal: theme.spacing.lg,

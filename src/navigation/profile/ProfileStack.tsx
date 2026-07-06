@@ -18,6 +18,7 @@ import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ReportProblemScreen } from "../../features/profile/screens/ReportProblemScreen";
 import { SettingsScreen } from "../../features/profile/screens/SettingsScreen";
 import { TokenWalletScreen } from "../../features/token/screens/TokenWalletScreen";
+import { TokenPackagesScreen } from "../../features/token/screens/TokenPackagesScreen";
 import { FinanceScreen } from "../../features/token/screens/FinanceScreen";
 import type { ProfileStackParamList } from "../types";
 
@@ -29,6 +30,7 @@ export function ProfileStack() {
       <Stack.Screen component={ProfileScreen} name={ProfileRoutes.ProfileScreen} />
       <Stack.Screen component={SettingsScreen} name={ProfileRoutes.SettingsScreen} />
       <Stack.Screen component={TokenWalletScreen} name={ProfileRoutes.TokenWalletScreen} />
+      <Stack.Screen component={TokenPackagesScreen} name={ProfileRoutes.TokenPackagesScreen} />
       <Stack.Screen component={FinanceScreen} name={ProfileRoutes.FinanceScreen} />
       <Stack.Screen component={AccountManagementScreen} name={ProfileRoutes.AccountManagementScreen} />
       <Stack.Screen component={ChangePasswordScreen} name={ProfileRoutes.ChangePasswordScreen} />
