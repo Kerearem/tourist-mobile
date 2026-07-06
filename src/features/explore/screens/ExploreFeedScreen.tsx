@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, AppState, FlatList, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View, type ViewToken } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -48,6 +48,7 @@ import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
 import { loadExploreFeed } from "../services/explore.service";
 import { searchUsers } from "../services/userSearch.service";
+import { getExplorePostPlaybackKey, shouldExploreReelPlaybackActive } from "../utils/exploreReelPlayback";
 import { formatProfileLocation } from "../../../utils/formatProfileLocation";
 import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
@@ -91,7 +92,8 @@ const syncCommentLikes = (items: SnapCommentItem[]): Record<string, { liked: boo
 
 export function ExploreFeedScreen() {
   const { user } = useAuth();
-  const { openShare, contentShareSheet } = useContentShareSheet();
+  const { openShare, isShareVisible, contentShareSheet } = useContentShareSheet();
+  const isScreenFocused = useIsFocused();
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const route = useRoute<RouteProp<ExploreStackParamList, "ExploreFeedScreen">>();
   const { height } = useWindowDimensions();
@@ -145,7 +147,59 @@ export function ExploreFeedScreen() {
   const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
   const [profileContentRefreshToken, setProfileContentRefreshToken] = useState(0);
   const [profileStats, setProfileStats] = useState<UserProfileStats | null>(null);
+  const [activeVisiblePostKey, setActiveVisiblePostKey] = useState<string | null>(null);
+  const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === "active");
   const audienceAnim = useRef(new Animated.Value(0)).current;
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 80,
+  }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const nextVisiblePost = viewableItems.find((entry) => entry.isViewable && typeof entry.key === "string");
+    setActiveVisiblePostKey(nextVisiblePost?.key ?? null);
+  }).current;
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      setIsAppActive(nextState === "active");
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const playbackOverlayState = useMemo(
+    () => ({
+      isSearchOpen,
+      isSearchProfileOpen: Boolean(selectedSearchUser),
+      isCommentsOpen: Boolean(activeCommentsPost),
+      isShareOpen: isShareVisible,
+      isContentReportOpen: Boolean(reportingPost),
+      isProfileMenuOpen: Boolean(selectedSearchUser) && isProfileMenuOpen,
+      isProfileReportOpen: Boolean(selectedSearchUser) && isReportModalOpen,
+    }),
+    [
+      activeCommentsPost,
+      isProfileMenuOpen,
+      isReportModalOpen,
+      isSearchOpen,
+      isShareVisible,
+      reportingPost,
+      selectedSearchUser,
+    ],
+  );
+
+  const resolvePostPlaybackActive = useCallback(
+    (post: ExplorePost) =>
+      shouldExploreReelPlaybackActive({
+        isScreenFocused,
+        isAppActive,
+        activeVisiblePostKey,
+        postKey: getExplorePostPlaybackKey(post),
+        ...playbackOverlayState,
+      }),
+    [activeVisiblePostKey, isAppActive, isScreenFocused, playbackOverlayState],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -915,6 +969,7 @@ export function ExploreFeedScreen() {
             setFeedViewportHeight(nextHeight);
           }
         }}
+        onViewableItemsChanged={onViewableItemsChanged}
         onRefresh={() => void fetchFeed("refresh")}
         pagingEnabled
         refreshing={refreshing}
@@ -925,6 +980,7 @@ export function ExploreFeedScreen() {
             height={feedViewportHeight > 0 ? feedViewportHeight : height}
             isFollowLoading={Boolean(followLoadingByAuthorId[item.author.id])}
             isLiked={postLikesById[item.id]?.liked ?? item.viewerState.liked}
+            isPlaybackActive={resolvePostPlaybackActive(item)}
             likeCount={postLikesById[item.id]?.count ?? item.stats.likeCount}
             onAuthorPress={() => openPostAuthorProfile(item)}
             onCommentPress={() => {
@@ -942,6 +998,7 @@ export function ExploreFeedScreen() {
         )}
         showsVerticalScrollIndicator={false}
         style={styles.feedList}
+        viewabilityConfig={viewabilityConfig}
       />
     );
   };

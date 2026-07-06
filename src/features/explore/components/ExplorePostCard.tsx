@@ -26,6 +26,7 @@ type ExplorePostCardProps = {
   isLiked?: boolean;
   likeCount?: number;
   commentCount?: number;
+  isPlaybackActive?: boolean;
 };
 
 const formatCount = (value: number) => {
@@ -70,6 +71,7 @@ export function ExplorePostCard({
   isLiked,
   likeCount,
   commentCount,
+  isPlaybackActive = false,
 }: ExplorePostCardProps) {
   const authorLabel = post.author.username || post.author.displayName;
   const initials = post.author.displayName.slice(0, 2).toUpperCase();
@@ -98,9 +100,9 @@ export function ExplorePostCard({
       {hasReelMedia ? (
         <View style={styles.reelMediaWrap}>
           <MediaCarousel
-            autoPlayVideo
+            autoPlayVideo={isPlaybackActive}
             height={height}
-            isFocused
+            isFocused={isPlaybackActive}
             media={post.media.map((item) => ({
               id: item.id,
               url: item.url,

@@ -21,5 +21,5 @@ export function useContentShareSheet() {
     <ContentShareSheet onClose={closeShare} payload={payload} visible={visible} />
   );
 
-  return { openShare, closeShare, contentShareSheet };
+  return { openShare, closeShare, isShareVisible: visible, contentShareSheet };
 }
