@@ -19,6 +19,7 @@ import type { MessagesStackParamList } from "../../../navigation/types";
 import { blockUser } from "../../profile/services/block.service";
 import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
+import { useMessageThreadListScroll } from "../hooks/useMessageThreadListScroll";
 import { getConversationById, getMessages, markConversationRead, sendMessage } from "../services/messages.service";
 import type { ConversationMessage, ConversationThread } from "../types";
 
@@ -74,7 +75,27 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   const [isSendingGreeting, setIsSendingGreeting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const {
+    listRef,
+    handleContentSizeChange,
+    onInitialMessagesReady,
+    onOwnMessageSent,
+    resetForThread,
+  } = useMessageThreadListScroll(messages);
+
   const viewerId = user?.id ?? "";
+
+  useEffect(() => {
+    resetForThread();
+    setConversation(null);
+    setMessages([]);
+    setError(null);
+    void loadThread();
+  }, [route.params.threadId]);
+
+  useEffect(() => {
+    onInitialMessagesReady(isLoading);
+  }, [isLoading, messages.length, onInitialMessagesReady]);
 
   const loadThread = async () => {
     setIsLoading(true);
@@ -98,10 +119,6 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     }
   };
 
-  useEffect(() => {
-    void loadThread();
-  }, [route.params.threadId]);
-
   const onSend = async (text: string) => {
     if (!user) {
       return;
@@ -121,6 +138,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     }
 
     const nextMessages = await getMessages(route.params.threadId);
+    onOwnMessageSent();
     setMessages(nextMessages.messages);
     const nextThread = await getConversationById(route.params.threadId);
     setConversation(nextThread);
@@ -286,8 +304,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
             </Card>
           ) : (
             <FlatList
+              ref={listRef}
               data={messages}
               keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={handleContentSizeChange}
               renderItem={({ item }) => <MessageBubble isMine={item.sender.id === viewerId} message={item} />}
               ListHeaderComponent={
                 timeLabel ? (
