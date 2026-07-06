@@ -16,7 +16,9 @@ const baseContext = (overrides: Partial<ExploreReelPlaybackContext> = {}): Explo
   isSearchProfileOpen: false,
   isCommentsOpen: false,
   isShareOpen: false,
+  isMoreMenuOpen: false,
   isContentReportOpen: false,
+  isPostReportedHidden: false,
   isProfileMenuOpen: false,
   isProfileReportOpen: false,
   ...overrides,
@@ -65,8 +67,16 @@ describe("shouldExploreReelPlaybackActive", () => {
     assert.equal(shouldExploreReelPlaybackActive(baseContext({ isShareOpen: true })), false);
   });
 
+  it("blocks playback when the Daha menu is open", () => {
+    assert.equal(shouldExploreReelPlaybackActive(baseContext({ isMoreMenuOpen: true })), false);
+  });
+
   it("blocks playback when content report sheet is open", () => {
     assert.equal(shouldExploreReelPlaybackActive(baseContext({ isContentReportOpen: true })), false);
+  });
+
+  it("blocks playback when the post is reported hidden", () => {
+    assert.equal(shouldExploreReelPlaybackActive(baseContext({ isPostReportedHidden: true })), false);
   });
 
   it("blocks playback when search profile overlay is open", () => {

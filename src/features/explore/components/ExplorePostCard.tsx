@@ -20,13 +20,14 @@ type ExplorePostCardProps = {
   onLikePress?: () => void;
   onAuthorPress?: () => void;
   onSharePress?: () => void;
+  onMorePress?: () => void;
   onFollowPress?: () => void;
-  onReportPress?: () => void;
   isFollowLoading?: boolean;
   isLiked?: boolean;
   likeCount?: number;
   commentCount?: number;
   isPlaybackActive?: boolean;
+  isReportedHidden?: boolean;
 };
 
 const formatCount = (value: number) => {
@@ -56,6 +57,12 @@ function ActionButton({
   );
 }
 
+const ACTION_ICON_SIZE = 34;
+const ACTION_RAIL_BOTTOM = 104;
+const ACTION_BUTTON_HEIGHT =
+  ACTION_ICON_SIZE + theme.spacing.xs + theme.typography.caption.lineHeight;
+const ACTION_RAIL_MORE_BOTTOM_OFFSET = ACTION_BUTTON_HEIGHT + theme.spacing.lg;
+
 export function ExplorePostCard({
   post,
   height,
@@ -65,13 +72,14 @@ export function ExplorePostCard({
   onLikePress,
   onAuthorPress,
   onSharePress,
+  onMorePress,
   onFollowPress,
-  onReportPress,
   isFollowLoading,
   isLiked,
   likeCount,
   commentCount,
   isPlaybackActive = false,
+  isReportedHidden = false,
 }: ExplorePostCardProps) {
   const authorLabel = post.author.username || post.author.displayName;
   const initials = post.author.displayName.slice(0, 2).toUpperCase();
@@ -84,6 +92,8 @@ export function ExplorePostCard({
   const visibleLikeCount = likeCount ?? post.stats.likeCount;
   const visibleCommentCount = commentCount ?? post.stats.commentCount;
   const likeScale = useRef(new Animated.Value(1)).current;
+  const showMoreAction = !isOwnPost && Boolean(onMorePress) && !isReportedHidden;
+  const showInteractions = !isReportedHidden;
 
   useEffect(() => {
     if (!liked) {
@@ -118,59 +128,72 @@ export function ExplorePostCard({
         </View>
       )}
 
-      <View style={styles.actionRail}>
-        <View style={styles.profileAction}>
-          <Pressable onPress={onAuthorPress}>
-            <Avatar initials={initials} size="md" uri={post.author.avatarUrl} />
+      {showInteractions ? (
+        <View style={[styles.actionRail, showMoreAction ? styles.actionRailWithMore : null]}>
+          <View style={styles.profileAction}>
+            <Pressable onPress={onAuthorPress}>
+              <Avatar initials={initials} size="md" uri={post.author.avatarUrl} />
+            </Pressable>
+            {!isOwnPost ? (
+              isFollowing ? (
+                <View style={[styles.followDot, styles.followDotActive]}>
+                  <Ionicons color="#FFFFFF" name="checkmark" size={14} />
+                </View>
+              ) : (
+                <Pressable disabled={isFollowLoading} onPress={onFollowPress} style={styles.followDot}>
+                  <Ionicons color="#FFFFFF" name="add" size={14} />
+                </Pressable>
+              )
+            ) : null}
+          </View>
+          <Pressable onPress={onLikePress} style={styles.actionButton}>
+            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+              <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
+            </Animated.View>
+            <AppText style={styles.actionLabel} variant="caption">
+              {formatCount(visibleLikeCount)}
+            </AppText>
           </Pressable>
-          {!isOwnPost ? (
-            isFollowing ? (
-              <View style={[styles.followDot, styles.followDotActive]}>
-                <Ionicons color="#FFFFFF" name="checkmark" size={14} />
-              </View>
-            ) : (
-              <Pressable disabled={isFollowLoading} onPress={onFollowPress} style={styles.followDot}>
-                <Ionicons color="#FFFFFF" name="add" size={14} />
-              </Pressable>
-            )
+          <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
+          <ActionButton icon="share-social-outline" label="Paylaş" onPress={onSharePress} />
+          {showMoreAction ? <ActionButton icon="ellipsis-horizontal" label="Daha" onPress={onMorePress} /> : null}
+        </View>
+      ) : null}
+
+      {showInteractions ? (
+        <View style={styles.captionBlock}>
+          <Pressable onPress={onAuthorPress}>
+            <VerifiedNameRow
+              accountType={post.author.accountType}
+              badgeSize={15}
+              isOrganizer={post.author.isOrganizer}
+              name={`@${authorLabel}`}
+              style={styles.usernameRow}
+              textStyle={styles.username}
+              verificationBadge={post.author.verificationBadge}
+            />
+          </Pressable>
+          <AppText style={styles.caption} variant="body">
+            {post.text}
+          </AppText>
+          {post.event ? (
+            <AppText numberOfLines={1} style={styles.eventTag} variant="caption">
+              {post.event.title}
+            </AppText>
           ) : null}
         </View>
-        <Pressable onPress={onLikePress} style={styles.actionButton}>
-          <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-            <Ionicons color={liked ? "#FF375F" : "#FFFFFF"} name={liked ? "heart" : "heart-outline"} size={34} />
-          </Animated.View>
-          <AppText style={styles.actionLabel} variant="caption">
-            {formatCount(visibleLikeCount)}
-          </AppText>
-        </Pressable>
-        <ActionButton icon="chatbubble-outline" label={formatCount(visibleCommentCount)} onPress={onCommentPress} />
-        <ActionButton icon="share-social-outline" label="Paylaş" onPress={onSharePress} />
-        {!isOwnPost && !isReel && onReportPress ? (
-          <ActionButton icon="flag-outline" label="Şikayet" onPress={onReportPress} />
-        ) : null}
-      </View>
+      ) : null}
 
-      <View style={styles.captionBlock}>
-        <Pressable onPress={onAuthorPress}>
-          <VerifiedNameRow
-            accountType={post.author.accountType}
-            badgeSize={15}
-            isOrganizer={post.author.isOrganizer}
-            name={`@${authorLabel}`}
-            style={styles.usernameRow}
-            textStyle={styles.username}
-            verificationBadge={post.author.verificationBadge}
-          />
-        </Pressable>
-        <AppText style={styles.caption} variant="body">
-          {post.text}
-        </AppText>
-        {post.event ? (
-          <AppText numberOfLines={1} style={styles.eventTag} variant="caption">
-            {post.event.title}
+      {isReportedHidden ? (
+        <View pointerEvents="auto" style={styles.reportedOverlay}>
+          <AppText style={styles.reportedTitle} variant="sectionTitle">
+            Şikayetiniz alındı
           </AppText>
-        ) : null}
-      </View>
+          <AppText style={styles.reportedSubtitle} variant="bodyMuted">
+            Bu içerik sizin için gizlendi
+          </AppText>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -199,10 +222,13 @@ const styles = StyleSheet.create({
   },
   actionRail: {
     alignItems: "center",
-    bottom: 104,
+    bottom: ACTION_RAIL_BOTTOM,
     gap: theme.spacing.lg,
     position: "absolute",
     right: theme.spacing.lg,
+  },
+  actionRailWithMore: {
+    bottom: ACTION_RAIL_BOTTOM - ACTION_RAIL_MORE_BOTTOM_OFFSET,
   },
   profileAction: {
     alignItems: "center",
@@ -251,5 +277,22 @@ const styles = StyleSheet.create({
     color: "#E5E7EB",
     marginTop: theme.spacing.xs,
     opacity: 0.9,
+  },
+  reportedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.82)",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.xl,
+    zIndex: 20,
+  },
+  reportedTitle: {
+    color: "#FFFFFF",
+    marginBottom: theme.spacing.sm,
+    textAlign: "center",
+  },
+  reportedSubtitle: {
+    color: "#D1D5DB",
+    textAlign: "center",
   },
 });

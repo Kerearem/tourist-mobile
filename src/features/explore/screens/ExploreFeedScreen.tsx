@@ -44,11 +44,18 @@ import type { ReelCommentItem } from "../../profile/types/reelEngagement";
 import { buildExplorePostSharePayload } from "../../share/utils/buildSharePayloads";
 import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
 import { ExplorePostCard } from "../components/ExplorePostCard";
+import { ExplorePostMoreSheet } from "../components/ExplorePostMoreSheet";
 import type { AudienceMode } from "../services/audienceMode";
 import { buildLoadExploreFeedInput, hasRequiredContext, reduceExploreViewState } from "../services/audienceMode";
 import { loadExploreFeed } from "../services/explore.service";
 import { searchUsers } from "../services/userSearch.service";
 import { getExplorePostPlaybackKey, shouldExploreReelPlaybackActive } from "../utils/exploreReelPlayback";
+import {
+  resolveExplorePostComplaintTargetType,
+  shouldShowExplorePostMoreAction,
+  isExplorePostReportedHidden,
+  markExplorePostReported,
+} from "../utils/exploreContentComplaint";
 import { formatProfileLocation } from "../../../utils/formatProfileLocation";
 import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
@@ -142,6 +149,8 @@ export function ExploreFeedScreen() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedReportReason, setSelectedReportReason] = useState<ComplaintReason | null>(null);
   const [reportingPost, setReportingPost] = useState<ExplorePost | null>(null);
+  const [moreMenuPost, setMoreMenuPost] = useState<ExplorePost | null>(null);
+  const [reportedPostKeys, setReportedPostKeys] = useState<Set<string>>(() => new Set());
   const [isContentReportSubmitting, setIsContentReportSubmitting] = useState(false);
   const [profileBlockStatus, setProfileBlockStatus] = useState<UserBlockStatus | null>(null);
   const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
@@ -174,6 +183,7 @@ export function ExploreFeedScreen() {
       isSearchProfileOpen: Boolean(selectedSearchUser),
       isCommentsOpen: Boolean(activeCommentsPost),
       isShareOpen: isShareVisible,
+      isMoreMenuOpen: Boolean(moreMenuPost),
       isContentReportOpen: Boolean(reportingPost),
       isProfileMenuOpen: Boolean(selectedSearchUser) && isProfileMenuOpen,
       isProfileReportOpen: Boolean(selectedSearchUser) && isReportModalOpen,
@@ -184,21 +194,26 @@ export function ExploreFeedScreen() {
       isReportModalOpen,
       isSearchOpen,
       isShareVisible,
+      moreMenuPost,
       reportingPost,
       selectedSearchUser,
     ],
   );
 
   const resolvePostPlaybackActive = useCallback(
-    (post: ExplorePost) =>
-      shouldExploreReelPlaybackActive({
+    (post: ExplorePost) => {
+      const isPostReportedHidden = isExplorePostReportedHidden(reportedPostKeys, post);
+
+      return shouldExploreReelPlaybackActive({
         isScreenFocused,
         isAppActive,
         activeVisiblePostKey,
         postKey: getExplorePostPlaybackKey(post),
+        isPostReportedHidden,
         ...playbackOverlayState,
-      }),
-    [activeVisiblePostKey, isAppActive, isScreenFocused, playbackOverlayState],
+      });
+    },
+    [activeVisiblePostKey, isAppActive, isScreenFocused, playbackOverlayState, reportedPostKeys],
   );
 
   useFocusEffect(
@@ -403,14 +418,17 @@ export function ExploreFeedScreen() {
     }
 
     setIsContentReportSubmitting(true);
+    const reportedPost = reportingPost;
     try {
       await createContentComplaint({
-        targetType: "SNAP",
-        targetId: reportingPost.id,
+        targetType: resolveExplorePostComplaintTargetType(reportedPost.type),
+        targetId: reportedPost.id,
         reason,
       });
+      setReportedPostKeys((current) => markExplorePostReported(current, reportedPost));
       setReportingPost(null);
-      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
+      setMoreMenuPost(null);
+      Alert.alert("Teşekkürler", "Geri bildirimin kaydedildi.");
     } catch (err) {
       Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
     } finally {
@@ -973,7 +991,10 @@ export function ExploreFeedScreen() {
         onRefresh={() => void fetchFeed("refresh")}
         pagingEnabled
         refreshing={refreshing}
-        renderItem={({ item }) => (
+        renderItem={({ item }) => {
+          const isPostReportedHidden = isExplorePostReportedHidden(reportedPostKeys, item);
+
+          return (
           <ExplorePostCard
             authorFollowStatus={followStatusByAuthorId[item.author.id] ?? null}
             commentCount={postCommentCountsById[item.id] ?? item.stats.commentCount}
@@ -981,6 +1002,7 @@ export function ExploreFeedScreen() {
             isFollowLoading={Boolean(followLoadingByAuthorId[item.author.id])}
             isLiked={postLikesById[item.id]?.liked ?? item.viewerState.liked}
             isPlaybackActive={resolvePostPlaybackActive(item)}
+            isReportedHidden={isPostReportedHidden}
             likeCount={postLikesById[item.id]?.count ?? item.stats.likeCount}
             onAuthorPress={() => openPostAuthorProfile(item)}
             onCommentPress={() => {
@@ -990,12 +1012,17 @@ export function ExploreFeedScreen() {
             }}
             onFollowPress={() => toggleFollowOnAuthor(item.author.id)}
             onLikePress={() => togglePostLike(item)}
+            onMorePress={
+              shouldShowExplorePostMoreAction(user?.id, item.author.id, isPostReportedHidden)
+                ? () => setMoreMenuPost(item)
+                : undefined
+            }
             onSharePress={() => openShare(buildExplorePostSharePayload(item))}
-            onReportPress={item.type === "snap" ? () => setReportingPost(item) : undefined}
             post={item}
             viewerId={user?.id}
           />
-        )}
+          );
+        }}
         showsVerticalScrollIndicator={false}
         style={styles.feedList}
         viewabilityConfig={viewabilityConfig}
@@ -1551,6 +1578,17 @@ export function ExploreFeedScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <ExplorePostMoreSheet
+        onClose={() => setMoreMenuPost(null)}
+        onReportPress={() => {
+          if (!moreMenuPost) {
+            return;
+          }
+          setReportingPost(moreMenuPost);
+          setMoreMenuPost(null);
+        }}
+        visible={moreMenuPost != null}
+      />
       <ComplaintReasonSheet
         isSubmitting={isContentReportSubmitting}
         onClose={() => setReportingPost(null)}

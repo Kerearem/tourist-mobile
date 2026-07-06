@@ -7,7 +7,9 @@ export type ExploreReelPlaybackContext = {
   isSearchProfileOpen: boolean;
   isCommentsOpen: boolean;
   isShareOpen: boolean;
+  isMoreMenuOpen: boolean;
   isContentReportOpen: boolean;
+  isPostReportedHidden: boolean;
   isProfileMenuOpen: boolean;
   isProfileReportOpen: boolean;
 };
@@ -45,7 +47,15 @@ export function shouldExploreReelPlaybackActive(context: ExploreReelPlaybackCont
     return false;
   }
 
+  if (context.isMoreMenuOpen) {
+    return false;
+  }
+
   if (context.isContentReportOpen) {
+    return false;
+  }
+
+  if (context.isPostReportedHidden) {
     return false;
   }
 
