@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,136 +9,218 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import type { NavigationAction } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
 
-import { AppButton } from "../../../components/ui/AppButton";
-import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
 import { Card } from "../../../components/ui/Card";
 import { Loader } from "../../../components/ui/Loader";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
-import { getCountryByCode, getCountryLabel } from "../../../constants/countries";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
 import { uploadImage } from "../../../services/media/cloudinary";
-import { EventDateTimePicker } from "../components/EventDateTimePicker";
 import { EventLocationPickerModal } from "../components/EventLocationPickerModal";
+import { EventCreationBottomBar } from "../components/create-event/EventCreationBottomBar";
+import { EventCreationStepper } from "../components/create-event/EventCreationStepper";
+import { BasicsStep } from "../components/create-event/steps/BasicsStep";
+import { DateLocationStep } from "../components/create-event/steps/DateLocationStep";
+import { ParticipationStep } from "../components/create-event/steps/ParticipationStep";
+import { PreviewStep } from "../components/create-event/steps/PreviewStep";
+import { TicketsStep } from "../components/create-event/steps/TicketsStep";
+import { createInitialEventCreationDraft, useEventCreationDraft } from "../hooks/useEventCreationDraft";
 import { createEvent } from "../services/events.service";
 import { getOrganizerStatus } from "../services/organizer.service";
-import { EVENT_TYPES, type EventType } from "../constants/eventTypes";
 import {
-  calculateAgeFromBirthDate,
-  isEventMinAgeAllowedForOrganizer,
-} from "../utils/viewerAge";
-import { buildCreateEventTicketPayload, parseTokenPriceInput } from "../utils/eventTicketPricing";
+  EVENT_CREATION_STEP_TITLES,
+  type ActiveEventCheckState,
+  type EventCreationFieldErrors,
+  type EventCreationStep,
+} from "../types/eventCreation";
+import { buildCreateEventPayload } from "../utils/eventCreationPayload";
+import {
+  EVENT_CREATION_EXIT_ALERT,
+  resolveEventCreationExitDecision,
+  shouldPreventNavigationRemoval,
+} from "../utils/eventCreationNavigation";
+import {
+  parseCapacityInput,
+  resolveActiveEventCheckFailureMessage,
+  resolveCapacityValidationError,
+  resolveEventCreationStepState,
+  resolveFirstInvalidStep,
+  validateCompleteEventDraft,
+  validateEventCreationStep,
+} from "../utils/eventCreationValidation";
+import { calculateAgeFromBirthDate } from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
   "CreateEventScreen"
 >;
 
-type FieldKey = "title" | "description" | "endsAt" | "venueName" | "location" | "eventType" | "tokenPrice" | "ageRestriction";
-type FieldErrors = Partial<Record<FieldKey, string>>;
-type EventMinAgeOption = null | 18 | 21;
-
-const MIN_AGE_OPTIONS: Array<{ value: EventMinAgeOption; label: string }> = [
-  { value: null, label: "Genel (16+)" },
-  { value: 18, label: "18+" },
-  { value: 21, label: "21+" },
-];
-
-const CHIP_RADIUS = 999;
-const FIELD_RADIUS = 14;
-const SELECTED_CHIP_BG = "#DBEAFE";
-const SELECTED_CHIP_BORDER = "#93C5FD";
-const SELECTED_CHIP_TEXT = "#2563EB";
-const inputFieldStyle = { borderRadius: FIELD_RADIUS };
-
-const buildDefaultStart = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-  date.setHours(18, 0, 0, 0);
-  return date;
-};
-
-const addHours = (date: Date, hours: number) => {
-  const next = new Date(date);
-  next.setHours(next.getHours() + hours);
-  return next;
-};
-
-const formatDateTimeLabel = (date: Date) =>
-  date.toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) {
-    return null;
-  }
-  return (
-    <AppText style={styles.fieldError} variant="caption">
-      {message}
-    </AppText>
-  );
-}
-
 export function CreateEventScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const defaultStart = useMemo(() => buildDefaultStart(), []);
+  const scrollRef = useRef<ScrollView>(null);
+  const initialDraft = useMemo(
+    () =>
+      createInitialEventCreationDraft({
+        city: user?.privateProfile.destinationCity ?? user?.publicProfile.currentCity ?? "",
+        countryCode: user?.privateProfile.destinationCountryCode ?? "",
+      }),
+    [user?.privateProfile.destinationCity, user?.privateProfile.destinationCountryCode, user?.publicProfile.currentCity],
+  );
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [startsAt, setStartsAt] = useState(defaultStart);
-  const [endsAt, setEndsAt] = useState(addHours(defaultStart, 2));
-  const [venueName, setVenueName] = useState("");
-  const [city, setCity] = useState(user?.privateProfile.destinationCity ?? user?.publicProfile.currentCity ?? "");
-  const [countryCode, setCountryCode] = useState(user?.privateProfile.destinationCountryCode ?? "");
-  const [coverUri, setCoverUri] = useState<string | null>(null);
-  const [eventType, setEventType] = useState<EventType | null>(null);
-  const [minAge, setMinAge] = useState<EventMinAgeOption>(null);
-  const [hasAlcohol, setHasAlcohol] = useState(false);
-  const [smokingAllowed, setSmokingAllowed] = useState(false);
-  const [alcoholWarning, setAlcoholWarning] = useState<string | null>(null);
-  const [isPaid, setIsPaid] = useState(false);
-  const [tokenPriceInput, setTokenPriceInput] = useState("");
+  const { draft, patchDraft, setStartsAt, isDirty } = useEventCreationDraft(initialDraft);
+  const [currentStep, setCurrentStep] = useState<EventCreationStep>(1);
+  const [fieldErrors, setFieldErrors] = useState<EventCreationFieldErrors>({});
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCheckingLimit, setIsCheckingLimit] = useState(true);
-  const [hasActiveEvent, setHasActiveEvent] = useState(false);
-  const [activeEventTitle, setActiveEventTitle] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [activeEventCheck, setActiveEventCheck] = useState<ActiveEventCheckState>({ status: "loading" });
+  const allowNavigationRef = useRef(false);
+  const isExitAlertVisibleRef = useRef(false);
 
   const isOrganizerApproved = user?.organizerStatus === "approved";
+
+  const isWizardActive =
+    isOrganizerApproved &&
+    activeEventCheck.status === "ready" &&
+    !activeEventCheck.hasActiveEvent;
+
+  const getExitDecision = useCallback(
+    () =>
+      resolveEventCreationExitDecision({
+        isDirty,
+        isSubmitting,
+        allowNavigationAfterSuccess: allowNavigationRef.current,
+      }),
+    [isDirty, isSubmitting],
+  );
+
+  const completeExit = useCallback(
+    (action?: NavigationAction) => {
+      if (action) {
+        allowNavigationRef.current = true;
+        navigation.dispatch(action);
+        return;
+      }
+
+      allowNavigationRef.current = true;
+      navigation.goBack();
+    },
+    [navigation],
+  );
+
+  const requestExit = useCallback(
+    (action?: NavigationAction) => {
+      if (!isWizardActive) {
+        completeExit(action);
+        return;
+      }
+
+      const decision = getExitDecision();
+      if (decision === "allow") {
+        completeExit(action);
+        return;
+      }
+
+      if (decision === "block") {
+        return;
+      }
+
+      if (isExitAlertVisibleRef.current) {
+        return;
+      }
+
+      isExitAlertVisibleRef.current = true;
+      Alert.alert(EVENT_CREATION_EXIT_ALERT.title, EVENT_CREATION_EXIT_ALERT.message, [
+        {
+          text: EVENT_CREATION_EXIT_ALERT.stayLabel,
+          style: "cancel",
+          onPress: () => {
+            isExitAlertVisibleRef.current = false;
+          },
+        },
+        {
+          text: EVENT_CREATION_EXIT_ALERT.leaveLabel,
+          style: "destructive",
+          onPress: () => {
+            isExitAlertVisibleRef.current = false;
+            completeExit(action);
+          },
+        },
+      ]);
+    },
+    [completeExit, getExitDecision, isWizardActive],
+  );
+
+  useEffect(() => {
+    if (!isWizardActive) {
+      return;
+    }
+
+    const unsubscribe = navigation.addListener("beforeRemove", (event) => {
+      const decision = getExitDecision();
+      if (!shouldPreventNavigationRemoval(decision)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (decision === "block") {
+        return;
+      }
+
+      requestExit(event.data.action);
+    });
+
+    return unsubscribe;
+  }, [getExitDecision, isWizardActive, navigation, requestExit]);
 
   const organizerAge = useMemo(
     () => (user?.privateProfile.birthDate ? calculateAgeFromBirthDate(user.privateProfile.birthDate) : null),
     [user?.privateProfile.birthDate],
   );
 
-  const availableMinAgeOptions = useMemo(
-    () => MIN_AGE_OPTIONS.filter((item) => isEventMinAgeAllowedForOrganizer(organizerAge, item.value)),
+  const validationContext = useMemo(
+    () => ({
+      organizerAge,
+    }),
     [organizerAge],
   );
 
-  const locationLabel = useMemo(() => {
-    if (!countryCode || !city.trim()) {
-      return "Ülke ve şehir seç";
-    }
-    const country = getCountryByCode(countryCode);
-    const countryName = country ? getCountryLabel(country, "tr") : countryCode;
-    return `${city}, ${countryName}`;
-  }, [city, countryCode]);
+  const stepState = useMemo(
+    () => resolveEventCreationStepState(draft, validationContext, currentStep),
+    [currentStep, draft, validationContext],
+  );
 
-  const clearFieldError = (key: FieldKey) => {
+  const loadActiveEventCheck = useCallback(async () => {
+    setActiveEventCheck({ status: "loading" });
+    try {
+      const status = await getOrganizerStatus();
+      setActiveEventCheck({
+        status: "ready",
+        hasActiveEvent: Boolean(status.hasActiveEvent),
+        activeEventTitle: status.activeEventTitle ?? null,
+      });
+    } catch {
+      setActiveEventCheck({
+        status: "error",
+        message: resolveActiveEventCheckFailureMessage(),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadActiveEventCheck();
+  }, [loadActiveEventCheck]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [currentStep]);
+
+  const clearFieldError = (key: keyof EventCreationFieldErrors) => {
     setFieldErrors((previous) => {
       if (!previous[key]) {
         return previous;
@@ -150,148 +231,67 @@ export function CreateEventScreen({ navigation }: Props) {
     });
   };
 
-  const validateForm = (): FieldErrors => {
-    const errors: FieldErrors = {};
-    const trimmedTitle = title.trim();
-    const trimmedDescription = description.trim();
-    const trimmedVenue = venueName.trim();
-    const trimmedCity = city.trim();
-    const trimmedCountryCode = countryCode.trim().toUpperCase();
-
-    if (trimmedTitle.length < 3) {
-      errors.title = "Etkinlik adı en az 3 karakter olmalı.";
-    }
-    if (trimmedDescription.length < 10) {
-      errors.description = "Açıklama en az 10 karakter olmalı.";
-    }
-    if (!trimmedVenue) {
-      errors.venueName = "Mekan adı gerekli.";
-    }
-    if (!trimmedCity || trimmedCountryCode.length < 2) {
-      errors.location = "Şehir ve ülke seçmelisin.";
-    }
-    if (endsAt <= startsAt) {
-      errors.endsAt = "Bitiş zamanı başlangıçtan sonra olmalı.";
-    }
-    if (!eventType) {
-      errors.eventType = "Etkinlik türü seçmelisin.";
-    }
-    if (isPaid) {
-      if (parseTokenPriceInput(tokenPriceInput) == null) {
-        errors.tokenPrice = "Geçerli bir token fiyatı gir (pozitif tam sayı).";
-      }
-    }
-    if (hasAlcohol && minAge == null) {
-      errors.ageRestriction = "Alkollü etkinlik için yaş sınırı (18+/21+) seçmelisin";
-    }
-    if (minAge != null && !isEventMinAgeAllowedForOrganizer(organizerAge, minAge)) {
-      errors.ageRestriction = "Kendi yaşından büyük yaş sınırı koyamazsın";
-    }
-
-    return errors;
+  const handleExit = () => {
+    requestExit();
   };
 
-  useEffect(() => {
-    if (minAge != null && !isEventMinAgeAllowedForOrganizer(organizerAge, minAge)) {
-      setMinAge(null);
-      setHasAlcohol(false);
-    }
-  }, [minAge, organizerAge]);
-
-  useEffect(() => {
-    const loadLimit = async () => {
-      setIsCheckingLimit(true);
-      try {
-        const status = await getOrganizerStatus();
-        setHasActiveEvent(Boolean(status.hasActiveEvent));
-        setActiveEventTitle(status.activeEventTitle ?? null);
-      } catch {
-        setHasActiveEvent(false);
-      } finally {
-        setIsCheckingLimit(false);
-      }
-    };
-
-    void loadLimit();
-  }, []);
-
-  const pickCoverImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("İzin gerekli", "Kapak fotoğrafı seçmek için galeri izni gerekiyor.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.85,
-    });
-
-    if (!result.canceled && result.assets[0]?.uri) {
-      setCoverUri(result.assets[0].uri);
-    }
-  };
-
-  const onSelectFree = () => {
-    setIsPaid(false);
-    setTokenPriceInput("");
-    clearFieldError("tokenPrice");
-  };
-
-  const onSelectTokenTicket = () => {
-    setIsPaid(true);
-  };
-
-  const onSelectMinAge = (value: EventMinAgeOption) => {
-    if (!isEventMinAgeAllowedForOrganizer(organizerAge, value)) {
-      setFieldErrors((previous) => ({
-        ...previous,
-        ageRestriction: "Kendi yaşından büyük yaş sınırı koyamazsın",
-      }));
-      return;
-    }
-    setMinAge(value);
-    if (value == null) {
-      setHasAlcohol(false);
-    }
-    setAlcoholWarning(null);
-    clearFieldError("ageRestriction");
-  };
-
-  const onSelectHasAlcohol = (value: boolean) => {
-    if (value && minAge == null) {
-      setAlcoholWarning("Alkollü etkinlik için yaş sınırı (18+/21+) seçmelisin");
-      return;
-    }
-    setHasAlcohol(value);
-    setAlcoholWarning(null);
-    clearFieldError("ageRestriction");
-  };
-
-  const onSubmit = async () => {
-    if (!isOrganizerApproved || hasActiveEvent) {
-      return;
-    }
-
-    const errors = validateForm();
-    setFieldErrors(errors);
+  const goToStep = (step: EventCreationStep) => {
+    setCurrentStep(step);
+    setFieldErrors({});
     setSubmitError(null);
+  };
 
+  const handleNext = () => {
+    const errors = validateEventCreationStep(currentStep, draft, validationContext);
+    setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       return;
     }
 
-    const trimmedTitle = title.trim();
-    const trimmedDescription = description.trim();
-    const trimmedVenue = venueName.trim();
-    const trimmedCity = city.trim();
-    const trimmedCountryCode = countryCode.trim().toUpperCase();
-    const ticketPayload = buildCreateEventTicketPayload(isPaid ? "token" : "free", tokenPriceInput);
+    if (currentStep < 5) {
+      goToStep((currentStep + 1) as EventCreationStep);
+    }
+  };
 
-    if (!ticketPayload) {
-      setFieldErrors({ tokenPrice: "Geçerli bir token fiyatı gir (pozitif tam sayı)." });
+  const handleBack = () => {
+    if (currentStep === 1) {
+      handleExit();
+      return;
+    }
+
+    goToStep((currentStep - 1) as EventCreationStep);
+  };
+
+  const handleSubmit = async () => {
+    if (!isOrganizerApproved || activeEventCheck.status !== "ready" || activeEventCheck.hasActiveEvent) {
+      return;
+    }
+
+    const errors = validateCompleteEventDraft(draft, validationContext);
+    setFieldErrors(errors);
+    setSubmitError(null);
+
+    if (Object.keys(errors).length > 0) {
+      const firstInvalidStep = resolveFirstInvalidStep(draft, validationContext);
+      if (firstInvalidStep) {
+        setCurrentStep(firstInvalidStep);
+      }
+      return;
+    }
+
+    const capacity = parseCapacityInput(draft.capacityInput);
+    if (capacity == null) {
+      setCurrentStep(3);
+      setFieldErrors({
+        capacity: resolveCapacityValidationError(draft.capacityInput) ?? "Geçerli bir kapasite gir (pozitif tam sayı).",
+      });
+      return;
+    }
+
+    const payload = buildCreateEventPayload(draft, capacity);
+    if (!payload) {
+      const firstInvalidStep = resolveFirstInvalidStep(draft, validationContext) ?? 4;
+      setCurrentStep(firstInvalidStep);
       return;
     }
 
@@ -299,36 +299,29 @@ export function CreateEventScreen({ navigation }: Props) {
 
     try {
       let coverImageUrl: string | undefined;
-      if (coverUri) {
-        coverImageUrl = await uploadImage(coverUri, { folder: "events/covers" });
+      if (draft.coverUri) {
+        coverImageUrl = await uploadImage(draft.coverUri, { folder: "events/covers" });
       }
 
       await createEvent({
-        title: trimmedTitle,
-        description: trimmedDescription,
-        city: trimmedCity,
-        countryCode: trimmedCountryCode,
-        venueName: trimmedVenue,
-        startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString(),
-        requiresApproval: false,
-        type: eventType!,
-        isPaid: ticketPayload.isPaid,
-        tokenPrice: ticketPayload.tokenPrice,
+        ...payload,
         ...(coverImageUrl ? { coverImageUrl } : {}),
-        ...(minAge != null ? { minAge } : {}),
-        hasAlcohol: minAge != null ? hasAlcohol : false,
-        smokingAllowed,
       });
+
+      allowNavigationRef.current = true;
 
       Alert.alert("Başarılı", "Etkinliğin incelenmek üzere gönderildi.", [
         { text: "Tamam", onPress: () => navigation.goBack() },
       ]);
-    } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : "Etkinlik oluşturulamadı.";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Etkinlik oluşturulamadı.";
       if (message.toLowerCase().includes("active event") || message.toLowerCase().includes("409")) {
-        setHasActiveEvent(true);
-        setSubmitError("Zaten aktif bir etkinliğin var. Bitmeden yeni etkinlik oluşturamazsın.");
+        setActiveEventCheck({
+          status: "ready",
+          hasActiveEvent: true,
+          activeEventTitle: activeEventCheck.status === "ready" ? activeEventCheck.activeEventTitle : null,
+        });
+        setSubmitError("Mevcut etkinlik limitine ulaştın. Bitmeden yeni etkinlik oluşturamazsın.");
       } else {
         setSubmitError(message);
       }
@@ -337,11 +330,24 @@ export function CreateEventScreen({ navigation }: Props) {
     }
   };
 
-  if (isCheckingLimit) {
+  const renderHeader = () => (
+    <View style={styles.headerBlock}>
+      <ScreenBackHeader onBack={handleExit} title="Etkinlik Oluştur" />
+      <AppText style={styles.stepCounter} variant="caption">
+        Adım {currentStep} / 5
+      </AppText>
+      <EventCreationStepper completedSteps={stepState.completedSteps} currentStep={currentStep} />
+      <AppText style={styles.stepTitle} variant="sectionTitle">
+        {EVENT_CREATION_STEP_TITLES[currentStep]}
+      </AppText>
+    </View>
+  );
+
+  if (activeEventCheck.status === "loading") {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.pagePadding}>
-          <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Oluştur" />
+          {renderHeader()}
           <Card style={styles.stateCard}>
             <Loader label="Kontrol ediliyor..." />
           </Card>
@@ -363,16 +369,34 @@ export function CreateEventScreen({ navigation }: Props) {
     );
   }
 
-  if (hasActiveEvent) {
+  if (activeEventCheck.status === "error") {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.pagePadding}>
+          <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Oluştur" />
+          <Card style={styles.stateCard}>
+            <AppText variant="body">{activeEventCheck.message}</AppText>
+            <Pressable onPress={() => void loadActiveEventCheck()}>
+              <AppText style={styles.retryLink} variant="label">
+                Tekrar dene
+              </AppText>
+            </Pressable>
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (activeEventCheck.hasActiveEvent) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.pagePadding}>
           <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Oluştur" />
           <Card style={styles.blockCard}>
-            <AppText variant="sectionTitle">Zaten aktif bir etkinliğin var</AppText>
+            <AppText variant="sectionTitle">Mevcut etkinlik limitine ulaştın</AppText>
             <AppText variant="bodyMuted">
-              {activeEventTitle
-                ? `"${activeEventTitle}" etkinliğin devam ederken yeni etkinlik oluşturamazsın.`
+              {activeEventCheck.activeEventTitle
+                ? `"${activeEventCheck.activeEventTitle}" etkinliğin devam ederken yeni etkinlik oluşturamazsın.`
                 : "Devam eden veya onay bekleyen bir etkinliğin varken yeni etkinlik oluşturamazsın."}
             </AppText>
           </Card>
@@ -388,275 +412,74 @@ export function CreateEventScreen({ navigation }: Props) {
         keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
         style={styles.flex}
       >
-        <View style={styles.pagePadding}>
-          <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Oluştur" />
-        </View>
+        <View style={styles.pagePadding}>{renderHeader()}</View>
 
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.form}>
-            <AppInput
-              error={fieldErrors.title}
-              label="Etkinlik Adı"
-              onChangeText={(value) => {
-                setTitle(value);
-                clearFieldError("title");
-              }}
-              placeholder="Berlin Türk Kahvesi Buluşması"
-              style={inputFieldStyle}
-              value={title}
+          {currentStep === 1 ? (
+            <BasicsStep
+              draft={draft}
+              errors={fieldErrors}
+              onChange={patchDraft}
+              onClearError={clearFieldError}
             />
-            <AppInput
-              error={fieldErrors.description}
-              label="Açıklama"
-              multiline
-              numberOfLines={4}
-              onChangeText={(value) => {
-                setDescription(value);
-                clearFieldError("description");
-              }}
-              placeholder="Katılımcılar ne beklemeli, kimler katılmalı?"
-              style={[inputFieldStyle, styles.textarea]}
-              textAlignVertical="top"
-              value={description}
+          ) : null}
+
+          {currentStep === 2 ? (
+            <DateLocationStep
+              draft={draft}
+              errors={fieldErrors}
+              onChange={patchDraft}
+              onClearError={clearFieldError}
+              onOpenLocationPicker={() => setIsLocationPickerOpen(true)}
+              onSetStartsAt={setStartsAt}
             />
+          ) : null}
 
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Başlangıç Tarihi ve Saati</AppText>
-              <AppText variant="caption">{formatDateTimeLabel(startsAt)}</AppText>
-              <EventDateTimePicker
-                minimumDate={new Date()}
-                onChange={(value) => {
-                  setStartsAt(value);
-                  clearFieldError("endsAt");
-                }}
-                value={startsAt}
-              />
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Bitiş Tarihi ve Saati</AppText>
-              <AppText variant="caption">{formatDateTimeLabel(endsAt)}</AppText>
-              <View style={[styles.pickerWrap, fieldErrors.endsAt ? styles.inputErrorBorder : null]}>
-                <EventDateTimePicker
-                  minimumDate={startsAt}
-                  onChange={(value) => {
-                    setEndsAt(value);
-                    clearFieldError("endsAt");
-                  }}
-                  value={endsAt}
-                />
-              </View>
-              <FieldError message={fieldErrors.endsAt} />
-            </View>
-
-            <AppInput
-              error={fieldErrors.venueName}
-              label="Mekan"
-              onChangeText={(value) => {
-                setVenueName(value);
-                clearFieldError("venueName");
-              }}
-              placeholder="Kreuzberg Topluluk Merkezi"
-              style={inputFieldStyle}
-              value={venueName}
+          {currentStep === 3 ? (
+            <ParticipationStep
+              draft={draft}
+              errors={fieldErrors}
+              onChange={patchDraft}
+              onClearError={clearFieldError}
+              organizerAge={organizerAge}
             />
+          ) : null}
 
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Şehir / Ülke</AppText>
-              <Pressable
-                onPress={() => {
-                  setIsLocationPickerOpen(true);
-                  clearFieldError("location");
-                }}
-                style={[styles.selectField, fieldErrors.location ? styles.inputErrorBorder : null]}
-              >
-                <AppText variant="body">{locationLabel}</AppText>
-                <Ionicons color={theme.colors.muted} name="chevron-forward" size={20} />
-              </Pressable>
-              <FieldError message={fieldErrors.location} />
-            </View>
+          {currentStep === 4 ? (
+            <TicketsStep
+              draft={draft}
+              errors={fieldErrors}
+              onChange={patchDraft}
+              onClearError={clearFieldError}
+            />
+          ) : null}
 
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Bilet</AppText>
-              <View style={styles.choiceRow}>
-                <Pressable
-                  onPress={onSelectFree}
-                  style={[styles.choiceChip, !isPaid && styles.choiceChipActive]}
-                >
-                  <AppText
-                    style={[styles.choiceChipText, !isPaid && styles.choiceChipTextActive]}
-                    variant="caption"
-                  >
-                    Ücretsiz
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  onPress={onSelectTokenTicket}
-                  style={[styles.choiceChip, isPaid && styles.choiceChipActive]}
-                >
-                  <AppText
-                    style={[styles.choiceChipText, isPaid && styles.choiceChipTextActive]}
-                    variant="caption"
-                  >
-                    Token ile biletli
-                  </AppText>
-                </Pressable>
-              </View>
-
-              {isPaid ? (
-                <View style={styles.paidFields}>
-                  <AppInput
-                    error={fieldErrors.tokenPrice}
-                    keyboardType="number-pad"
-                    label="Bilet Fiyatı"
-                    onChangeText={(value) => {
-                      setTokenPriceInput(value);
-                      clearFieldError("tokenPrice");
-                    }}
-                    placeholder="25"
-                    style={inputFieldStyle}
-                    value={tokenPriceInput}
-                  />
-                  <AppText variant="caption">token</AppText>
-                </View>
-              ) : null}
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Kapak Fotoğrafı</AppText>
-              {coverUri ? <Image source={{ uri: coverUri }} style={styles.coverPreview} /> : null}
-              <AppButton label={coverUri ? "Fotoğrafı Değiştir" : "Fotoğraf Seç"} onPress={() => void pickCoverImage()} variant="secondary" />
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Etkinlik Türü</AppText>
-              <AppText variant="caption">Bir tür seç (zorunlu)</AppText>
-              <View style={[styles.typeGrid, fieldErrors.eventType ? styles.inputErrorBorder : null]}>
-                {EVENT_TYPES.map((item) => {
-                  const active = eventType === item.value;
-                  return (
-                    <Pressable
-                      key={item.value}
-                      onPress={() => {
-                        setEventType(item.value);
-                        clearFieldError("eventType");
-                      }}
-                      style={[styles.typeChip, active && styles.typeChipActive]}
-                    >
-                      <AppText style={active ? styles.typeChipTextActive : styles.typeChipText} variant="caption">
-                        {item.emoji} {item.label}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <FieldError message={fieldErrors.eventType} />
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Yaş Sınırı</AppText>
-              <AppText variant="caption">Katılım için minimum yaş (opsiyonel)</AppText>
-              <View style={[styles.choiceRow, fieldErrors.ageRestriction ? styles.inputErrorBorder : null]}>
-                {availableMinAgeOptions.map((item) => {
-                  const active = minAge === item.value;
-                  return (
-                    <Pressable
-                      key={item.label}
-                      onPress={() => onSelectMinAge(item.value)}
-                      style={[styles.choiceChip, active && styles.choiceChipActive]}
-                    >
-                      <AppText style={[styles.choiceChipText, active && styles.choiceChipTextActive]} variant="caption">
-                        {item.label}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {organizerAge != null && organizerAge < 21 ? (
-                <AppText variant="caption">
-                  21+ yaş sınırı yalnızca 21 yaş ve üzeri organizatörler tarafından seçilebilir.
-                </AppText>
-              ) : null}
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Alkol var mı?</AppText>
-              <View style={styles.choiceRow}>
-                <Pressable
-                  onPress={() => onSelectHasAlcohol(false)}
-                  style={[styles.choiceChip, !hasAlcohol && styles.choiceChipActive]}
-                >
-                  <AppText style={[styles.choiceChipText, !hasAlcohol && styles.choiceChipTextActive]} variant="caption">
-                    Hayır
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => onSelectHasAlcohol(true)}
-                  style={[styles.choiceChip, hasAlcohol && styles.choiceChipActive]}
-                >
-                  <AppText style={[styles.choiceChipText, hasAlcohol && styles.choiceChipTextActive]} variant="caption">
-                    Evet
-                  </AppText>
-                </Pressable>
-              </View>
-              {alcoholWarning ? (
-                <AppText style={styles.fieldError} variant="caption">
-                  {alcoholWarning}
-                </AppText>
-              ) : null}
-              <FieldError message={fieldErrors.ageRestriction} />
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <AppText variant="label">Sigara içilebilir mi?</AppText>
-              <View style={styles.choiceRow}>
-                <Pressable
-                  onPress={() => setSmokingAllowed(false)}
-                  style={[styles.choiceChip, !smokingAllowed && styles.choiceChipActive]}
-                >
-                  <AppText style={[styles.choiceChipText, !smokingAllowed && styles.choiceChipTextActive]} variant="caption">
-                    Hayır
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setSmokingAllowed(true)}
-                  style={[styles.choiceChip, smokingAllowed && styles.choiceChipActive]}
-                >
-                  <AppText style={[styles.choiceChipText, smokingAllowed && styles.choiceChipTextActive]} variant="caption">
-                    Evet
-                  </AppText>
-                </Pressable>
-              </View>
-            </View>
-
-            {submitError ? (
-              <AppText style={styles.submitError} variant="caption">
-                {submitError}
-              </AppText>
-            ) : null}
-          </View>
+          {currentStep === 5 ? (
+            <PreviewStep draft={draft} onEditStep={goToStep} submitError={submitError} />
+          ) : null}
         </ScrollView>
 
-        <View style={styles.footer}>
-          <AppButton
-            disabled={isSubmitting}
-            label={isSubmitting ? "Gönderiliyor..." : "Etkinliği Oluştur"}
-            onPress={() => void onSubmit()}
-          />
-        </View>
+        <EventCreationBottomBar
+          canProceed={currentStep === 5 ? true : stepState.canProceed}
+          currentStep={currentStep}
+          isSubmitting={isSubmitting}
+          onBack={handleBack}
+          onNext={handleNext}
+          onSubmit={() => void handleSubmit()}
+        />
       </KeyboardAvoidingView>
 
       <EventLocationPickerModal
-        city={city}
-        countryCode={countryCode}
+        city={draft.city}
+        countryCode={draft.countryCode}
         onClose={() => setIsLocationPickerOpen(false)}
         onConfirm={(nextCountryCode, nextCity) => {
-          setCountryCode(nextCountryCode);
-          setCity(nextCity);
+          patchDraft({ countryCode: nextCountryCode, city: nextCity });
           clearFieldError("location");
         }}
         visible={isLocationPickerOpen}
@@ -676,125 +499,21 @@ const styles = StyleSheet.create({
   pagePadding: {
     paddingHorizontal: theme.spacing.lg,
   },
-  scrollContent: {
-    paddingBottom: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  form: {
-    gap: theme.spacing.md,
-  },
-  fieldBlock: {
-    gap: theme.spacing.xs,
-  },
-  fieldError: {
-    color: theme.colors.danger,
-  },
-  submitError: {
-    color: theme.colors.danger,
-    textAlign: "center",
-  },
-  textarea: {
-    minHeight: 110,
-  },
-  pickerWrap: {
-    borderColor: "transparent",
-    borderRadius: FIELD_RADIUS,
-    borderWidth: 1,
-    padding: 1,
-  },
-  selectField: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: theme.colors.border,
-    borderRadius: FIELD_RADIUS,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    minHeight: 48,
-    paddingHorizontal: theme.spacing.md,
-  },
-  inputErrorBorder: {
-    borderColor: theme.colors.danger,
-  },
-  coverPreview: {
-    borderRadius: FIELD_RADIUS,
-    height: 160,
-    width: "100%",
-  },
-  choiceRow: {
-    flexDirection: "row",
+  headerBlock: {
     gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
   },
-  choiceChip: {
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderColor: theme.colors.border,
-    borderRadius: CHIP_RADIUS,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 44,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  choiceChipActive: {
-    backgroundColor: SELECTED_CHIP_BG,
-    borderColor: SELECTED_CHIP_BORDER,
-  },
-  choiceChipText: {
+  stepCounter: {
     color: theme.colors.textSecondary,
-    fontWeight: "600",
     textAlign: "center",
   },
-  choiceChipTextActive: {
-    color: SELECTED_CHIP_TEXT,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  paidFields: {
-    gap: theme.spacing.sm,
+  stepTitle: {
+    color: theme.colors.textPrimary,
     marginTop: theme.spacing.xs,
   },
-  typeGrid: {
-    borderColor: "transparent",
-    borderRadius: FIELD_RADIUS,
-    borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.sm,
-    padding: theme.spacing.xs,
-  },
-  typeChip: {
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderColor: theme.colors.border,
-    borderRadius: CHIP_RADIUS,
-    borderWidth: 1,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  typeChipActive: {
-    backgroundColor: SELECTED_CHIP_BG,
-    borderColor: SELECTED_CHIP_BORDER,
-  },
-  typeChipText: {
-    color: theme.colors.textPrimary,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  typeChipTextActive: {
-    color: SELECTED_CHIP_TEXT,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  footer: {
-    backgroundColor: theme.colors.background,
-    borderTopColor: theme.colors.border,
-    borderTopWidth: 1,
-    paddingBottom: theme.spacing.lg,
+  scrollContent: {
+    paddingBottom: theme.spacing.xxl,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
   },
   stateCard: {
     gap: theme.spacing.sm,
@@ -803,5 +522,9 @@ const styles = StyleSheet.create({
   blockCard: {
     gap: theme.spacing.sm,
     marginTop: theme.spacing.md,
+  },
+  retryLink: {
+    color: theme.colors.primary,
+    marginTop: theme.spacing.sm,
   },
 });
