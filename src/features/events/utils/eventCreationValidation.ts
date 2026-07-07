@@ -8,6 +8,13 @@ import { EVENT_CREATION_STEPS } from "../types/eventCreation";
 import { resolveEventCreationExitDecision } from "./eventCreationNavigation";
 import { isEventMinAgeAllowedForOrganizer } from "./viewerAge";
 import { parseTokenPriceInput } from "./eventTicketPricing";
+import {
+  EVENT_TIMEZONE_INVALID_MESSAGE,
+  normalizeIanaTimezone,
+  resolveWallClockValidationError,
+  wallClockFromDate,
+  wallClockToUtc,
+} from "./eventTimezone";
 
 const TITLE_MIN = 3;
 const TITLE_MAX = 120;
@@ -115,13 +122,10 @@ function validateDateLocationStep(draft: EventCreationDraft, context: EventCreat
   const trimmedVenue = draft.venueName.trim();
   const trimmedCity = draft.city.trim();
   const trimmedCountryCode = draft.countryCode.trim().toUpperCase();
+  const timezone = normalizeIanaTimezone(draft.timezone);
 
-  if (draft.startsAt < now) {
-    errors.startsAt = "Başlangıç zamanı geçmişte olamaz.";
-  }
-
-  if (draft.endsAt <= draft.startsAt) {
-    errors.endsAt = "Bitiş zamanı başlangıçtan sonra olmalı.";
+  if (!timezone) {
+    errors.timezone = EVENT_TIMEZONE_INVALID_MESSAGE;
   }
 
   if (trimmedVenue.length < VENUE_MIN) {
@@ -132,6 +136,34 @@ function validateDateLocationStep(draft: EventCreationDraft, context: EventCreat
 
   if (!trimmedCity || trimmedCountryCode.length < 2) {
     errors.location = "Şehir ve ülke seçmelisin.";
+  }
+
+  if (!timezone) {
+    return errors;
+  }
+
+  const startWall = wallClockFromDate(draft.startsAt);
+  const endWall = wallClockFromDate(draft.endsAt);
+
+  const startWallError = resolveWallClockValidationError(startWall, timezone);
+  if (startWallError) {
+    errors.startsAt = startWallError;
+  }
+
+  const endWallError = resolveWallClockValidationError(endWall, timezone);
+  if (endWallError) {
+    errors.endsAt = endWallError;
+  }
+
+  const startUtc = wallClockToUtc(startWall, timezone);
+  const endUtc = wallClockToUtc(endWall, timezone);
+
+  if (startUtc.ok && startUtc.utcMillis < now.getTime()) {
+    errors.startsAt = "Başlangıç zamanı geçmişte olamaz.";
+  }
+
+  if (startUtc.ok && endUtc.ok && endUtc.utcMillis <= startUtc.utcMillis) {
+    errors.endsAt = "Bitiş zamanı başlangıçtan sonra olmalı.";
   }
 
   return errors;
@@ -225,7 +257,7 @@ export function resolveFirstInvalidStep(
 
 function resolveFirstInvalidStepFromErrors(errors: EventCreationFieldErrors): EventCreationStep {
   const step1Keys = ["title", "description", "eventType"] as const;
-  const step2Keys = ["startsAt", "endsAt", "venueName", "location"] as const;
+  const step2Keys = ["startsAt", "endsAt", "venueName", "location", "timezone"] as const;
   const step3Keys = ["capacity", "minAge", "hasAlcohol"] as const;
   const step4Keys = ["tokenPrice"] as const;
 

@@ -9,6 +9,7 @@ import { theme } from "../../../constants/theme";
 import type { EventItem } from "../types";
 import { getEventTypeLabel } from "../constants/eventTypes";
 import { formatEventTicketCardLabel } from "../utils/eventTicketPricing";
+import { formatEventDateBadge, formatEventTimeLabel } from "../utils/eventTimezone";
 
 type EventCardProps = {
   event: EventItem;
@@ -30,31 +31,13 @@ const getCoverUri = (event: EventItem) => {
   return "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80";
 };
 
-const formatTime = (startsAt: string) => {
-  const date = new Date(startsAt);
-  if (Number.isNaN(date.getTime())) {
-    return "12:00 PM";
-  }
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
-
-const formatDateBadge = (startsAt: string) => {
-  const date = new Date(startsAt);
-  if (Number.isNaN(date.getTime())) {
-    return { day: "--", weekday: "DAY" };
-  }
-  return {
-    day: date.toLocaleDateString([], { day: "2-digit" }),
-    weekday: date.toLocaleDateString([], { weekday: "short" }).toUpperCase(),
-  };
-};
-
 const typeLabel = (event: EventItem) => getEventTypeLabel(event.type);
 
 const ratingLabel = (_event: EventItem) => "4.8";
 
 export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJoin, onPress }: EventCardProps) {
-  const dateBadge = formatDateBadge(event.startsAt);
+  const dateBadge = formatEventDateBadge(event.startsAt, event.timezone);
+  const timeLabel = formatEventTimeLabel(event.startsAt, event.timezone);
   const attendeePreview = ["U1", "U2", "U3", `+${Math.max(0, event.attendeeCount - 3)}`];
   const ticketLabel = formatEventTicketCardLabel(event);
 
@@ -116,7 +99,7 @@ export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJ
           </View>
 
           <AppText style={styles.dateLine} variant="bodyMuted">
-            {formatTime(event.startsAt)}
+            {timeLabel}
           </AppText>
 
           <View style={styles.footer}>

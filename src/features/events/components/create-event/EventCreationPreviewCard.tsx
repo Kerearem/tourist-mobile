@@ -9,19 +9,11 @@ import { theme } from "../../../../constants/theme";
 import { getEventTypeEmoji, getEventTypeLabel } from "../../constants/eventTypes";
 import type { EventCreationDraft } from "../../types/eventCreation";
 import { formatEventTicketOfferingLabel } from "../../utils/eventTicketPricing";
+import { formatTimezoneOptionLabel, formatWallClockInTimezone, wallClockFromDate } from "../../utils/eventTimezone";
 
 type EventCreationPreviewCardProps = {
   draft: EventCreationDraft;
 };
-
-const formatDateTimeLabel = (date: Date) =>
-  date.toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
 const formatMinAgeLabel = (minAge: EventCreationDraft["minAge"]) => {
   if (minAge == null) {
@@ -67,7 +59,9 @@ export function EventCreationPreviewCard({ draft }: EventCreationPreviewCardProp
         </AppText>
 
         <AppText style={styles.meta} variant="bodyMuted">
-          {formatDateTimeLabel(draft.startsAt)}
+          {draft.timezone.trim()
+            ? formatWallClockInTimezone(wallClockFromDate(draft.startsAt), draft.timezone)
+            : draft.startsAt.toLocaleString("tr-TR")}
         </AppText>
 
         <AppText style={styles.meta} variant="bodyMuted">
@@ -91,7 +85,7 @@ export function EventCreationPreviewCard({ draft }: EventCreationPreviewCardProp
         </AppText>
 
         <AppText style={styles.meta} variant="caption">
-          {formatVisibilityLabel(draft.visibility)}
+          {formatVisibilityLabel(draft.visibility)} · {formatTimezoneOptionLabel(draft.timezone)}
         </AppText>
       </View>
     </Card>

@@ -7,6 +7,7 @@ import { theme } from "../../../../../constants/theme";
 import { getEventTypeLabel } from "../../../constants/eventTypes";
 import type { EventCreationDraft, EventCreationStep } from "../../../types/eventCreation";
 import { formatEventTicketOfferingLabel } from "../../../utils/eventTicketPricing";
+import { formatTimezoneOptionLabel, formatWallClockInTimezone, wallClockFromDate } from "../../../utils/eventTimezone";
 import { EventCreationPreviewCard } from "../EventCreationPreviewCard";
 import { FIELD_RADIUS, StepSection } from "../createEventUi";
 
@@ -49,11 +50,11 @@ export function PreviewStep({ draft, submitError, onEditStep }: PreviewStepProps
         <SummarySection
           onEdit={() => onEditStep(2)}
           rows={[
-            ["Başlangıç", draft.startsAt.toLocaleString("tr-TR")],
-            ["Bitiş", draft.endsAt.toLocaleString("tr-TR")],
+            ["Başlangıç", formatWallClockInTimezone(wallClockFromDate(draft.startsAt), draft.timezone)],
+            ["Bitiş", formatWallClockInTimezone(wallClockFromDate(draft.endsAt), draft.timezone)],
             ["Mekân", draft.venueName.trim() || "—"],
             ["Konum", draft.city && countryName ? `${draft.city}, ${countryName}` : "—"],
-            ["Saat dilimi", draft.timezone ?? "—"],
+            ["Saat dilimi", draft.timezone.trim() ? formatTimezoneOptionLabel(draft.timezone) : "—"],
           ]}
           title="Tarih ve konum"
         />

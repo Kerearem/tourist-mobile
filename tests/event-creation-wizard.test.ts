@@ -2,11 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { EVENT_CREATION_STEPS, EVENT_CREATION_STEP_TITLES } from "../src/features/events/types/eventCreation";
-import { createInitialEventCreationDraft } from "../src/features/events/hooks/useEventCreationDraft";
+import { createInitialEventCreationDraft } from "../src/features/events/utils/eventCreationDraft";
 import { DEFAULT_EVENT_CREATION_CAPABILITIES } from "../src/features/events/utils/eventCreationCapabilities";
 import {
   buildCreateEventPayload,
-  resolveDeviceTimezone,
   shouldUploadCoverOnSubmit,
 } from "../src/features/events/utils/eventCreationPayload";
 import {
@@ -39,8 +38,8 @@ function buildValidDraft() {
   draft.title = "Test Etkinliği";
   draft.description = "Bu etkinlik test amaçlı açıklama metnidir.";
   draft.eventType = "social";
-  draft.startsAt = new Date("2026-08-01T18:00:00.000Z");
-  draft.endsAt = new Date("2026-08-01T20:00:00.000Z");
+  draft.startsAt = new Date(2026, 7, 1, 18, 0, 0, 0);
+  draft.endsAt = new Date(2026, 7, 1, 20, 0, 0, 0);
   draft.venueName = "Test Mekan";
   draft.capacityInput = "40";
   draft.visibility = "city";
@@ -78,8 +77,8 @@ describe("event creation field validation", () => {
 
   it("rejects past start dates", () => {
     const draft = buildValidDraft();
-    draft.startsAt = new Date("2026-06-01T18:00:00.000Z");
-    draft.endsAt = new Date("2026-06-01T20:00:00.000Z");
+    draft.startsAt = new Date(2026, 5, 1, 18, 0, 0, 0);
+    draft.endsAt = new Date(2026, 5, 1, 20, 0, 0, 0);
     const errors = validateEventCreationStep(2, draft, context);
     assert.match(errors.startsAt ?? "", /geçmişte/);
   });
@@ -144,15 +143,21 @@ describe("event creation field validation", () => {
   it("validates token price and free payload", () => {
     const freeDraft = buildValidDraft();
     const freePayload = buildCreateEventPayload(freeDraft, 40);
-    assert.equal(freePayload?.tokenPrice, 0);
-    assert.equal(freePayload?.isPaid, false);
+    assert.equal(freePayload.ok, true);
+    if (freePayload.ok) {
+      assert.equal(freePayload.payload.tokenPrice, 0);
+      assert.equal(freePayload.payload.isPaid, false);
+    }
 
     const tokenDraft = { ...buildValidDraft(), ticketMode: "token" as const, tokenPriceInput: "12" };
     const tokenErrors = validateEventCreationStep(4, tokenDraft, context);
     assert.equal(Object.keys(tokenErrors).length, 0);
     const tokenPayload = buildCreateEventPayload(tokenDraft, 40);
-    assert.equal(tokenPayload?.isPaid, true);
-    assert.equal(tokenPayload?.tokenPrice, 12);
+    assert.equal(tokenPayload.ok, true);
+    if (tokenPayload.ok) {
+      assert.equal(tokenPayload.payload.isPaid, true);
+      assert.equal(tokenPayload.payload.tokenPrice, 12);
+    }
   });
 
   it("enforces age and alcohol rules", () => {
@@ -170,31 +175,37 @@ describe("event creation field validation", () => {
     const countryDraft = { ...buildValidDraft(), visibility: "country" as const };
     assert.equal(Object.keys(validateEventCreationStep(3, cityDraft, context)).length, 0);
     assert.equal(Object.keys(validateEventCreationStep(3, countryDraft, context)).length, 0);
-    assert.equal(buildCreateEventPayload(cityDraft, 40)?.visibility, "city");
-    assert.equal(buildCreateEventPayload(countryDraft, 40)?.visibility, "country");
+    const cityPayload = buildCreateEventPayload(cityDraft, 40);
+    const countryPayload = buildCreateEventPayload(countryDraft, 40);
+    assert.equal(cityPayload.ok && cityPayload.payload.visibility, "city");
+    assert.equal(countryPayload.ok && countryPayload.payload.visibility, "country");
   });
 });
 
 describe("event creation payload and timezone", () => {
-  it("omits timezone when unavailable", () => {
+  it("rejects payload when timezone is missing", () => {
     const draft = buildValidDraft();
-    draft.timezone = undefined;
-    const payload = buildCreateEventPayload(draft, 40);
-    if (!resolveDeviceTimezone()) {
-      assert.equal(payload?.timezone, undefined);
+    draft.timezone = "";
+    const result = buildCreateEventPayload(draft, 40);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.reason, "timezone");
     }
   });
 
   it("builds final payload with all required fields", () => {
     const draft = buildValidDraft();
-    const payload = buildCreateEventPayload(draft, 40);
-    assert.ok(payload);
-    assert.equal(payload.title, "Test Etkinliği");
-    assert.equal(payload.capacity, 40);
-    assert.equal(payload.requiresApproval, false);
-    assert.equal(payload.hasAlcohol, false);
-    assert.equal(payload.smokingAllowed, false);
-    assert.equal(payload.type, "social");
+    const result = buildCreateEventPayload(draft, 40);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.payload.title, "Test Etkinliği");
+      assert.equal(result.payload.capacity, 40);
+      assert.equal(result.payload.requiresApproval, false);
+      assert.equal(result.payload.hasAlcohol, false);
+      assert.equal(result.payload.smokingAllowed, false);
+      assert.equal(result.payload.type, "social");
+      assert.equal(result.payload.timezone, "Europe/Istanbul");
+    }
   });
 
   it("uploads cover only when cover uri exists", () => {

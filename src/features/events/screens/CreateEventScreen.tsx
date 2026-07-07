@@ -21,6 +21,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
 import { uploadImage } from "../../../services/media/cloudinary";
 import { EventLocationPickerModal } from "../components/EventLocationPickerModal";
+import { EventTimezonePickerModal } from "../components/create-event/EventTimezonePickerModal";
 import { EventCreationBottomBar } from "../components/create-event/EventCreationBottomBar";
 import { EventCreationStepper } from "../components/create-event/EventCreationStepper";
 import { BasicsStep } from "../components/create-event/steps/BasicsStep";
@@ -28,7 +29,9 @@ import { DateLocationStep } from "../components/create-event/steps/DateLocationS
 import { ParticipationStep } from "../components/create-event/steps/ParticipationStep";
 import { PreviewStep } from "../components/create-event/steps/PreviewStep";
 import { TicketsStep } from "../components/create-event/steps/TicketsStep";
-import { createInitialEventCreationDraft, useEventCreationDraft } from "../hooks/useEventCreationDraft";
+import { useEventCreationDraft } from "../hooks/useEventCreationDraft";
+import { createInitialEventCreationDraft } from "../utils/eventCreationDraft";
+import { resolveDeviceTimezone } from "../utils/eventDeviceTimezone";
 import { createEvent } from "../services/events.service";
 import { getOrganizerStatus } from "../services/organizer.service";
 import {
@@ -38,6 +41,7 @@ import {
   type EventCreationStep,
 } from "../types/eventCreation";
 import { buildCreateEventPayload } from "../utils/eventCreationPayload";
+import { EVENT_TIMEZONE_INVALID_MESSAGE } from "../utils/eventTimezone";
 import {
   EVENT_CREATION_EXIT_ALERT,
   resolveEventCreationExitDecision,
@@ -67,6 +71,7 @@ export function CreateEventScreen({ navigation }: Props) {
       createInitialEventCreationDraft({
         city: user?.privateProfile.destinationCity ?? user?.publicProfile.currentCity ?? "",
         countryCode: user?.privateProfile.destinationCountryCode ?? "",
+        timezone: resolveDeviceTimezone() ?? "",
       }),
     [user?.privateProfile.destinationCity, user?.privateProfile.destinationCountryCode, user?.publicProfile.currentCity],
   );
@@ -75,6 +80,7 @@ export function CreateEventScreen({ navigation }: Props) {
   const [currentStep, setCurrentStep] = useState<EventCreationStep>(1);
   const [fieldErrors, setFieldErrors] = useState<EventCreationFieldErrors>({});
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [isTimezonePickerOpen, setIsTimezonePickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeEventCheck, setActiveEventCheck] = useState<ActiveEventCheckState>({ status: "loading" });
@@ -288,9 +294,15 @@ export function CreateEventScreen({ navigation }: Props) {
       return;
     }
 
-    const payload = buildCreateEventPayload(draft, capacity);
-    if (!payload) {
-      const firstInvalidStep = resolveFirstInvalidStep(draft, validationContext) ?? 4;
+    const payloadResult = buildCreateEventPayload(draft, capacity);
+    if (!payloadResult.ok) {
+      if (payloadResult.reason === "timezone") {
+        setCurrentStep(2);
+        setFieldErrors({ timezone: EVENT_TIMEZONE_INVALID_MESSAGE });
+        return;
+      }
+
+      const firstInvalidStep = resolveFirstInvalidStep(draft, validationContext) ?? 2;
       setCurrentStep(firstInvalidStep);
       return;
     }
@@ -304,7 +316,7 @@ export function CreateEventScreen({ navigation }: Props) {
       }
 
       await createEvent({
-        ...payload,
+        ...payloadResult.payload,
         ...(coverImageUrl ? { coverImageUrl } : {}),
       });
 
@@ -436,6 +448,7 @@ export function CreateEventScreen({ navigation }: Props) {
               onChange={patchDraft}
               onClearError={clearFieldError}
               onOpenLocationPicker={() => setIsLocationPickerOpen(true)}
+              onOpenTimezonePicker={() => setIsTimezonePickerOpen(true)}
               onSetStartsAt={setStartsAt}
             />
           ) : null}
@@ -473,6 +486,18 @@ export function CreateEventScreen({ navigation }: Props) {
           onSubmit={() => void handleSubmit()}
         />
       </KeyboardAvoidingView>
+
+      <EventTimezonePickerModal
+        onClose={() => setIsTimezonePickerOpen(false)}
+        onSelect={(timezone) => {
+          patchDraft({ timezone });
+          clearFieldError("timezone");
+          clearFieldError("startsAt");
+          clearFieldError("endsAt");
+        }}
+        selectedTimezone={draft.timezone}
+        visible={isTimezonePickerOpen}
+      />
 
       <EventLocationPickerModal
         city={draft.city}

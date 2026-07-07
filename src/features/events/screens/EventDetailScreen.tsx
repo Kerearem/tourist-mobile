@@ -22,6 +22,7 @@ import { getEventById, toggleEventAttendance } from "../services/events.service"
 import type { EventAttendanceStatus, EventItem } from "../types";
 import { formatEventJoinCtaLabel, canAttemptEventJoin, resolveEventTokenPrice, resolveEventTicketAvailable } from "../utils/eventTicketPricing";
 import { resolveEventAttendanceError } from "../utils/resolveEventAttendanceError";
+import { formatEventDateBadge, formatEventDateTimeRange } from "../utils/eventTimezone";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventDetailScreen">;
 
@@ -32,37 +33,6 @@ const toAttendanceUiState = (status?: EventAttendanceStatus): AttendanceUiState 
 };
 
 type AttendanceUiState = "idle" | "pending" | "approved";
-
-const formatDateTime = (startsAt: string, endsAt?: string) => {
-  const start = new Date(startsAt);
-  if (Number.isNaN(start.getTime())) {
-    return "Date pending";
-  }
-
-  const startLabel = start.toLocaleString([], {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  if (!endsAt) {
-    return startLabel;
-  }
-
-  const end = new Date(endsAt);
-  if (Number.isNaN(end.getTime())) {
-    return startLabel;
-  }
-
-  const endLabel = end.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  return `${startLabel} - ${endLabel}`;
-};
 
 const getCoverUri = (event: EventItem) => {
   if (event.coverImageUrl) {
@@ -75,17 +45,6 @@ const getCoverUri = (event: EventItem) => {
     return "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&q=80";
   }
   return "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80";
-};
-
-const formatDateBadge = (startsAt: string) => {
-  const date = new Date(startsAt);
-  if (Number.isNaN(date.getTime())) {
-    return { day: "--", weekday: "DAY" };
-  }
-  return {
-    day: date.toLocaleDateString([], { day: "2-digit" }),
-    weekday: date.toLocaleDateString([], { weekday: "short" }).toUpperCase(),
-  };
 };
 
 export function EventDetailScreen({ route }: Props) {
@@ -231,8 +190,8 @@ export function EventDetailScreen({ route }: Props) {
   }
 
   const hostInitials = event.host.displayName.slice(0, 2).toUpperCase();
-  const dateTimeLabel = formatDateTime(event.startsAt, event.endsAt);
-  const dateBadge = formatDateBadge(event.startsAt);
+  const dateTimeLabel = formatEventDateTimeRange(event.startsAt, event.endsAt, event.timezone);
+  const dateBadge = formatEventDateBadge(event.startsAt, event.timezone);
   const locationLabel = event.venueName
     ? `${event.venueName} - ${event.city}, ${event.countryCode}`
     : `${event.city}, ${event.countryCode}`;

@@ -14,6 +14,7 @@
     "@react-navigation/bottom-tabs": "^7.15.8",
     "@react-navigation/native": "^7.2.1",
     "@react-navigation/native-stack": "^7.14.9",
+    "@vvo/tzdb": "^6.198.0",
     "country-flag-icons": "^1.6.17",
     "expo": "~55.0.27",
     "expo-camera": "~55.0.20",
@@ -23,10 +24,12 @@
     "expo-haptics": "~55.0.15",
     "expo-image-picker": "~55.0.21",
     "expo-linear-gradient": "~55.0.15",
+    "expo-localization": "~55.0.16",
     "expo-media-library": "~55.0.18",
     "expo-secure-store": "~55.0.15",
     "expo-status-bar": "~55.0.6",
     "expo-video": "~55.0.18",
+    "luxon": "^3.7.2",
     "react": "19.2.0",
     "react-native": "0.83.6",
     "react-native-gesture-handler": "^2.30.0",
@@ -35,6 +38,7 @@
     "react-native-svg": "15.15.3"
   },
   "devDependencies": {
+    "@types/luxon": "^3.7.2",
     "@types/react": "~19.2.2",
     "tsx": "^4.21.0",
     "typescript": "~5.9.2"

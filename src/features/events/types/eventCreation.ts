@@ -28,7 +28,7 @@ export type EventCreationDraft = {
   venueName: string;
   city: string;
   countryCode: string;
-  timezone?: string;
+  timezone: string;
   capacityInput: string;
   visibility: EventCreationVisibility;
   minAge: EventMinAgeOption;
@@ -49,10 +49,11 @@ export type EventCreationFieldKey =
   | "title"
   | "description"
   | "eventType"
+  | "location"
+  | "timezone"
   | "startsAt"
   | "endsAt"
   | "venueName"
-  | "location"
   | "capacity"
   | "minAge"
   | "hasAlcohol"

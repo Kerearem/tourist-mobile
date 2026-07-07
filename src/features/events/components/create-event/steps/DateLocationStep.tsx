@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { DateTime } from "luxon";
 
 import { AppInput } from "../../../../../components/ui/AppInput";
 import { AppText } from "../../../../../components/ui/AppText";
@@ -8,6 +9,13 @@ import { getCountryByCode, getCountryLabel } from "../../../../../constants/coun
 import { theme } from "../../../../../constants/theme";
 import { EventDateTimePicker } from "../../EventDateTimePicker";
 import type { EventCreationDraft, EventCreationFieldErrors } from "../../../types/eventCreation";
+import {
+  dateFromWallClock,
+  formatTimezoneOptionLabel,
+  formatWallClockInTimezone,
+  getNowWallClockInTimezone,
+  isValidIanaTimezone,
+} from "../../../utils/eventTimezone";
 import { FieldError, FIELD_RADIUS, StepSection, errorBorder, inputFieldStyle } from "../createEventUi";
 
 type DateLocationStepProps = {
@@ -16,17 +24,9 @@ type DateLocationStepProps = {
   onChange: (patch: Partial<EventCreationDraft>) => void;
   onSetStartsAt: (date: Date) => void;
   onOpenLocationPicker: () => void;
+  onOpenTimezonePicker: () => void;
   onClearError: (key: keyof EventCreationFieldErrors) => void;
 };
-
-const formatDateTimeLabel = (date: Date) =>
-  date.toLocaleString("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
 export function DateLocationStep({
   draft,
@@ -34,6 +34,7 @@ export function DateLocationStep({
   onChange,
   onSetStartsAt,
   onOpenLocationPicker,
+  onOpenTimezonePicker,
   onClearError,
 }: DateLocationStepProps) {
   const locationLabel = useMemo(() => {
@@ -45,17 +46,62 @@ export function DateLocationStep({
     return `${draft.city}, ${countryName}`;
   }, [draft.city, draft.countryCode]);
 
-  const timezoneLabel = draft.timezone?.trim() || "Cihaz saat dilimi kullanılamıyor";
+  const timezoneLabel = draft.timezone.trim()
+    ? formatTimezoneOptionLabel(draft.timezone)
+    : "Saat dilimi seç";
+
+  const minimumStartDate = useMemo(() => {
+    if (!isValidIanaTimezone(draft.timezone)) {
+      return new Date();
+    }
+
+    const wall = getNowWallClockInTimezone(draft.timezone, DateTime.utc());
+    return wall ? dateFromWallClock(wall) : new Date();
+  }, [draft.timezone]);
+
+  const formatPickerLabel = (date: Date) =>
+    isValidIanaTimezone(draft.timezone)
+      ? formatWallClockInTimezone(
+          {
+            year: date.getFullYear(),
+            month: date.getMonth() + 1,
+            day: date.getDate(),
+            hour: date.getHours(),
+            minute: date.getMinutes(),
+          },
+          draft.timezone,
+        )
+      : date.toLocaleString("tr-TR");
 
   return (
     <StepSection>
       <View style={styles.card}>
         <View style={styles.fieldBlock}>
+          <AppText variant="label">Etkinlik Saat Dilimi</AppText>
+          <AppText variant="caption">Tarih ve saatler bu saat dilimine göre yorumlanır.</AppText>
+          <Pressable
+            onPress={onOpenTimezonePicker}
+            style={[styles.selectField, errorBorder(Boolean(errors.timezone))]}
+          >
+            <View style={styles.timezoneValue}>
+              <AppText variant="body">{draft.timezone.trim() || "Saat dilimi seç"}</AppText>
+              <AppText style={styles.timezoneHint} variant="caption">
+                {timezoneLabel}
+              </AppText>
+            </View>
+            <Ionicons color={theme.colors.muted} name="chevron-forward" size={20} />
+          </Pressable>
+          <FieldError message={errors.timezone} />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.fieldBlock}>
           <AppText variant="label">Başlangıç Tarihi ve Saati</AppText>
-          <AppText variant="caption">{formatDateTimeLabel(draft.startsAt)}</AppText>
+          <AppText variant="caption">{formatPickerLabel(draft.startsAt)}</AppText>
           <View style={errorBorder(Boolean(errors.startsAt))}>
             <EventDateTimePicker
-              minimumDate={new Date()}
+              minimumDate={minimumStartDate}
               onChange={(value) => {
                 onSetStartsAt(value);
                 onClearError("startsAt");
@@ -69,7 +115,7 @@ export function DateLocationStep({
 
         <View style={styles.fieldBlock}>
           <AppText variant="label">Bitiş Tarihi ve Saati</AppText>
-          <AppText variant="caption">{formatDateTimeLabel(draft.endsAt)}</AppText>
+          <AppText variant="caption">{formatPickerLabel(draft.endsAt)}</AppText>
           <View style={[styles.pickerWrap, errorBorder(Boolean(errors.endsAt))]}>
             <EventDateTimePicker
               minimumDate={draft.startsAt}
@@ -108,14 +154,6 @@ export function DateLocationStep({
           </Pressable>
           <FieldError message={errors.location} />
         </View>
-
-        <View style={styles.timezoneBox}>
-          <Ionicons color={theme.colors.primary} name="time-outline" size={18} />
-          <View style={styles.timezoneText}>
-            <AppText variant="label">Saat dilimi</AppText>
-            <AppText variant="caption">{timezoneLabel}</AppText>
-          </View>
-        </View>
       </View>
     </StepSection>
   );
@@ -149,17 +187,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     minHeight: 48,
     paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
-  timezoneBox: {
-    alignItems: "center",
-    backgroundColor: theme.colors.surface,
-    borderRadius: FIELD_RADIUS,
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-    padding: theme.spacing.md,
-  },
-  timezoneText: {
+  timezoneValue: {
     flex: 1,
     gap: 2,
+    paddingRight: theme.spacing.sm,
+  },
+  timezoneHint: {
+    color: theme.colors.textSecondary,
   },
 });

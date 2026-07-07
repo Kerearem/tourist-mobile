@@ -13,6 +13,7 @@ import { EventMomentsGrid } from "../components/EventMomentsGrid";
 import { getEventAlbum } from "../services/events.service";
 import type { EventAlbum } from "../types";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
+import { formatEventDateTimeRange } from "../utils/eventTimezone";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
@@ -48,29 +49,8 @@ function AlbumStarRating({ rating, starCount = 5 }: AlbumStarRatingProps) {
   );
 }
 
-const formatEventDate = (startsAt: string, endsAt?: string) => {
-  const start = new Date(startsAt);
-  if (Number.isNaN(start.getTime())) {
-    return "";
-  }
-  const startLabel = start.toLocaleString("tr-TR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  if (!endsAt) {
-    return startLabel;
-  }
-  const end = new Date(endsAt);
-  if (Number.isNaN(end.getTime())) {
-    return startLabel;
-  }
-  const endLabel = end.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-  return `${startLabel} – ${endLabel}`;
-};
+const formatEventDate = (startsAt: string, endsAt: string | undefined, timezone?: string) =>
+  formatEventDateTimeRange(startsAt, endsAt, timezone, "tr-TR");
 
 export function EventAlbumScreen({ navigation, route }: Props) {
   const [album, setAlbum] = useState<EventAlbum | null>(null);
@@ -135,7 +115,7 @@ export function EventAlbumScreen({ navigation, route }: Props) {
             {album.event.title}
           </AppText>
           <AppText style={styles.eventMeta} variant="bodyMuted">
-            {formatEventDate(album.event.startsAt, album.event.endsAt)}
+            {formatEventDate(album.event.startsAt, album.event.endsAt, album.event.timezone)}
           </AppText>
           <AppText style={styles.eventMeta} variant="bodyMuted">
             {locationLabel}
