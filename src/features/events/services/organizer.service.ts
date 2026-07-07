@@ -1,9 +1,29 @@
-import type { ApplyOrganizerInput, OrganizerStatusResponse } from "../types/organizer";
+import type {
+  ApplyOrganizerInput,
+  CreateOrganizerDraftInput,
+  CreateUploadIntentInput,
+  CurrentOrganizerApplicationResponse,
+  FinalizeVerificationUploadResponse,
+  OrganizerDraftResponse,
+  OrganizerStatusResponse,
+  SubmitOrganizerApplicationResponse,
+  UploadIntentResponse,
+  VerificationUploadFile,
+} from "../types/organizer";
 import type { EventItem } from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
 import { apiRequest } from "../../../services/api/client";
+import { uploadVerificationFileToCloudinary } from "../../../services/media/cloudinary-verification";
+import {
+  createMockOrganizerDraft,
+  createMockUploadIntent,
+  finalizeMockUploadIntent,
+  getMockCurrentOrganizerApplication,
+  submitMockOrganizerApplication,
+} from "./organizer-mock-state";
+import { orchestrateVerificationUpload } from "../utils/organizer-verification-upload";
 
 const getAccessToken = async () => {
   const state = await loadAuthState();
@@ -13,8 +33,29 @@ const getAccessToken = async () => {
   return state.tokens.accessToken;
 };
 
+const withApplicationIdParam = (template: string, applicationId: string) =>
+  template.replace(":applicationId", applicationId);
+
+const withUserIdParam = (template: string, userId: string) => template.replace(":userId", userId);
+
 export async function getOrganizerStatus(): Promise<OrganizerStatusResponse> {
   if (USE_MOCK_BACKEND) {
+    const current = getMockCurrentOrganizerApplication();
+    if (current.application?.reviewStatus === "SUBMITTED" || current.application?.reviewStatus === "UNDER_REVIEW") {
+      return {
+        organizerStatus: "pending",
+        application: current.application
+          ? {
+              id: current.application.id,
+              reason: current.application.reason ?? undefined,
+              status: "pending",
+              type: current.application.type.toLowerCase(),
+              createdAt: current.application.createdAt,
+            }
+          : undefined,
+      };
+    }
+
     return {
       organizerStatus: "not_applied",
     };
@@ -27,6 +68,130 @@ export async function getOrganizerStatus(): Promise<OrganizerStatusResponse> {
   });
 }
 
+export async function getCurrentOrganizerApplication(): Promise<CurrentOrganizerApplicationResponse> {
+  if (USE_MOCK_BACKEND) {
+    return getMockCurrentOrganizerApplication();
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<CurrentOrganizerApplicationResponse>(API_ENDPOINTS.organizer.applications.current, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function createOrUpdateOrganizerDraft(
+  input: CreateOrganizerDraftInput,
+): Promise<OrganizerDraftResponse> {
+  if (USE_MOCK_BACKEND) {
+    return createMockOrganizerDraft(input);
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<OrganizerDraftResponse>(API_ENDPOINTS.organizer.applications.draft, {
+    method: "POST",
+    token,
+    body: input,
+  });
+}
+
+export async function createVerificationUploadIntent(
+  applicationId: string,
+  input: CreateUploadIntentInput,
+): Promise<UploadIntentResponse> {
+  if (USE_MOCK_BACKEND) {
+    return createMockUploadIntent({ documentType: input.documentType });
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<UploadIntentResponse>(
+    withApplicationIdParam(API_ENDPOINTS.organizer.applications.uploadIntent, applicationId),
+    {
+      method: "POST",
+      token,
+      body: input,
+    },
+  );
+}
+
+export async function uploadVerificationFileToCloudinaryWithIntent(
+  file: VerificationUploadFile,
+  intent: UploadIntentResponse,
+): Promise<void> {
+  if (USE_MOCK_BACKEND) {
+    return;
+  }
+
+  await uploadVerificationFileToCloudinary(file, intent);
+}
+
+export async function finalizeVerificationUpload(
+  applicationId: string,
+  intentId: string,
+): Promise<FinalizeVerificationUploadResponse> {
+  if (USE_MOCK_BACKEND) {
+    return finalizeMockUploadIntent(intentId);
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<FinalizeVerificationUploadResponse>(
+    withApplicationIdParam(API_ENDPOINTS.organizer.applications.finalize, applicationId),
+    {
+      method: "POST",
+      token,
+      body: { intentId },
+    },
+  );
+}
+
+export async function uploadVerificationDocument(
+  applicationId: string,
+  file: VerificationUploadFile,
+  input: CreateUploadIntentInput,
+): Promise<FinalizeVerificationUploadResponse> {
+  return orchestrateVerificationUpload({
+    createIntent: async () => {
+      if (USE_MOCK_BACKEND) {
+        return createMockUploadIntent({ documentType: input.documentType });
+      }
+
+      return createVerificationUploadIntent(applicationId, input);
+    },
+    uploadToCloudinary: async (intent) => {
+      if (USE_MOCK_BACKEND) {
+        return;
+      }
+
+      await uploadVerificationFileToCloudinary(file, intent);
+    },
+    finalize: async (intentId) => {
+      if (USE_MOCK_BACKEND) {
+        return finalizeMockUploadIntent(intentId);
+      }
+
+      return finalizeVerificationUpload(applicationId, intentId);
+    },
+  });
+}
+
+export async function submitOrganizerApplication(
+  applicationId: string,
+): Promise<SubmitOrganizerApplicationResponse> {
+  if (USE_MOCK_BACKEND) {
+    return submitMockOrganizerApplication();
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<SubmitOrganizerApplicationResponse>(
+    withApplicationIdParam(API_ENDPOINTS.organizer.applications.submit, applicationId),
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+/** @deprecated Legacy single-step apply flow */
 export async function applyForOrganizer(input: ApplyOrganizerInput): Promise<OrganizerStatusResponse> {
   if (USE_MOCK_BACKEND) {
     return {
@@ -48,8 +213,6 @@ export async function applyForOrganizer(input: ApplyOrganizerInput): Promise<Org
     body: input,
   });
 }
-
-const withUserIdParam = (template: string, userId: string) => template.replace(":userId", userId);
 
 export async function getMyOrganizerEvents(): Promise<EventItem[]> {
   if (USE_MOCK_BACKEND) {

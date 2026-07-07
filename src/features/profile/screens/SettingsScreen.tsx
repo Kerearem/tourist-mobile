@@ -188,6 +188,7 @@ export function SettingsScreen({ navigation }: Props) {
         {organizerStatus === "pending" ? (
           <SettingsRow
             icon="time-outline"
+            onPress={() => navigation.navigate(ProfileRoutes.OrganizerApplicationScreen)}
             subtitle="Organizatör başvurun değerlendiriliyor."
             title="Başvurun İnceleniyor"
           />

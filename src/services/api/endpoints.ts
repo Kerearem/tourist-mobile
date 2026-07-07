@@ -106,6 +106,13 @@ export const API_ENDPOINTS = {
     myEvents: "/organizer/events",
     reels: "/organizer/reels",
     reel: "/organizer/reels/:reelId",
+    applications: {
+      draft: "/organizer/applications/draft",
+      current: "/organizer/applications/current",
+      uploadIntent: "/organizer/applications/:applicationId/documents/upload-intent",
+      finalize: "/organizer/applications/:applicationId/documents/finalize",
+      submit: "/organizer/applications/:applicationId/submit",
+    },
   },
   reels: {
     like: "/reels/:reelId/like",
