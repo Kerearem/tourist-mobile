@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Animated, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
@@ -20,10 +21,14 @@ import { blockUser } from "../../profile/services/block.service";
 import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
 import { useMessageThreadListScroll } from "../hooks/useMessageThreadListScroll";
+import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import { getConversationById, getMessages, markConversationRead, sendMessage } from "../services/messages.service";
 import type { ConversationMessage, ConversationThread } from "../types";
+import { appendMessageDeduped } from "../utils/threadRealtime";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageThreadScreen">;
+
+const NEAR_BOTTOM_THRESHOLD = 120;
 
 const threadTitle = (conversation: ConversationThread | null, viewerId: string) => {
   if (!conversation) {
@@ -74,16 +79,33 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingGreeting, setIsSendingGreeting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeThreadIdRef = useRef(route.params.threadId);
+  const isNearBottomRef = useRef(true);
+  const isFocusedRef = useRef(false);
 
   const {
     listRef,
     handleContentSizeChange,
     onInitialMessagesReady,
     onOwnMessageSent,
+    onIncomingMessage,
     resetForThread,
   } = useMessageThreadListScroll(messages);
 
   const viewerId = user?.id ?? "";
+
+  useEffect(() => {
+    activeThreadIdRef.current = route.params.threadId;
+  }, [route.params.threadId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      return () => {
+        isFocusedRef.current = false;
+      };
+    }, []),
+  );
 
   useEffect(() => {
     resetForThread();
@@ -97,38 +119,78 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     onInitialMessagesReady(isLoading);
   }, [isLoading, messages.length, onInitialMessagesReady]);
 
-  const loadThread = async () => {
+  const loadThread = async (threadId = route.params.threadId) => {
     setIsLoading(true);
     let loadedThread: ConversationThread | null = null;
 
     try {
       const [thread, threadMessages] = await Promise.all([
-        getConversationById(route.params.threadId),
-        getMessages(route.params.threadId),
+        getConversationById(threadId),
+        getMessages(threadId),
       ]);
+
+      if (activeThreadIdRef.current !== threadId) {
+        return;
+      }
+
       loadedThread = thread;
       setConversation(thread);
       setMessages(threadMessages.messages);
       setError(null);
     } catch {
+      if (activeThreadIdRef.current !== threadId) {
+        return;
+      }
+
       setConversation(null);
       setMessages([]);
       setError("Sohbet yüklenemedi.");
     } finally {
-      setIsLoading(false);
+      if (activeThreadIdRef.current === threadId) {
+        setIsLoading(false);
+      }
     }
 
-    if (loadedThread) {
-      void markConversationRead(route.params.threadId).catch(() => undefined);
+    if (loadedThread && activeThreadIdRef.current === threadId) {
+      void markConversationRead(threadId).catch(() => undefined);
     }
   };
+
+  useMessagesRealtime({
+    onMessageNew: (event) => {
+      const { conversationId, message } = event.payload;
+      if (conversationId !== activeThreadIdRef.current) {
+        return;
+      }
+
+      setMessages((current) => appendMessageDeduped(current, message));
+
+      if (message.sender.id !== viewerId) {
+        onIncomingMessage(isNearBottomRef.current);
+
+        if (isFocusedRef.current) {
+          void markConversationRead(conversationId).catch(() => undefined);
+        }
+      }
+    },
+    onConversationUpdated: (event) => {
+      if (event.payload.conversation.id !== activeThreadIdRef.current) {
+        return;
+      }
+
+      setConversation(event.payload.conversation);
+    },
+    onReconnect: () => {
+      void loadThread(activeThreadIdRef.current);
+    },
+  });
 
   const onSend = async (text: string) => {
     if (!user) {
       return;
     }
 
-    const next = await sendMessage({
+    const sentMessage = await sendMessage({
       threadId: route.params.threadId,
       sender: {
         id: user.id,
@@ -137,15 +199,23 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       text,
     });
 
-    if (!next) {
+    if (!sentMessage || activeThreadIdRef.current !== route.params.threadId) {
       return;
     }
 
-    const nextMessages = await getMessages(route.params.threadId);
+    setMessages((current) => appendMessageDeduped(current, sentMessage));
     onOwnMessageSent();
-    setMessages(nextMessages.messages);
-    const nextThread = await getConversationById(route.params.threadId);
-    setConversation(nextThread);
+    setConversation((current) =>
+      current
+        ? {
+            ...current,
+            lastMessageAt: sentMessage.createdAt,
+            lastMessagePreview: sentMessage.text || "📷 Fotoğraf",
+            updatedAt: sentMessage.createdAt,
+            unreadCount: 0,
+          }
+        : current,
+    );
   };
   const onSendGreeting = async () => {
     if (isSendingGreeting) {
@@ -249,17 +319,16 @@ export function MessageThreadScreen({ route, navigation }: Props) {
           </Pressable>
 
           <View style={styles.identity}>
-            <View style={styles.avatarWrap}>
-              <Avatar initials={initials} size={52} uri={isSystemInbox ? undefined : participant?.avatarUrl} />
-              {!isSystemInbox ? <View style={styles.onlineDot} /> : null}
-            </View>
+            <Avatar initials={initials} size={52} uri={isSystemInbox ? undefined : participant?.avatarUrl} />
             <View>
               <AppText style={styles.title} numberOfLines={1} variant="label">
                 {title}
               </AppText>
-              <AppText style={styles.onlineText} variant="caption">
-                {isSystemInbox ? "Sistem bildirimi" : "Online"}
-              </AppText>
+              {isSystemInbox ? (
+                <AppText style={styles.subtitleText} variant="caption">
+                  Sistem bildirimi
+                </AppText>
+              ) : null}
             </View>
           </View>
 
@@ -313,6 +382,13 @@ export function MessageThreadScreen({ route, navigation }: Props) {
               keyExtractor={(item) => item.id}
               keyboardShouldPersistTaps="handled"
               onContentSizeChange={handleContentSizeChange}
+              onScroll={(event) => {
+                const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+                const distanceFromBottom =
+                  contentSize.height - layoutMeasurement.height - contentOffset.y;
+                isNearBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
+              }}
+              scrollEventThrottle={16}
               renderItem={({ item }) => <MessageBubble isMine={item.sender.id === viewerId} message={item} />}
               ListHeaderComponent={
                 timeLabel ? (
@@ -370,27 +446,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: theme.spacing.sm,
   },
-  avatarWrap: {
-    position: "relative",
-  },
-  onlineDot: {
-    backgroundColor: "#18D66B",
-    borderColor: "#FFFFFF",
-    borderRadius: 7,
-    borderWidth: 2,
-    bottom: 1,
-    height: 14,
-    position: "absolute",
-    right: 1,
-    width: 14,
-  },
   title: {
     color: theme.colors.textPrimary,
     fontSize: 18,
   },
-  onlineText: {
-    color: "#16A34A",
-    fontWeight: "600",
+  subtitleText: {
+    color: theme.colors.textSecondary,
   },
   headerActions: {
     alignItems: "center",

@@ -16,6 +16,7 @@ import type { MessagesStackParamList } from "../../../navigation/types";
 import { archiveEventGroup } from "../../events/services/eventGroup.service";
 import { getEventById, toggleEventAttendance } from "../../events/services/events.service";
 import { ConversationListItem } from "../components/ConversationListItem";
+import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import { getConversations, getMessageRequests } from "../services/messages.service";
 import { getUnreadNotificationCount } from "../../notifications/services/notifications.service";
 import type { ConversationThread } from "../types";
@@ -28,6 +29,7 @@ import {
   shouldShowInboxFullScreenLoader,
   type InboxLoadMode,
 } from "../utils/inboxLoadPresentation";
+import { upsertConversationThread } from "../utils/inboxRealtime";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessagesInboxScreen">;
 
@@ -94,6 +96,19 @@ export function MessagesInboxScreen({ navigation }: Props) {
       return undefined;
     }, []),
   );
+
+  useMessagesRealtime({
+    onConversationUpdated: (event) => {
+      if (event.payload.conversation.metadata?.isRequestPending === "true") {
+        return;
+      }
+
+      setItems((current) => upsertConversationThread(current, event.payload.conversation));
+    },
+    onReconnect: () => {
+      void loadData("silent");
+    },
+  });
 
   const hideConversation = (conversationId: string) => {
     setHiddenIds((prev) => new Set(prev).add(conversationId));
@@ -295,11 +310,10 @@ export function MessagesInboxScreen({ navigation }: Props) {
             }
             onRefresh={() => void loadData("refresh")}
             refreshing={refreshing}
-            renderItem={({ item, index }) => (
+            renderItem={({ item }) => (
               <ConversationListItem
                 conversation={item}
                 isMuted={mutedIds.has(item.id)}
-                isOnline={index === 0 && item.type === "direct"}
                 onArchive={() => handleArchive(item)}
                 onDelete={() => confirmDeleteConversation(item)}
                 onMute={() => toggleMute(item.id)}

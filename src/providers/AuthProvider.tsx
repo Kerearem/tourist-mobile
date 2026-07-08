@@ -13,6 +13,7 @@ import {
   verifyRestoreAccount as verifyRestoreAccountService,
 } from "../features/auth/services/auth.service";
 import { completeOnboarding as completeOnboardingService } from "../features/onboarding/services/onboarding.service";
+import { messagesRealtimeClient } from "../features/messages/realtime/messagesRealtimeClient";
 import type { AuthGateStatus, AuthSession } from "../models/auth";
 import type { AppUser, RelocationReason, UserLanguage } from "../models/user";
 import { onAuthSessionExpired } from "../services/api/authSession";
@@ -162,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async (options?: { skipRemote?: boolean }) => {
+    messagesRealtimeClient.disconnect();
     await signOutSession(options);
     setSession(null);
     setUser(null);

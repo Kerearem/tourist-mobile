@@ -4,6 +4,7 @@ import { Keyboard, type FlatList } from "react-native";
 import type { ConversationMessage } from "../types";
 import {
   consumePendingScrollReason,
+  resolveIncomingMessageScrollPlan,
   resolveOwnMessageSentScrollPlan,
   shouldRunInitialScroll,
   shouldScrollMessageThread,
@@ -86,6 +87,18 @@ export function useMessageThreadListScroll(messages: ConversationMessage[]) {
     }
   }, [messages.length, scrollToBottom]);
 
+  const onIncomingMessage = useCallback(
+    (isNearBottom: boolean) => {
+      const plan = resolveIncomingMessageScrollPlan(isNearBottom);
+      if (!plan.shouldScroll) {
+        return;
+      }
+
+      queueAutoScroll("incoming_message", true);
+    },
+    [queueAutoScroll],
+  );
+
   const resetForThread = useCallback(() => {
     hasScrolledInitialRef.current = false;
     pendingScrollReasonRef.current = null;
@@ -126,6 +139,7 @@ export function useMessageThreadListScroll(messages: ConversationMessage[]) {
     handleContentSizeChange,
     onInitialMessagesReady,
     onOwnMessageSent,
+    onIncomingMessage,
     resetForThread,
   };
 }

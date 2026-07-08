@@ -1,7 +1,8 @@
 export type MessageThreadAutoScrollReason =
   | "initial_load"
   | "keyboard_opened"
-  | "own_message_sent";
+  | "own_message_sent"
+  | "incoming_message";
 
 export function shouldScrollMessageThread(
   reason: MessageThreadAutoScrollReason | null,
@@ -38,6 +39,14 @@ export function consumePendingScrollReason(
   }
 
   return { shouldScroll: true, nextPendingReason: null };
+}
+
+export function resolveIncomingMessageScrollPlan(isNearBottom: boolean): {
+  shouldScroll: boolean;
+} {
+  return {
+    shouldScroll: isNearBottom,
+  };
 }
 
 export function resolveOwnMessageSentScrollPlan(messageCount: number): {

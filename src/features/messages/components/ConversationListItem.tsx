@@ -3,13 +3,13 @@ import { Animated, PanResponder, Pressable, StyleSheet, View } from "react-nativ
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "../../../components/ui/AppText";
+import { Avatar } from "../../../components/ui/Avatar";
 import { theme } from "../../../constants/theme";
 import type { ConversationThread } from "../types";
 
 type ConversationListItemProps = {
   conversation: ConversationThread;
   viewerId: string;
-  isOnline?: boolean;
   isMuted?: boolean;
   onPress: () => void;
   onMute?: () => void;
@@ -55,7 +55,6 @@ const MAX_SWIPE_RIGHT = SWIPE_ACTION_WIDTH + theme.spacing.sm;
 export function ConversationListItem({
   conversation,
   viewerId,
-  isOnline = false,
   isMuted = false,
   onPress,
   onMute,
@@ -166,18 +165,21 @@ export function ConversationListItem({
           style={styles.container}
         >
           <View style={styles.avatarWrap}>
-            <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-              {isGroup ? (
+            {isGroup ? (
+              <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
                 <Ionicons color={theme.colors.primary} name="people" size={22} />
-              ) : isSystemInbox ? (
+              </View>
+            ) : isSystemInbox ? (
+              <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
                 <Ionicons color="#4338CA" name="information-circle" size={24} />
-              ) : (
-                <AppText style={styles.initials} variant="label">
-                  {initials}
-                </AppText>
-              )}
-            </View>
-            {isOnline && !isGroup ? <View style={styles.onlineDot} /> : null}
+              </View>
+            ) : (
+              <Avatar
+                initials={initials}
+                size={54}
+                uri={firstOther?.avatarUrl}
+              />
+            )}
           </View>
 
           <View style={styles.content}>
@@ -294,17 +296,6 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontSize: 15,
     fontWeight: "800",
-  },
-  onlineDot: {
-    backgroundColor: "#18D66B",
-    borderColor: "#FFFFFF",
-    borderRadius: 7,
-    borderWidth: 3,
-    bottom: 2,
-    height: 14,
-    position: "absolute",
-    right: 2,
-    width: 14,
   },
   content: {
     flex: 1,

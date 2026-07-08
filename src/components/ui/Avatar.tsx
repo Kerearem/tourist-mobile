@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { theme } from "../../constants/theme";
@@ -19,9 +19,14 @@ const avatarSizes = {
 export function Avatar({ uri, size = "md", initials = "TM" }: AvatarProps) {
   const resolvedSize = typeof size === "number" ? size : avatarSizes[size];
   const boxStyle = [styles.avatar, { height: resolvedSize, width: resolvedSize, borderRadius: resolvedSize / 2 }];
+  const [imageError, setImageError] = useState(false);
 
-  if (uri) {
-    return <Image source={{ uri }} style={boxStyle} />;
+  useEffect(() => {
+    setImageError(false);
+  }, [uri]);
+
+  if (uri && !imageError) {
+    return <Image onError={() => setImageError(true)} source={{ uri }} style={boxStyle} />;
   }
 
   return (
