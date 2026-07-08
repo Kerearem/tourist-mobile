@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { MessagesRoutes } from "../../constants/routes";
 import { MessageThreadScreen } from "../../features/messages/screens/MessageThreadScreen";
+import { ConversationInfoScreen } from "../../features/messages/screens/ConversationInfoScreen";
 import { GroupDetailScreen } from "../../features/messages/screens/GroupDetailScreen";
 import { GroupInfoScreen } from "../../features/messages/screens/GroupInfoScreen";
 import { MessageRequestsScreen } from "../../features/messages/screens/MessageRequestsScreen";
@@ -19,6 +20,7 @@ export function MessagesStack() {
       <Stack.Screen component={NotificationsScreen} name={MessagesRoutes.NotificationsScreen} />
       <Stack.Screen component={MessageRequestsScreen} name={MessagesRoutes.MessageRequestsScreen} />
       <Stack.Screen component={MessageThreadScreen} name={MessagesRoutes.MessageThreadScreen} />
+      <Stack.Screen component={ConversationInfoScreen} name={MessagesRoutes.ConversationInfoScreen} />
       <Stack.Screen component={GroupDetailScreen} name={MessagesRoutes.GroupDetailScreen} />
       <Stack.Screen component={GroupInfoScreen} name={MessagesRoutes.GroupInfoScreen} />
     </Stack.Navigator>

@@ -24,6 +24,7 @@ import { useMessageThreadListScroll } from "../hooks/useMessageThreadListScroll"
 import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import { getConversationById, getMessages, markConversationRead, sendMessage } from "../services/messages.service";
 import type { ConversationMessage, ConversationThread } from "../types";
+import { canOpenConversationInfo, resolveConversationInfoNavigation } from "../utils/conversationInfoNavigation";
 import { appendMessageDeduped } from "../utils/threadRealtime";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageThreadScreen">;
@@ -251,6 +252,15 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     ]);
   };
 
+  const openConversationInfo = () => {
+    if (!canOpenConversationInfo()) {
+      return;
+    }
+
+    const target = resolveConversationInfoNavigation(route.params.threadId);
+    navigation.navigate(target.screen, target.params);
+  };
+
   const confirmBlockRequester = () => {
     if (!participant) {
       return;
@@ -318,7 +328,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
             <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={30} />
           </Pressable>
 
-          <View style={styles.identity}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openConversationInfo}
+            style={({ pressed }) => [styles.identity, pressed && styles.identityPressed]}
+          >
             <Avatar initials={initials} size={52} uri={isSystemInbox ? undefined : participant?.avatarUrl} />
             <View>
               <AppText style={styles.title} numberOfLines={1} variant="label">
@@ -330,7 +344,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
                 </AppText>
               ) : null}
             </View>
-          </View>
+          </Pressable>
 
           <View style={styles.headerActions}>
             <Pressable style={styles.moreButton}>
@@ -445,6 +459,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     gap: theme.spacing.sm,
+  },
+  identityPressed: {
+    opacity: 0.7,
   },
   title: {
     color: theme.colors.textPrimary,

@@ -1,6 +1,9 @@
 import type {
+  ConversationInfo,
+  ConversationMediaResult,
   ConversationMessage,
   ConversationMessagesPage,
+  ConversationSearchResult,
   ConversationThread,
   HelpConversationInput,
   SendMessageInput,
@@ -98,6 +101,26 @@ const mockMessages: Record<string, ConversationMessage[]> = {
       createdAt: now.toISOString(),
       status: "delivered",
     },
+    {
+      id: "message_mehmet_2",
+      conversationId: "thread_mehmet_event",
+      sender: { id: "user_test_tourist", displayName: "Test Tourist" },
+      type: "image",
+      text: "",
+      mediaUrl: "https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=400&q=80",
+      mediaType: "image",
+      createdAt: now.toISOString(),
+      status: "sent",
+    },
+    {
+      id: "message_mehmet_3",
+      conversationId: "thread_mehmet_event",
+      sender: { id: "user_mehmet", displayName: "Mehmet Kaya" },
+      type: "text",
+      text: "We can meet near the venue.",
+      createdAt: now.toISOString(),
+      status: "delivered",
+    },
   ],
   ...mockHelpMessages,
   thread_support: [
@@ -114,6 +137,77 @@ const mockMessages: Record<string, ConversationMessage[]> = {
 };
 
 const isMockHelpThread = (threadId: string) => threadId.startsWith("thread_help_");
+
+const MOCK_VIEWER_ID = "user_test_tourist";
+
+const buildMockConversationInfo = (threadId: string): ConversationInfo | null => {
+  const thread =
+    mockThreads.find((item) => item.id === threadId) ??
+    mockHelpThreads().find((item) => item.id === threadId) ??
+    null;
+  if (!thread) {
+    return null;
+  }
+
+  const other = thread.participants.find((participant) => participant.id !== MOCK_VIEWER_ID);
+  const messages = mockMessages[threadId] ?? [];
+  const sharedMediaPreview = messages
+    .filter((message) => Boolean(message.mediaUrl))
+    .slice()
+    .reverse()
+    .slice(0, 6);
+
+  const isSystemInbox = thread.metadata?.isSystemInbox === "true";
+
+  return {
+    conversation: thread,
+    otherParticipant:
+      thread.type === "direct" && other && !isSystemInbox
+        ? {
+            id: other.id,
+            displayName: other.displayName,
+            username: other.displayName.toLowerCase().replace(/\s+/g, "_"),
+            avatarUrl: other.avatarUrl,
+            accountType: "personal",
+            isOrganizer: false,
+          }
+        : undefined,
+    sharedMediaPreview,
+  };
+};
+
+const searchMockConversationMessages = (
+  threadId: string,
+  query: string,
+  page = 1,
+  limit = 20,
+): ConversationSearchResult => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const messages = (mockMessages[threadId] ?? []).filter((message) =>
+    message.text.toLowerCase().includes(normalizedQuery),
+  );
+  const start = (page - 1) * limit;
+
+  return {
+    messages: messages.slice(start, start + limit),
+    query: query.trim(),
+    page,
+    limit,
+    total: messages.length,
+  };
+};
+
+const getMockConversationMedia = (threadId: string, page = 1, limit = 30): ConversationMediaResult => {
+  const messages = (mockMessages[threadId] ?? []).filter((message) => Boolean(message.mediaUrl)).reverse();
+  const start = (page - 1) * limit;
+
+  return {
+    messages: messages.slice(start, start + limit),
+    page,
+    limit,
+    total: messages.length,
+  };
+};
 
 export async function getConversations(): Promise<ConversationThread[]> {
   if (USE_MOCK_BACKEND) {
@@ -377,4 +471,54 @@ export async function getOrCreateHelpConversation({
       helpRequestId,
     },
   });
+}
+
+export async function getConversationInfo(threadId: string): Promise<ConversationInfo> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    const info = buildMockConversationInfo(threadId);
+    if (!info) {
+      throw new Error("Conversation not found.");
+    }
+    return info;
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationInfo>(withThreadId(API_ENDPOINTS.messages.conversationInfo, threadId), {
+    method: "GET",
+    token,
+  });
+}
+
+export async function searchConversationMessages(
+  threadId: string,
+  query: string,
+  page = 1,
+): Promise<ConversationSearchResult> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    return searchMockConversationMessages(threadId, query, page);
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationSearchResult>(
+    `${withThreadId(API_ENDPOINTS.messages.conversationSearch, threadId)}?q=${encodeURIComponent(query)}&page=${page}`,
+    {
+      method: "GET",
+      token,
+    },
+  );
+}
+
+export async function getConversationMedia(threadId: string, page = 1): Promise<ConversationMediaResult> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    return getMockConversationMedia(threadId, page);
+  }
+
+  const token = await getAccessToken();
+  return apiRequest<ConversationMediaResult>(
+    `${withThreadId(API_ENDPOINTS.messages.conversationMedia, threadId)}?page=${page}`,
+    {
+      method: "GET",
+      token,
+    },
+  );
 }

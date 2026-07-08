@@ -48,6 +48,37 @@ export type ConversationMessagesPage = {
   pinnedMessage: ConversationMessage | null;
 };
 
+export type ConversationParticipantProfile = {
+  id: string;
+  displayName: string;
+  username: string;
+  avatarUrl?: string;
+  bio?: string;
+  accountType: "personal" | "business";
+  isOrganizer: boolean;
+};
+
+export type ConversationInfo = {
+  conversation: ConversationThread;
+  otherParticipant?: ConversationParticipantProfile;
+  sharedMediaPreview: ConversationMessage[];
+};
+
+export type ConversationSearchResult = {
+  messages: ConversationMessage[];
+  query: string;
+  page: number;
+  limit: number;
+  total: number;
+};
+
+export type ConversationMediaResult = {
+  messages: ConversationMessage[];
+  page: number;
+  limit: number;
+  total: number;
+};
+
 export type SendMessageInput = {
   threadId: string;
   sender: {

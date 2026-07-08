@@ -63,6 +63,7 @@ export type MessagesStackParamList = {
   MessagesInboxScreen: undefined;
   MessageRequestsScreen: { hideThreadId?: string } | undefined;
   MessageThreadScreen: { threadId: string };
+  ConversationInfoScreen: { threadId: string };
   GroupDetailScreen: { eventId: string; conversationId?: string };
   GroupInfoScreen: { eventId: string };
   NotificationsScreen: undefined;
