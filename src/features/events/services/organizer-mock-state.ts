@@ -1,14 +1,17 @@
 import type {
+  CapabilityLevel,
   CurrentOrganizerApplicationResponse,
   DocumentChecklistItem,
   FinalizeVerificationUploadResponse,
   OrganizerApplicationType,
   OrganizerDraftResponse,
+  OrganizerStatusResponse,
   UploadIntentResponse,
   VerificationDocumentMetadata,
   VerificationDocumentStatus,
   VerificationDocumentType,
 } from "../types/organizer";
+import { buildMockOrganizerStatusResponse } from "../utils/organizerCapabilityStatus";
 
 type MockDocumentRecord = VerificationDocumentMetadata;
 
@@ -63,12 +66,40 @@ const buildChecklist = (applicationType: OrganizerApplicationType, documents: Mo
   });
 };
 
+let mockOrganizerCapabilityConfig: {
+  capabilityLevel?: CapabilityLevel;
+  activeEventCount?: number;
+  activeEventTitle?: string | null;
+} = {};
+
+export function resetMockOrganizerCapabilityConfig() {
+  mockOrganizerCapabilityConfig = {};
+}
+
+export function setMockOrganizerCapabilityConfig(input: {
+  capabilityLevel?: CapabilityLevel;
+  activeEventCount?: number;
+  activeEventTitle?: string | null;
+}) {
+  mockOrganizerCapabilityConfig = { ...input };
+}
+
+export function getMockOrganizerStatusResponse(): OrganizerStatusResponse {
+  return buildMockOrganizerStatusResponse({
+    organizerStatus: "approved",
+    capabilityLevel: mockOrganizerCapabilityConfig.capabilityLevel,
+    activeEventCount: mockOrganizerCapabilityConfig.activeEventCount,
+    activeEventTitle: mockOrganizerCapabilityConfig.activeEventTitle,
+  });
+}
+
 export function resetOrganizerVerificationMockState() {
   mockState = {
     application: null,
     documents: [],
     intents: new Map(),
   };
+  resetMockOrganizerCapabilityConfig();
 }
 
 export function getMockCurrentOrganizerApplication(): CurrentOrganizerApplicationResponse {

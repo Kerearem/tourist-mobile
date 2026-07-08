@@ -27,6 +27,23 @@ export function resolveEventCreationExitDecision(input: {
   return "allow";
 }
 
+export function resolveProtectedEventCreationExitDecision(input: {
+  hasEnteredWizard: boolean;
+  isDirty: boolean;
+  isSubmitting: boolean;
+  allowNavigationAfterSuccess: boolean;
+}): EventCreationExitDecision {
+  if (!input.hasEnteredWizard) {
+    return "allow";
+  }
+
+  return resolveEventCreationExitDecision({
+    isDirty: input.isDirty,
+    isSubmitting: input.isSubmitting,
+    allowNavigationAfterSuccess: input.allowNavigationAfterSuccess,
+  });
+}
+
 export function shouldPreventNavigationRemoval(decision: EventCreationExitDecision): boolean {
   return decision === "block" || decision === "confirm";
 }

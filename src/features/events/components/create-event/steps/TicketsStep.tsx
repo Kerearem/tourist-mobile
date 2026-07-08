@@ -4,7 +4,6 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { AppInput } from "../../../../../components/ui/AppInput";
 import { AppText } from "../../../../../components/ui/AppText";
 import { theme } from "../../../../../constants/theme";
-import { DEFAULT_EVENT_CREATION_CAPABILITIES } from "../../../utils/eventCreationCapabilities";
 import type { EventCreationDraft, EventCreationFieldErrors } from "../../../types/eventCreation";
 import { FieldError, FIELD_RADIUS, SELECTED_BG, SELECTED_BORDER, StepSection, inputFieldStyle } from "../createEventUi";
 
@@ -16,14 +15,8 @@ type TicketsStepProps = {
 };
 
 export function TicketsStep({ draft, errors, onChange, onClearError }: TicketsStepProps) {
-  const capabilities = DEFAULT_EVENT_CREATION_CAPABILITIES;
-
   return (
     <StepSection>
-      <AppText variant="caption">
-        Bu etkinlik için {capabilities.maxTicketOptionsPerEvent} bilet seçeneği kullanılabilir.
-      </AppText>
-
       <View style={styles.choiceColumn}>
         <TicketModeCard
           active={draft.ticketMode === "free"}

@@ -2,18 +2,9 @@ import { API_BASE_URL, API_TIMEOUT_MS, USE_MOCK_BACKEND } from "../../constants/
 import { API_ENDPOINTS } from "./endpoints";
 import { clearAuthState, loadAuthState, notifyAuthSessionExpired, updateAuthTokens } from "./authSession";
 import type { ApiRequestOptions, ApiResponseEnvelope } from "./types";
+import { ApiRequestError } from "./apiRequestError";
 
-export class ApiRequestError extends Error {
-  readonly status: number;
-  readonly code?: string;
-
-  constructor(message: string, status: number, code?: string) {
-    super(message);
-    this.name = "ApiRequestError";
-    this.status = status;
-    this.code = code;
-  }
-}
+export { ApiRequestError } from "./apiRequestError";
 
 type RefreshTokensResponse = {
   tokens: {

@@ -1,5 +1,21 @@
 import type { OrganizerStatus } from "../../../models/user";
 
+export type CapabilityLevel = "LEVEL_1" | "LEVEL_2" | "LEVEL_3";
+
+export type OrganizerCapabilities = {
+  maxConcurrentActiveEvents: number;
+  maxTicketOptionsPerEvent: number;
+  canUseMultipleTicketOptions: boolean;
+  canUsePackageInclusions: boolean;
+  maxCoHostsPerEvent: number;
+  canUseAdvancedAnalytics: boolean;
+};
+
+export type OrganizerCapabilityUsage = {
+  activeEventCount: number;
+  remainingActiveEventSlots: number;
+};
+
 export type OrganizerApplicationType = "INDIVIDUAL" | "BUSINESS";
 
 export type OrganizerReviewStatus =
@@ -132,6 +148,9 @@ export type OrganizerStatusResponse = {
   application?: OrganizerApplicationInfo;
   hasActiveEvent?: boolean;
   activeEventTitle?: string;
+  capabilityLevel?: CapabilityLevel;
+  capabilities?: Partial<OrganizerCapabilities>;
+  usage?: Partial<OrganizerCapabilityUsage>;
 };
 
 /** @deprecated Legacy single-step apply flow */

@@ -3,7 +3,12 @@ import { describe, it } from "node:test";
 
 import { EVENT_CREATION_STEPS, EVENT_CREATION_STEP_TITLES } from "../src/features/events/types/eventCreation";
 import { createInitialEventCreationDraft } from "../src/features/events/utils/eventCreationDraft";
-import { DEFAULT_EVENT_CREATION_CAPABILITIES } from "../src/features/events/utils/eventCreationCapabilities";
+import {
+  buildMockOrganizerStatusResponse,
+  LEGACY_LEVEL_1_CAPABILITIES,
+  normalizeOrganizerCapabilityStatus,
+  toActiveEventCheckReadyState,
+} from "../src/features/events/utils/organizerCapabilityStatus";
 import {
   buildCreateEventPayload,
   shouldUploadCoverOnSubmit,
@@ -11,6 +16,7 @@ import {
 import {
   EVENT_CREATION_EXIT_ALERT,
   resolveEventCreationExitDecision,
+  resolveProtectedEventCreationExitDecision,
   shouldPreventNavigationRemoval,
 } from "../src/features/events/utils/eventCreationNavigation";
 import {
@@ -304,29 +310,91 @@ describe("event creation exit navigation", () => {
   });
 });
 
+describe("protected event creation exit navigation", () => {
+  it("allows exit when wizard was never opened", () => {
+    assert.equal(
+      resolveProtectedEventCreationExitDecision({
+        hasEnteredWizard: false,
+        isDirty: true,
+        isSubmitting: false,
+        allowNavigationAfterSuccess: false,
+      }),
+      "allow",
+    );
+  });
+
+  it("confirms exit for dirty drafts after wizard entry even when slots later reach zero", () => {
+    assert.equal(
+      resolveProtectedEventCreationExitDecision({
+        hasEnteredWizard: true,
+        isDirty: true,
+        isSubmitting: false,
+        allowNavigationAfterSuccess: false,
+      }),
+      "confirm",
+    );
+  });
+
+  it("blocks exit while submitting after wizard entry", () => {
+    assert.equal(
+      resolveProtectedEventCreationExitDecision({
+        hasEnteredWizard: true,
+        isDirty: true,
+        isSubmitting: true,
+        allowNavigationAfterSuccess: false,
+      }),
+      "block",
+    );
+  });
+
+  it("allows exit after successful submission", () => {
+    assert.equal(
+      resolveProtectedEventCreationExitDecision({
+        hasEnteredWizard: true,
+        isDirty: true,
+        isSubmitting: false,
+        allowNavigationAfterSuccess: true,
+      }),
+      "allow",
+    );
+  });
+});
+
 describe("active event limit checks", () => {
   it("fails closed when active event check errors", () => {
     assert.equal(
-      shouldAllowCreateAfterActiveEventCheck({ status: "error" }),
+      shouldAllowCreateAfterActiveEventCheck({ status: "error", message: "fail" }),
       false,
     );
     assert.equal(
-      shouldAllowCreateAfterActiveEventCheck({ status: "ready", hasActiveEvent: true }),
+      shouldAllowCreateAfterActiveEventCheck(
+        toActiveEventCheckReadyState(
+          normalizeOrganizerCapabilityStatus(
+            buildMockOrganizerStatusResponse({ capabilityLevel: "LEVEL_1", activeEventCount: 1 }),
+          ),
+        ),
+      ),
       false,
     );
     assert.equal(
-      shouldAllowCreateAfterActiveEventCheck({ status: "ready", hasActiveEvent: false }),
+      shouldAllowCreateAfterActiveEventCheck(
+        toActiveEventCheckReadyState(
+          normalizeOrganizerCapabilityStatus(
+            buildMockOrganizerStatusResponse({ capabilityLevel: "LEVEL_2", activeEventCount: 1 }),
+          ),
+        ),
+      ),
       true,
     );
-    assert.match(resolveActiveEventCheckFailureMessage(), /kontrol edilemedi/);
+    assert.match(resolveActiveEventCheckFailureMessage(), /Etkinlik hakları yüklenemedi/);
   });
 });
 
 describe("event creation capabilities defaults", () => {
   it("keeps single ticket model for this phase", () => {
-    assert.equal(DEFAULT_EVENT_CREATION_CAPABILITIES.maxTicketOptionsPerEvent, 1);
-    assert.equal(DEFAULT_EVENT_CREATION_CAPABILITIES.canUseMultipleTicketOptions, false);
-    assert.equal(DEFAULT_EVENT_CREATION_CAPABILITIES.canUsePackageInclusions, false);
+    assert.equal(LEGACY_LEVEL_1_CAPABILITIES.maxTicketOptionsPerEvent, 1);
+    assert.equal(LEGACY_LEVEL_1_CAPABILITIES.canUseMultipleTicketOptions, false);
+    assert.equal(LEGACY_LEVEL_1_CAPABILITIES.canUsePackageInclusions, false);
   });
 });
 

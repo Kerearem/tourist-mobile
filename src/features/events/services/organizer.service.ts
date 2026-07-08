@@ -21,9 +21,14 @@ import {
   createMockUploadIntent,
   finalizeMockUploadIntent,
   getMockCurrentOrganizerApplication,
+  getMockOrganizerStatusResponse,
   submitMockOrganizerApplication,
 } from "./organizer-mock-state";
 import { orchestrateVerificationUpload } from "../utils/organizer-verification-upload";
+import {
+  normalizeOrganizerCapabilityStatus,
+  type NormalizedOrganizerCapabilityStatus,
+} from "../utils/organizerCapabilityStatus";
 
 const getAccessToken = async () => {
   const state = await loadAuthState();
@@ -38,11 +43,17 @@ const withApplicationIdParam = (template: string, applicationId: string) =>
 
 const withUserIdParam = (template: string, userId: string) => template.replace(":userId", userId);
 
-export async function getOrganizerStatus(): Promise<OrganizerStatusResponse> {
+export async function getOrganizerStatus(): Promise<NormalizedOrganizerCapabilityStatus> {
   if (USE_MOCK_BACKEND) {
     const current = getMockCurrentOrganizerApplication();
-    if (current.application?.reviewStatus === "SUBMITTED" || current.application?.reviewStatus === "UNDER_REVIEW") {
-      return {
+    const baseResponse = getMockOrganizerStatusResponse();
+
+    if (
+      current.application?.reviewStatus === "SUBMITTED" ||
+      current.application?.reviewStatus === "UNDER_REVIEW"
+    ) {
+      return normalizeOrganizerCapabilityStatus({
+        ...baseResponse,
         organizerStatus: "pending",
         application: current.application
           ? {
@@ -53,19 +64,26 @@ export async function getOrganizerStatus(): Promise<OrganizerStatusResponse> {
               createdAt: current.application.createdAt,
             }
           : undefined,
-      };
+      });
     }
 
-    return {
-      organizerStatus: "not_applied",
-    };
+    if (current.application?.reviewStatus === "DRAFT") {
+      return normalizeOrganizerCapabilityStatus({
+        ...baseResponse,
+        organizerStatus: "not_applied",
+      });
+    }
+
+    return normalizeOrganizerCapabilityStatus(baseResponse);
   }
 
   const token = await getAccessToken();
-  return apiRequest<OrganizerStatusResponse>(API_ENDPOINTS.organizer.status, {
+  const raw = await apiRequest<OrganizerStatusResponse>(API_ENDPOINTS.organizer.status, {
     method: "GET",
     token,
   });
+
+  return normalizeOrganizerCapabilityStatus(raw);
 }
 
 export async function getCurrentOrganizerApplication(): Promise<CurrentOrganizerApplicationResponse> {
@@ -192,26 +210,22 @@ export async function submitOrganizerApplication(
 }
 
 /** @deprecated Legacy single-step apply flow */
-export async function applyForOrganizer(input: ApplyOrganizerInput): Promise<OrganizerStatusResponse> {
+export async function applyForOrganizer(input: ApplyOrganizerInput): Promise<NormalizedOrganizerCapabilityStatus> {
   if (USE_MOCK_BACKEND) {
-    return {
+    return normalizeOrganizerCapabilityStatus({
+      ...getMockOrganizerStatusResponse(),
       organizerStatus: "pending",
-      application: {
-        id: `app_${Date.now()}`,
-        reason: input.reason,
-        status: "pending",
-        type: "individual",
-        createdAt: new Date().toISOString(),
-      },
-    };
+    });
   }
 
   const token = await getAccessToken();
-  return apiRequest<OrganizerStatusResponse>(API_ENDPOINTS.organizer.apply, {
+  const raw = await apiRequest<OrganizerStatusResponse>(API_ENDPOINTS.organizer.apply, {
     method: "POST",
     token,
     body: input,
   });
+
+  return normalizeOrganizerCapabilityStatus(raw);
 }
 
 export async function getMyOrganizerEvents(): Promise<EventItem[]> {

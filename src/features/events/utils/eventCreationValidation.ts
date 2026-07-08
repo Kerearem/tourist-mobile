@@ -15,6 +15,11 @@ import {
   wallClockFromDate,
   wallClockToUtc,
 } from "./eventTimezone";
+import {
+  canCreateEventFromStatus,
+  resolveActiveEventCheckFailureMessage,
+  type ActiveEventCheckState,
+} from "./organizerCapabilityStatus";
 
 const TITLE_MIN = 3;
 const TITLE_MAX = 120;
@@ -332,13 +337,15 @@ export function shouldBlockExitForUnsavedChanges(input: {
   );
 }
 
-export function resolveActiveEventCheckFailureMessage(): string {
-  return "Aktif etkinlik limiti kontrol edilemedi. Lütfen tekrar dene.";
-}
+export {
+  canCreateEventFromStatus,
+  resolveActiveEventCheckFailureMessage,
+  type ActiveEventCheckState,
+};
 
-export function shouldAllowCreateAfterActiveEventCheck(state: { status: string; hasActiveEvent?: boolean }): boolean {
-  if (state.status !== "ready") {
-    return false;
-  }
-  return !state.hasActiveEvent;
+export function shouldAllowCreateAfterActiveEventCheck(
+  state: ActiveEventCheckState,
+  organizerApproved = true,
+): boolean {
+  return canCreateEventFromStatus({ organizerApproved, checkState: state });
 }

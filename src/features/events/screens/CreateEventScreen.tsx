@@ -36,15 +36,25 @@ import { createEvent } from "../services/events.service";
 import { getOrganizerStatus } from "../services/organizer.service";
 import {
   EVENT_CREATION_STEP_TITLES,
-  type ActiveEventCheckState,
   type EventCreationFieldErrors,
   type EventCreationStep,
 } from "../types/eventCreation";
 import { buildCreateEventPayload } from "../utils/eventCreationPayload";
 import { EVENT_TIMEZONE_INVALID_MESSAGE } from "../utils/eventTimezone";
 import {
+  buildCapabilityUsageLabel,
+  canCreateEventFromStatus,
+  createOrganizerLimitConflictMessages,
+  formatCapabilityLevelLabel,
+  isOrganizerEventLimitConflict,
+  resolveLimitCardMessage,
+  resolveOrganizerEventLimitMessage,
+  toActiveEventCheckReadyState,
+  type ActiveEventCheckState,
+} from "../utils/organizerCapabilityStatus";
+import {
   EVENT_CREATION_EXIT_ALERT,
-  resolveEventCreationExitDecision,
+  resolveProtectedEventCreationExitDecision,
   shouldPreventNavigationRemoval,
 } from "../utils/eventCreationNavigation";
 import {
@@ -83,20 +93,19 @@ export function CreateEventScreen({ navigation }: Props) {
   const [isTimezonePickerOpen, setIsTimezonePickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [limitConflictMessage, setLimitConflictMessage] = useState<string | null>(null);
   const [activeEventCheck, setActiveEventCheck] = useState<ActiveEventCheckState>({ status: "loading" });
+  const activeEventCheckRequestRef = useRef(0);
   const allowNavigationRef = useRef(false);
+  const hasEnteredWizardRef = useRef(false);
   const isExitAlertVisibleRef = useRef(false);
 
   const isOrganizerApproved = user?.organizerStatus === "approved";
 
-  const isWizardActive =
-    isOrganizerApproved &&
-    activeEventCheck.status === "ready" &&
-    !activeEventCheck.hasActiveEvent;
-
   const getExitDecision = useCallback(
     () =>
-      resolveEventCreationExitDecision({
+      resolveProtectedEventCreationExitDecision({
+        hasEnteredWizard: hasEnteredWizardRef.current,
         isDirty,
         isSubmitting,
         allowNavigationAfterSuccess: allowNavigationRef.current,
@@ -120,11 +129,6 @@ export function CreateEventScreen({ navigation }: Props) {
 
   const requestExit = useCallback(
     (action?: NavigationAction) => {
-      if (!isWizardActive) {
-        completeExit(action);
-        return;
-      }
-
       const decision = getExitDecision();
       if (decision === "allow") {
         completeExit(action);
@@ -158,15 +162,25 @@ export function CreateEventScreen({ navigation }: Props) {
         },
       ]);
     },
-    [completeExit, getExitDecision, isWizardActive],
+    [completeExit, getExitDecision],
   );
 
   useEffect(() => {
-    if (!isWizardActive) {
-      return;
+    if (
+      isOrganizerApproved &&
+      activeEventCheck.status === "ready" &&
+      activeEventCheck.usage.remainingActiveEventSlots > 0
+    ) {
+      hasEnteredWizardRef.current = true;
     }
+  }, [activeEventCheck, isOrganizerApproved]);
 
+  useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event) => {
+      if (!hasEnteredWizardRef.current) {
+        return;
+      }
+
       const decision = getExitDecision();
       if (!shouldPreventNavigationRemoval(decision)) {
         return;
@@ -182,7 +196,7 @@ export function CreateEventScreen({ navigation }: Props) {
     });
 
     return unsubscribe;
-  }, [getExitDecision, isWizardActive, navigation, requestExit]);
+  }, [getExitDecision, navigation, requestExit]);
 
   const organizerAge = useMemo(
     () => (user?.privateProfile.birthDate ? calculateAgeFromBirthDate(user.privateProfile.birthDate) : null),
@@ -202,15 +216,23 @@ export function CreateEventScreen({ navigation }: Props) {
   );
 
   const loadActiveEventCheck = useCallback(async () => {
+    const requestId = ++activeEventCheckRequestRef.current;
     setActiveEventCheck({ status: "loading" });
+    setLimitConflictMessage(null);
+    setSubmitError(null);
+
     try {
       const status = await getOrganizerStatus();
-      setActiveEventCheck({
-        status: "ready",
-        hasActiveEvent: Boolean(status.hasActiveEvent),
-        activeEventTitle: status.activeEventTitle ?? null,
-      });
+      if (requestId !== activeEventCheckRequestRef.current) {
+        return;
+      }
+
+      setActiveEventCheck(toActiveEventCheckReadyState(status));
     } catch {
+      if (requestId !== activeEventCheckRequestRef.current) {
+        return;
+      }
+
       setActiveEventCheck({
         status: "error",
         message: resolveActiveEventCheckFailureMessage(),
@@ -269,13 +291,19 @@ export function CreateEventScreen({ navigation }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!isOrganizerApproved || activeEventCheck.status !== "ready" || activeEventCheck.hasActiveEvent) {
+    if (
+      !canCreateEventFromStatus({
+        organizerApproved: isOrganizerApproved,
+        checkState: activeEventCheck,
+      })
+    ) {
       return;
     }
 
     const errors = validateCompleteEventDraft(draft, validationContext);
     setFieldErrors(errors);
     setSubmitError(null);
+    setLimitConflictMessage(null);
 
     if (Object.keys(errors).length > 0) {
       const firstInvalidStep = resolveFirstInvalidStep(draft, validationContext);
@@ -326,17 +354,23 @@ export function CreateEventScreen({ navigation }: Props) {
         { text: "Tamam", onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Etkinlik oluşturulamadı.";
-      if (message.toLowerCase().includes("active event") || message.toLowerCase().includes("409")) {
-        setActiveEventCheck({
-          status: "ready",
-          hasActiveEvent: true,
-          activeEventTitle: activeEventCheck.status === "ready" ? activeEventCheck.activeEventTitle : null,
-        });
-        setSubmitError("Mevcut etkinlik limitine ulaştın. Bitmeden yeni etkinlik oluşturamazsın.");
-      } else {
-        setSubmitError(message);
+      if (isOrganizerEventLimitConflict(error)) {
+        const messages = createOrganizerLimitConflictMessages(resolveOrganizerEventLimitMessage(error));
+        setLimitConflictMessage(messages.limitConflictMessage);
+        setSubmitError(messages.submitError);
+
+        try {
+          const status = await getOrganizerStatus();
+          setActiveEventCheck(toActiveEventCheckReadyState(status));
+        } catch {
+          // Keep the current check state if refresh fails; submitError preserves the message on Preview.
+        }
+
+        return;
       }
+
+      const message = error instanceof Error ? error.message : "Etkinlik oluşturulamadı.";
+      setSubmitError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -352,6 +386,15 @@ export function CreateEventScreen({ navigation }: Props) {
       <AppText style={styles.stepTitle} variant="sectionTitle">
         {EVENT_CREATION_STEP_TITLES[currentStep]}
       </AppText>
+      {activeEventCheck.status === "ready" ? (
+        <AppText style={styles.usageHint} variant="caption">
+          {formatCapabilityLevelLabel(activeEventCheck.capabilityLevel)} ·{" "}
+          {buildCapabilityUsageLabel(
+            activeEventCheck.usage,
+            activeEventCheck.capabilities.maxConcurrentActiveEvents,
+          )}
+        </AppText>
+      ) : null}
     </View>
   );
 
@@ -399,18 +442,28 @@ export function CreateEventScreen({ navigation }: Props) {
     );
   }
 
-  if (activeEventCheck.hasActiveEvent) {
+  if (
+    activeEventCheck.status === "ready" &&
+    activeEventCheck.usage.remainingActiveEventSlots === 0
+  ) {
+    const limitMessage = resolveLimitCardMessage({
+      limitConflictMessage,
+      capabilityLevel: activeEventCheck.capabilityLevel,
+      maxConcurrentActiveEvents: activeEventCheck.capabilities.maxConcurrentActiveEvents,
+    });
+
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.pagePadding}>
-          <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Oluştur" />
+          <ScreenBackHeader onBack={handleExit} title="Etkinlik Oluştur" />
           <Card style={styles.blockCard}>
-            <AppText variant="sectionTitle">Mevcut etkinlik limitine ulaştın</AppText>
-            <AppText variant="bodyMuted">
-              {activeEventCheck.activeEventTitle
-                ? `"${activeEventCheck.activeEventTitle}" etkinliğin devam ederken yeni etkinlik oluşturamazsın.`
-                : "Devam eden veya onay bekleyen bir etkinliğin varken yeni etkinlik oluşturamazsın."}
-            </AppText>
+            <AppText variant="sectionTitle">Etkinlik limitine ulaştın</AppText>
+            <AppText variant="bodyMuted">{limitMessage}</AppText>
+            {activeEventCheck.activeEventTitle ? (
+              <AppText style={styles.secondaryInfo} variant="caption">
+                Yakın etkinlik: {activeEventCheck.activeEventTitle}
+              </AppText>
+            ) : null}
           </Card>
         </View>
       </SafeAreaView>
@@ -535,6 +588,14 @@ const styles = StyleSheet.create({
   stepTitle: {
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.xs,
+  },
+  usageHint: {
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs,
+  },
+  secondaryInfo: {
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.sm,
   },
   scrollContent: {
     paddingBottom: theme.spacing.xxl,

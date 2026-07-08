@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -11,6 +11,16 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ProfileStackParamList } from "../../../navigation/types";
 import { getOrganizerStatus } from "../../events/services/organizer.service";
+import {
+  buildAvailableCreateSubtitle,
+  buildCapabilityUsageLabel,
+  buildEventLimitMessage,
+  buildRemainingSlotsLabel,
+  formatCapabilityLevelLabel,
+  resolveOrganizerCapabilityLoadFailureMessage,
+  toActiveEventCheckReadyState,
+  type ActiveEventCheckState,
+} from "../../events/utils/organizerCapabilityStatus";
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "SettingsScreen">;
 
@@ -20,19 +30,20 @@ type SettingsRowProps = {
   subtitle?: string;
   rightText?: string;
   danger?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-function SettingsRow({ icon, title, subtitle, rightText, danger, onPress }: SettingsRowProps) {
+function SettingsRow({ icon, title, subtitle, rightText, danger, disabled, onPress }: SettingsRowProps) {
   return (
-    <Pressable disabled={!onPress} onPress={onPress} style={styles.row}>
+    <Pressable disabled={disabled || !onPress} onPress={onPress} style={[styles.row, disabled && styles.rowDisabled]}>
       <Ionicons color={danger ? theme.colors.danger : theme.colors.textPrimary} name={icon} size={24} />
       <View style={styles.rowCenter}>
-        <AppText style={[styles.rowTitle, danger && styles.dangerText]} variant="body">
+        <AppText style={[styles.rowTitle, danger && styles.dangerText, disabled && styles.rowTitleDisabled]} variant="body">
           {title}
         </AppText>
         {subtitle ? (
-          <AppText numberOfLines={2} style={styles.rowSubtitle} variant="caption">
+          <AppText numberOfLines={3} style={styles.rowSubtitle} variant="caption">
             {subtitle}
           </AppText>
         ) : null}
@@ -41,7 +52,7 @@ function SettingsRow({ icon, title, subtitle, rightText, danger, onPress }: Sett
         <AppText style={styles.rightText} variant="caption">
           {rightText}
         </AppText>
-      ) : onPress ? (
+      ) : onPress && !disabled ? (
         <Ionicons color={theme.colors.muted} name="chevron-forward" size={20} />
       ) : null}
     </Pressable>
@@ -78,29 +89,48 @@ function PlaceholderSheet({ visible, title, description, onClose }: PlaceholderS
 
 export function SettingsScreen({ navigation }: Props) {
   const { signOut, user, refreshSession } = useAuth();
-  const [hasActiveEvent, setHasActiveEvent] = React.useState(false);
-  const [activeEventTitle, setActiveEventTitle] = React.useState<string | null>(null);
+  const [capabilityState, setCapabilityState] = React.useState<ActiveEventCheckState>({ status: "loading" });
+  const capabilityRequestRef = useRef(0);
   const [isLikesOpen, setIsLikesOpen] = React.useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
 
+  const loadOrganizerCapabilities = useCallback(async () => {
+    const requestId = ++capabilityRequestRef.current;
+    setCapabilityState({ status: "loading" });
+
+    try {
+      const status = await getOrganizerStatus();
+      if (requestId !== capabilityRequestRef.current) {
+        return;
+      }
+
+      setCapabilityState(toActiveEventCheckReadyState(status));
+    } catch {
+      if (requestId !== capabilityRequestRef.current) {
+        return;
+      }
+
+      setCapabilityState({
+        status: "error",
+        message: resolveOrganizerCapabilityLoadFailureMessage(),
+      });
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void refreshSession();
-      void (async () => {
-        try {
-          const status = await getOrganizerStatus();
-          setHasActiveEvent(Boolean(status.hasActiveEvent));
-          setActiveEventTitle(status.activeEventTitle ?? null);
-        } catch {
-          setHasActiveEvent(false);
-          setActiveEventTitle(null);
-        }
-      })();
-    }, [refreshSession]),
+      void loadOrganizerCapabilities();
+
+      return () => {
+        capabilityRequestRef.current += 1;
+      };
+    }, [loadOrganizerCapabilities, refreshSession]),
   );
 
   const organizerStatus = user?.organizerStatus ?? "not_applied";
+  const readyCapabilityState = capabilityState.status === "ready" ? capabilityState : null;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -161,23 +191,68 @@ export function SettingsScreen({ navigation }: Props) {
         </AppText>
         {organizerStatus === "approved" ? (
           <>
-            {hasActiveEvent ? (
-              <SettingsRow
-                icon="information-circle-outline"
-                subtitle={
-                  activeEventTitle
-                    ? `"${activeEventTitle}" bitene kadar yeni etkinlik oluşturamazsın.`
-                    : "Zaten aktif bir etkinliğin var."
-                }
-                title="Zaten aktif bir etkinliğin var"
-              />
-            ) : (
-              <SettingsRow
-                icon="add-circle-outline"
-                onPress={() => navigation.navigate(ProfileRoutes.CreateEventScreen)}
-                title="Etkinlik Oluştur"
-              />
-            )}
+            {capabilityState.status === "loading" ? (
+              <SettingsRow icon="hourglass-outline" title="Etkinlik hakları yükleniyor..." />
+            ) : null}
+
+            {capabilityState.status === "error" ? (
+              <>
+                <SettingsRow
+                  icon="alert-circle-outline"
+                  subtitle={capabilityState.message}
+                  title="Etkinlik hakları yüklenemedi"
+                />
+                <SettingsRow icon="refresh-outline" onPress={() => void loadOrganizerCapabilities()} title="Tekrar dene" />
+              </>
+            ) : null}
+
+            {readyCapabilityState ? (
+              <>
+                <SettingsRow
+                  icon="ribbon-outline"
+                  rightText={formatCapabilityLevelLabel(readyCapabilityState.capabilityLevel)}
+                  subtitle={buildCapabilityUsageLabel(
+                    readyCapabilityState.usage,
+                    readyCapabilityState.capabilities.maxConcurrentActiveEvents,
+                  )}
+                  title="Organizatör seviyesi"
+                />
+                <SettingsRow
+                  icon="stats-chart-outline"
+                  subtitle={buildRemainingSlotsLabel(readyCapabilityState.usage.remainingActiveEventSlots)}
+                  title="Aktif etkinlik kullanımı"
+                />
+                {readyCapabilityState.usage.remainingActiveEventSlots > 0 ? (
+                  <SettingsRow
+                    icon="add-circle-outline"
+                    onPress={() => navigation.navigate(ProfileRoutes.CreateEventScreen)}
+                    subtitle={buildAvailableCreateSubtitle(
+                      readyCapabilityState.usage,
+                      readyCapabilityState.capabilities.maxConcurrentActiveEvents,
+                    )}
+                    title="Etkinlik Oluştur"
+                  />
+                ) : (
+                  <SettingsRow
+                    disabled
+                    icon="remove-circle-outline"
+                    subtitle={
+                      readyCapabilityState.activeEventTitle
+                        ? `${buildEventLimitMessage(
+                            readyCapabilityState.capabilityLevel,
+                            readyCapabilityState.capabilities.maxConcurrentActiveEvents,
+                          )} Yakın etkinlik: ${readyCapabilityState.activeEventTitle}`
+                        : buildEventLimitMessage(
+                            readyCapabilityState.capabilityLevel,
+                            readyCapabilityState.capabilities.maxConcurrentActiveEvents,
+                          )
+                    }
+                    title="Etkinlik limitine ulaştın"
+                  />
+                )}
+              </>
+            ) : null}
+
             <SettingsRow
               icon="calendar-outline"
               onPress={() => navigation.navigate(ProfileRoutes.MyOrganizerEventsScreen)}
@@ -345,12 +420,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xs,
   },
+  rowDisabled: {
+    opacity: 0.72,
+  },
   rowCenter: {
     flex: 1,
   },
   rowTitle: {
     color: theme.colors.textPrimary,
     fontSize: 16,
+  },
+  rowTitleDisabled: {
+    color: theme.colors.textSecondary,
   },
   rowSubtitle: {
     color: theme.colors.textSecondary,

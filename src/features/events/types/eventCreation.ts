@@ -38,12 +38,9 @@ export type EventCreationDraft = {
   tokenPriceInput: string;
 };
 
-export type EventCreationCapabilities = {
-  maxConcurrentActiveEvents: number;
-  maxTicketOptionsPerEvent: number;
-  canUseMultipleTicketOptions: boolean;
-  canUsePackageInclusions: boolean;
-};
+import type { OrganizerCapabilities } from "./organizer";
+
+export type EventCreationCapabilities = OrganizerCapabilities;
 
 export type EventCreationFieldKey =
   | "title"
@@ -70,8 +67,3 @@ export type EventCreationStepState = {
   currentStep: EventCreationStep;
   completedSteps: EventCreationStep[];
 };
-
-export type ActiveEventCheckState =
-  | { status: "loading" }
-  | { status: "ready"; hasActiveEvent: boolean; activeEventTitle: string | null }
-  | { status: "error"; message: string };
