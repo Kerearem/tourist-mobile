@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,11 +18,9 @@ import type { NavigationProp } from "@react-navigation/native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
-import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
-import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
@@ -42,6 +42,13 @@ import {
   shouldInvalidateConversationSearch,
 } from "../utils/conversationInfoSearch";
 import {
+  CONVERSATION_INFO_MEDIA_GRID_COLUMNS,
+  CONVERSATION_INFO_MUTE_PLACEHOLDER_ALERT,
+  CONVERSATION_INFO_OPTIONS_PLACEHOLDER_ALERT,
+  CONVERSATION_INFO_PLACEHOLDER_ALERT,
+  CONVERSATION_INFO_SETTINGS_ROWS,
+} from "../utils/conversationInfoLayout";
+import {
   hasSharedMediaPreview,
   resolveSharedMediaPreviewItems,
   SHARED_MEDIA_PREVIEW_LIMIT,
@@ -49,20 +56,66 @@ import {
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "ConversationInfoScreen">;
 
-type ActionRowProps = {
+type QuickActionProps = {
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
+  label: string;
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-function ActionRow({ icon, title, onPress }: ActionRowProps) {
+function QuickAction({ icon, label, disabled, onPress }: QuickActionProps) {
   return (
-    <Pressable disabled={!onPress} onPress={onPress} style={styles.actionRow}>
-      <Ionicons color={theme.colors.textPrimary} name={icon} size={22} />
-      <AppText style={styles.actionRowTitle} variant="body">
-        {title}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled ?? false }}
+      disabled={disabled || !onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.quickAction,
+        disabled && styles.quickActionDisabled,
+        pressed && !disabled && styles.quickActionPressed,
+      ]}
+    >
+      <View style={styles.quickActionIconWrap}>
+        <Ionicons
+          color={disabled ? theme.colors.muted : theme.colors.textPrimary}
+          name={icon}
+          size={24}
+        />
+      </View>
+      <AppText
+        numberOfLines={1}
+        style={[styles.quickActionLabel, disabled && styles.quickActionLabelDisabled]}
+        variant="caption"
+      >
+        {label}
       </AppText>
-      <Ionicons color={theme.colors.muted} name="chevron-forward" size={20} />
+    </Pressable>
+  );
+}
+
+type SettingsRowProps = {
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  isLast?: boolean;
+};
+
+function SettingsRow({ title, subtitle, onPress, isLast }: SettingsRowProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.settingsRow, pressed && styles.settingsRowPressed, !isLast && styles.settingsRowBorder]}
+    >
+      <View style={styles.settingsRowText}>
+        <AppText variant="body">{title}</AppText>
+        {subtitle ? (
+          <AppText style={styles.settingsRowSubtitle} variant="caption">
+            {subtitle}
+          </AppText>
+        ) : null}
+      </View>
+      <Ionicons color={theme.colors.muted} name="chevron-forward" size={18} />
     </Pressable>
   );
 }
@@ -98,6 +151,7 @@ const resolveDisplayTitle = (info: ConversationInfo | null, viewerId: string) =>
 };
 
 export function ConversationInfoScreen({ navigation, route }: Props) {
+  const { width: screenWidth } = useWindowDimensions();
   const { user } = useAuth();
   const viewerId = user?.id ?? "";
   const [info, setInfo] = useState<ConversationInfo | null>(null);
@@ -176,6 +230,14 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
     [info?.sharedMediaPreview],
   );
   const mediaItems = showAllMedia ? allMedia : previewMedia;
+  const canOpenProfile = Boolean(info?.otherParticipant && !isSystemInbox);
+
+  const mediaTileSize = useMemo(() => {
+    const horizontalPadding = theme.spacing.lg * 2;
+    const gap = theme.spacing.xs;
+    const totalGaps = gap * (CONVERSATION_INFO_MEDIA_GRID_COLUMNS - 1);
+    return (screenWidth - horizontalPadding - totalGaps) / CONVERSATION_INFO_MEDIA_GRID_COLUMNS;
+  }, [screenWidth]);
 
   const openProfile = () => {
     if (!info?.otherParticipant) {
@@ -194,6 +256,16 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
           isOrganizer: info.otherParticipant.isOrganizer,
         },
       },
+    });
+  };
+
+  const toggleSearch = () => {
+    setIsSearchOpen((current) => {
+      if (current) {
+        setSearchQuery("");
+        resetSearchState();
+      }
+      return !current;
     });
   };
 
@@ -264,14 +336,20 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
     navigation.navigate(MessagesRoutes.MessageThreadScreen, { threadId: route.params.threadId });
   };
 
+  const showPlaceholderAlert = () => {
+    Alert.alert(CONVERSATION_INFO_PLACEHOLDER_ALERT);
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.pagePadding}>
-          <ScreenBackHeader onBack={() => navigation.goBack()} title="Sohbet Detayı" />
-          <Card style={styles.stateCard}>
-            <Loader label="Sohbet detayı yükleniyor..." />
-          </Card>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
+          </Pressable>
+        </View>
+        <View style={styles.stateWrap}>
+          <Loader label="Sohbet detayı yükleniyor..." />
         </View>
       </SafeAreaView>
     );
@@ -280,11 +358,17 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
   if (error || !info) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.pagePadding}>
-          <ScreenBackHeader onBack={() => navigation.goBack()} title="Sohbet Detayı" />
-          <Card style={styles.stateCard}>
-            <ErrorState onRetry={() => void loadInfo()} subtitle={error ?? undefined} title="Sohbet detayı yüklenemedi" />
-          </Card>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
+          </Pressable>
+          <AppText style={styles.headerTitle} variant="label">
+            Sohbet Detayı
+          </AppText>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.stateWrap}>
+          <ErrorState onRetry={() => void loadInfo()} subtitle={error ?? undefined} title="Sohbet detayı yüklenemedi" />
         </View>
       </SafeAreaView>
     );
@@ -292,62 +376,68 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.pagePadding}>
-        <ScreenBackHeader onBack={() => navigation.goBack()} title="Sohbet Detayı" />
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={28} />
+        </Pressable>
+        <AppText style={styles.headerTitle} variant="label">
+          Sohbet Detayı
+        </AppText>
+        <View style={styles.headerSpacer} />
+      </View>
 
-        <Card style={styles.profileCard}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>
           <Avatar
             initials={displayTitle.slice(0, 2).toUpperCase()}
-            size={88}
+            size={96}
             uri={isSystemInbox ? undefined : info.otherParticipant?.avatarUrl}
           />
-          <AppText style={styles.profileName} variant="sectionTitle">
+          <AppText style={styles.heroName} variant="title">
             {displayTitle}
           </AppText>
           {info.otherParticipant?.username ? (
-            <AppText style={styles.profileUsername} variant="caption">
+            <AppText style={styles.heroUsername} variant="caption">
               @{info.otherParticipant.username}
             </AppText>
           ) : null}
           {isSystemInbox ? (
-            <AppText style={styles.systemDescription} variant="bodyMuted">
+            <AppText style={styles.heroSubtitle} variant="bodyMuted">
               Tourist sistem bildirimleri ve güncellemeleri bu sohbet üzerinden iletilir.
             </AppText>
           ) : null}
-          {info.otherParticipant && !isSystemInbox ? (
-            <Pressable onPress={openProfile} style={styles.profileButton}>
-              <AppText style={styles.profileButtonText} variant="label">
-                Profili Görüntüle
-              </AppText>
-            </Pressable>
-          ) : null}
-        </Card>
+        </View>
 
-        <Card style={styles.sectionCard}>
-          <ActionRow
-            icon="search-outline"
-            onPress={() => setIsSearchOpen((current) => !current)}
-            title="Sohbette Ara"
+        <View style={styles.quickActionsRow}>
+          <QuickAction
+            disabled={!canOpenProfile}
+            icon="person-outline"
+            label="Profil"
+            onPress={canOpenProfile ? openProfile : undefined}
           />
-          <View style={styles.sectionDivider} />
-          <ActionRow
-            icon="images-outline"
-            onPress={() => {
-              if (showAllMedia) {
-                setShowAllMedia(false);
-                return;
-              }
-              void loadAllMedia();
-            }}
-            title={showAllMedia ? "Önizlemeyi Göster" : "Ortak Medya"}
+          <QuickAction icon="search-outline" label="Ara" onPress={toggleSearch} />
+          <QuickAction
+            icon="notifications-outline"
+            label="Sessize al"
+            onPress={() => Alert.alert(CONVERSATION_INFO_MUTE_PLACEHOLDER_ALERT)}
           />
-        </Card>
+          <QuickAction
+            icon="ellipsis-horizontal"
+            label="Seçenekler"
+            onPress={() => Alert.alert(CONVERSATION_INFO_OPTIONS_PLACEHOLDER_ALERT)}
+          />
+        </View>
 
         {isSearchOpen ? (
-          <Card style={styles.sectionCard}>
+          <View style={styles.searchSection}>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
+              autoFocus
               onChangeText={setSearchQuery}
               placeholder="Mesajlarda ara..."
               placeholderTextColor={theme.colors.muted}
@@ -386,26 +476,48 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
               )}
               scrollEnabled={false}
             />
-          </Card>
+          </View>
         ) : null}
 
-        <Card style={styles.sectionCard}>
+        <View style={styles.settingsSection}>
+          {CONVERSATION_INFO_SETTINGS_ROWS.map((row, index) => (
+            <SettingsRow
+              key={row.title}
+              isLast={index === CONVERSATION_INFO_SETTINGS_ROWS.length - 1}
+              onPress={showPlaceholderAlert}
+              subtitle={row.subtitle}
+              title={row.title}
+            />
+          ))}
+        </View>
+
+        <View style={styles.mediaSection}>
           <View style={styles.mediaHeader}>
-            <AppText variant="label">Ortak Medya</AppText>
+            <AppText style={styles.mediaTitle} variant="label">
+              Ortak medya
+            </AppText>
             {!showAllMedia && hasSharedMediaPreview(previewMedia) ? (
               <Pressable onPress={() => void loadAllMedia()}>
                 <AppText style={styles.mediaLink} variant="caption">
                   Tümünü Gör
                 </AppText>
               </Pressable>
+            ) : showAllMedia ? (
+              <Pressable onPress={() => setShowAllMedia(false)}>
+                <AppText style={styles.mediaLink} variant="caption">
+                  Önizleme
+                </AppText>
+              </Pressable>
             ) : null}
           </View>
+
           {isMediaLoading ? <Loader label="Medya yükleniyor..." /> : null}
           {mediaError ? (
             <AppText style={styles.mediaErrorText} variant="caption">
               {mediaError}
             </AppText>
           ) : null}
+
           {!isMediaLoading && !mediaError && mediaItems.length === 0 ? (
             <AppText style={styles.emptyMediaText} variant="bodyMuted">
               Henüz ortak medya yok
@@ -413,7 +525,10 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
           ) : (
             <View style={styles.mediaGrid}>
               {mediaItems.map((item) => (
-                <View key={item.id} style={styles.mediaTile}>
+                <View
+                  key={item.id}
+                  style={[styles.mediaTile, { height: mediaTileSize, width: mediaTileSize }]}
+                >
                   {item.mediaUrl ? (
                     <Image resizeMode="cover" source={{ uri: item.mediaUrl }} style={styles.mediaImage} />
                   ) : null}
@@ -421,7 +536,7 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
               ))}
             </View>
           )}
-        </Card>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -432,63 +547,100 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1,
   },
-  pagePadding: {
-    gap: theme.spacing.md,
-    padding: theme.spacing.lg,
-  },
-  stateCard: {
-    padding: theme.spacing.xl,
-  },
-  profileCard: {
-    alignItems: "center",
-    gap: theme.spacing.sm,
-    padding: theme.spacing.xl,
-  },
-  profileName: {
-    marginTop: theme.spacing.sm,
-    textAlign: "center",
-  },
-  profileUsername: {
-    color: theme.colors.textSecondary,
-  },
-  systemDescription: {
-    color: theme.colors.textSecondary,
-    marginTop: theme.spacing.sm,
-    textAlign: "center",
-  },
-  profileButton: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    marginTop: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-  },
-  profileButtonText: {
-    color: theme.colors.primary,
-  },
-  sectionCard: {
-    gap: theme.spacing.md,
-    padding: theme.spacing.lg,
-  },
-  actionRow: {
+  header: {
     alignItems: "center",
     flexDirection: "row",
-    gap: theme.spacing.md,
+    justifyContent: "space-between",
+    minHeight: 44,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
-  actionRowTitle: {
+  backButton: {
+    padding: theme.spacing.xs,
+    width: 44,
+  },
+  headerTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+  },
+  headerSpacer: {
+    width: 44,
+  },
+  stateWrap: {
     flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
   },
-  sectionDivider: {
-    backgroundColor: theme.colors.border,
-    height: 1,
+  scrollContent: {
+    paddingBottom: theme.spacing.xxl,
+  },
+  hero: {
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+  },
+  heroName: {
+    marginTop: theme.spacing.md,
+    textAlign: "center",
+  },
+  heroUsername: {
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  heroSubtitle: {
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    textAlign: "center",
+  },
+  quickActionsRow: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  quickAction: {
+    alignItems: "center",
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  quickActionPressed: {
+    opacity: 0.7,
+  },
+  quickActionDisabled: {
+    opacity: 0.45,
+  },
+  quickActionIconWrap: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    height: 52,
+    justifyContent: "center",
+    width: 52,
+  },
+  quickActionLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 12,
+    textAlign: "center",
+  },
+  quickActionLabelDisabled: {
+    color: theme.colors.muted,
+  },
+  searchSection: {
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
   },
   searchInput: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     color: theme.colors.textPrimary,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
@@ -498,7 +650,7 @@ const styles = StyleSheet.create({
   },
   searchResultRow: {
     borderBottomColor: theme.colors.border,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: theme.spacing.xs,
     paddingVertical: theme.spacing.sm,
   },
@@ -510,10 +662,47 @@ const styles = StyleSheet.create({
   searchResultDate: {
     color: theme.colors.textSecondary,
   },
+  settingsSection: {
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginBottom: theme.spacing.lg,
+  },
+  settingsRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  settingsRowPressed: {
+    backgroundColor: theme.colors.surface,
+  },
+  settingsRowBorder: {
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  settingsRowText: {
+    flex: 1,
+    gap: 2,
+    paddingRight: theme.spacing.sm,
+  },
+  settingsRowSubtitle: {
+    color: theme.colors.textSecondary,
+  },
+  mediaSection: {
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+  },
   mediaHeader: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: theme.spacing.xs,
+  },
+  mediaTitle: {
+    color: theme.colors.textPrimary,
   },
   mediaLink: {
     color: theme.colors.primary,
@@ -524,19 +713,18 @@ const styles = StyleSheet.create({
   },
   emptyMediaText: {
     color: theme.colors.textSecondary,
+    paddingVertical: theme.spacing.md,
     textAlign: "center",
   },
   mediaGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs,
   },
   mediaTile: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.sm,
-    height: 96,
     overflow: "hidden",
-    width: "31%",
   },
   mediaImage: {
     height: "100%",

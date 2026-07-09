@@ -20,6 +20,10 @@ import {
   shouldInvalidateConversationSearch,
 } from "../src/features/messages/utils/conversationInfoSearch";
 import {
+  CONVERSATION_INFO_QUICK_ACTION_LABELS,
+  CONVERSATION_INFO_SETTINGS_ROWS,
+} from "../src/features/messages/utils/conversationInfoLayout";
+import {
   hasSharedMediaPreview,
   resolveSharedMediaPreviewItems,
 } from "../src/features/messages/utils/sharedMediaPreview";
@@ -125,6 +129,50 @@ describe("shared media preview helpers", () => {
   it("reports empty preview when no media exists", () => {
     assert.equal(hasSharedMediaPreview([textMessage]), false);
     assert.deepEqual(resolveSharedMediaPreviewItems([textMessage]), []);
+  });
+});
+
+describe("conversation info layout labels", () => {
+  it("exposes quick action labels for profile search mute and options", () => {
+    assert.deepEqual(CONVERSATION_INFO_QUICK_ACTION_LABELS, [
+      "Profil",
+      "Ara",
+      "Sessize al",
+      "Seçenekler",
+    ]);
+  });
+
+  it("exposes settings row labels for light theme placeholder rows", () => {
+    const titles = CONVERSATION_INFO_SETTINGS_ROWS.map((row) => row.title);
+    assert.deepEqual(titles, [
+      "Tema",
+      "Takma adlar",
+      "Süreli mesajlar",
+      "Gizlilik ve emniyet",
+      "Grup sohbeti oluştur",
+      "Bir şey çalışmıyor",
+    ]);
+    assert.equal(
+      CONVERSATION_INFO_SETTINGS_ROWS.find((row) => row.title === "Tema")?.subtitle,
+      "Varsayılan",
+    );
+    assert.equal(
+      CONVERSATION_INFO_SETTINGS_ROWS.find((row) => row.title === "Süreli mesajlar")?.subtitle,
+      "Kapalı",
+    );
+  });
+
+  it("uses instagram-style layout labels in ConversationInfoScreen source", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/features/messages/screens/ConversationInfoScreen.tsx"),
+      "utf8",
+    );
+
+    assert.match(source, /quickActionsRow/);
+    assert.match(source, /settingsSection/);
+    assert.match(source, /mediaGrid/);
+    assert.match(source, /CONVERSATION_INFO_SETTINGS_ROWS/);
+    assert.doesNotMatch(source, /Profili Görüntüle/);
   });
 });
 
