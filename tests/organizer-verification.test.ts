@@ -11,6 +11,15 @@ import {
 } from "../src/features/events/services/organizer-mock-state";
 import type { DocumentChecklistItem, UploadIntentResponse, VerificationUploadFile } from "../src/features/events/types/organizer";
 import {
+  canProceedFromDocumentStep,
+  findFirstIncompleteDocumentStep,
+  getRequiredDocumentTypes,
+  getWizardSteps,
+  isWizardSubmitEnabled,
+  resolveInitialWizardStep,
+  validateOrganizerMotivation,
+} from "../src/features/events/utils/organizer-verification-wizard";
+import {
   buildVerificationUploadFormEntries,
   parseCloudinaryUploadResponse,
 } from "../src/services/media/cloudinary-verification";
@@ -24,6 +33,8 @@ import {
   DOCUMENT_TYPE_LABELS,
   hasRequiredDocumentsPresent,
   isDraftBlockedByAge,
+  isChecklistItemComplete,
+  isChecklistItemSubmitReady,
   isPendingOrganizerApplicationNavigable,
   isReadOnlyReviewStatus,
   isSubmitEligible,
@@ -86,7 +97,9 @@ const phaseInput = (
 
 test("maps backend document types and statuses to Turkish labels", () => {
   assert.equal(DOCUMENT_TYPE_LABELS.IDENTITY_FRONT, "Kimlik ön yüz");
+  assert.equal(DOCUMENT_TYPE_LABELS.SELFIE, "Canlılık/selfie");
   assert.equal(DOCUMENT_TYPE_LABELS.TAX_DOCUMENT, "Vergi belgesi");
+  assert.equal(DOCUMENT_TYPE_LABELS.AUTHORIZED_SIGNATORY, "Yetkili imza belgesi");
   assert.equal(DOCUMENT_STATUS_LABELS.UPLOADED, "Yüklendi");
   assert.equal(DOCUMENT_STATUS_LABELS.REUPLOAD_REQUESTED, "Yeniden yükleme istendi");
 });
@@ -438,4 +451,125 @@ test("mock backend draft upload and submit flow stays local without cloudinary n
 
   const submitted = submitMockOrganizerApplication();
   assert.equal(submitted.application?.reviewStatus, "SUBMITTED");
+});
+
+test("individual wizard includes intro motivation identity docs and review", () => {
+  const steps = getWizardSteps("INDIVIDUAL");
+  assert.deepEqual(steps, [
+    "intro",
+    "motivation",
+    "identity_front",
+    "identity_back",
+    "selfie",
+    "review",
+  ]);
+});
+
+test("business wizard includes tax registration and signature steps", () => {
+  const steps = getWizardSteps("BUSINESS");
+  assert.deepEqual(steps, [
+    "intro",
+    "motivation",
+    "identity_front",
+    "identity_back",
+    "selfie",
+    "tax_document",
+    "business_registration",
+    "authorized_signature",
+    "review",
+  ]);
+});
+
+test("required document helper returns individual and business lists", () => {
+  assert.deepEqual(getRequiredDocumentTypes("INDIVIDUAL"), [
+    "IDENTITY_FRONT",
+    "IDENTITY_BACK",
+    "SELFIE",
+  ]);
+  assert.deepEqual(getRequiredDocumentTypes("BUSINESS"), [
+    "IDENTITY_FRONT",
+    "IDENTITY_BACK",
+    "SELFIE",
+    "TAX_DOCUMENT",
+    "BUSINESS_REGISTRATION",
+    "AUTHORIZED_SIGNATORY",
+  ]);
+});
+
+test("validateOrganizerMotivation enforces minimum length", () => {
+  assert.match(validateOrganizerMotivation("short") ?? "", /10 karakter/);
+  assert.equal(validateOrganizerMotivation("This is long enough"), null);
+});
+
+test("resolveInitialWizardStep resumes draft at first incomplete document", () => {
+  const incompleteChecklist = buildChecklist(["UPLOADED", null, null]);
+  assert.equal(
+    resolveInitialWizardStep({
+      screenPhase: "draft_documents",
+      applicationType: "INDIVIDUAL",
+      checklist: incompleteChecklist,
+      reviewStatus: "DRAFT",
+    }),
+    "identity_back",
+  );
+});
+
+test("resolveInitialWizardStep opens intro for new applications", () => {
+  assert.equal(
+    resolveInitialWizardStep({
+      screenPhase: "draft_info",
+      applicationType: "INDIVIDUAL",
+      checklist: emptyChecklist,
+      reviewStatus: null,
+    }),
+    "intro",
+  );
+});
+
+test("document step completion blocks continue until uploaded", () => {
+  const missing = emptyChecklist[0]!;
+  assert.equal(canProceedFromDocumentStep(missing), false);
+  assert.equal(canProceedFromDocumentStep(undefined), false);
+  assert.equal(canProceedFromDocumentStep(completeChecklist[0]!), true);
+});
+
+test("checklist item completion uses single submit-ready rules", () => {
+  const missing = emptyChecklist[0]!;
+  assert.equal(isChecklistItemComplete(missing), false);
+  assert.equal(isChecklistItemSubmitReady(missing), false);
+
+  assert.equal(isChecklistItemComplete(buildChecklist(["UPLOADED", null, null])[0]!), true);
+  assert.equal(isChecklistItemComplete(buildChecklist(["UNDER_REVIEW", null, null])[0]!), true);
+  assert.equal(isChecklistItemComplete(buildChecklist(["APPROVED", null, null])[0]!), true);
+
+  assert.equal(isChecklistItemComplete(buildChecklist(["REJECTED", null, null])[0]!), false);
+  assert.equal(isChecklistItemComplete(buildChecklist(["REUPLOAD_REQUESTED", null, null])[0]!), false);
+
+  assert.equal(isChecklistItemComplete(completeChecklist[0]!), true);
+  assert.equal(isSubmitEligible(completeChecklist), true);
+});
+
+test("wizard submit enabled only for draft and changes requested when eligible", () => {
+  assert.equal(isWizardSubmitEnabled(completeChecklist, "draft_documents"), true);
+  assert.equal(isWizardSubmitEnabled(emptyChecklist, "draft_documents"), false);
+  assert.equal(isWizardSubmitEnabled(completeChecklist, "read_only"), false);
+});
+
+test("changes requested allows upload only for rejected or reupload requested items", () => {
+  const rejectedItem: DocumentChecklistItem = {
+    documentType: "IDENTITY_FRONT",
+    required: true,
+    latestDocumentId: "doc-1",
+    latestStatus: "REJECTED",
+    latestVersion: 1,
+    satisfied: false,
+  };
+
+  assert.equal(isChecklistItemComplete(rejectedItem), false);
+  assert.equal(canUploadChecklistItem(rejectedItem, "CHANGES_REQUESTED"), true);
+  assert.equal(canUploadChecklistItem(rejectedItem, "UNDER_REVIEW"), false);
+});
+
+test("legacy submitted completion resumes at first missing document step", () => {
+  assert.equal(findFirstIncompleteDocumentStep(emptyChecklist, "INDIVIDUAL"), "identity_front");
 });

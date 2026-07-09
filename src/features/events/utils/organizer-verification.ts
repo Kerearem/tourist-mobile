@@ -21,7 +21,7 @@ export const VERIFICATION_ALLOWED_SELFIE_MIME_TYPES = ["image/jpeg", "image/png"
 export const DOCUMENT_TYPE_LABELS: Record<VerificationDocumentType, string> = {
   IDENTITY_FRONT: "Kimlik ön yüz",
   IDENTITY_BACK: "Kimlik arka yüz",
-  SELFIE: "Selfie",
+  SELFIE: "Canlılık/selfie",
   TAX_DOCUMENT: "Vergi belgesi",
   BUSINESS_REGISTRATION: "İşletme tescil belgesi",
   AUTHORIZED_SIGNATORY: "Yetkili imza belgesi",
@@ -118,17 +118,23 @@ export function hasRequiredDocumentsPresent(checklist: DocumentChecklistItem[]):
     return false;
   }
 
-  return requiredItems.every((item) => {
-    if (!item.latestDocumentId || !item.latestStatus) {
-      return false;
-    }
+  return requiredItems.every(isChecklistItemSubmitReady);
+}
 
-    if (BLOCKING_SUBMIT_STATUSES.includes(item.latestStatus)) {
-      return false;
-    }
+export function isChecklistItemSubmitReady(item: DocumentChecklistItem): boolean {
+  if (!item.latestDocumentId || !item.latestStatus) {
+    return false;
+  }
 
-    return SUBMIT_READY_STATUSES.includes(item.latestStatus);
-  });
+  if (BLOCKING_SUBMIT_STATUSES.includes(item.latestStatus)) {
+    return false;
+  }
+
+  return SUBMIT_READY_STATUSES.includes(item.latestStatus);
+}
+
+export function isChecklistItemComplete(item: DocumentChecklistItem): boolean {
+  return isChecklistItemSubmitReady(item);
 }
 
 export function canUploadChecklistItem(
@@ -273,10 +279,6 @@ export function mergeDraftUpdateChecklist(
   return nextChecklist;
 }
 
-export function isChecklistItemComplete(item: DocumentChecklistItem): boolean {
-  return item.latestDocumentId !== null && item.latestStatus !== null && item.latestStatus !== "REJECTED";
-}
-
 export function getChecklistItemDisplayStatus(item: DocumentChecklistItem): string {
   if (!item.latestDocumentId || !item.latestStatus) {
     return "Eksik";
@@ -291,17 +293,7 @@ export function isSubmitEligible(checklist: DocumentChecklistItem[]): boolean {
     return false;
   }
 
-  return requiredItems.every((item) => {
-    if (!item.latestDocumentId || !item.latestStatus) {
-      return false;
-    }
-
-    if (BLOCKING_SUBMIT_STATUSES.includes(item.latestStatus)) {
-      return false;
-    }
-
-    return SUBMIT_READY_STATUSES.includes(item.latestStatus);
-  });
+  return requiredItems.every(isChecklistItemSubmitReady);
 }
 
 export function normalizeMimeType(mimeType: string): string {

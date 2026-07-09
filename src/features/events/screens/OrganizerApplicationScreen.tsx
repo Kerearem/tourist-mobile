@@ -1,20 +1,31 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppButton } from "../../../components/ui/AppButton";
-import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
-import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { Loader } from "../../../components/ui/Loader";
-import { Screen } from "../../../components/ui/Screen";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
 import type { OrganizerStatus } from "../../../models/user";
-import { OrganizerDocumentCard } from "../components/OrganizerDocumentCard";
+import { OrganizerApplicationDocumentStep } from "../components/organizer-application/OrganizerApplicationDocumentStep";
+import { OrganizerApplicationFooter } from "../components/organizer-application/OrganizerApplicationFooter";
+import { OrganizerApplicationIntroStep } from "../components/organizer-application/OrganizerApplicationIntroStep";
+import { OrganizerApplicationMotivationStep } from "../components/organizer-application/OrganizerApplicationMotivationStep";
+import { OrganizerApplicationProgress } from "../components/organizer-application/OrganizerApplicationProgress";
+import { OrganizerApplicationReviewStep } from "../components/organizer-application/OrganizerApplicationReviewStep";
+import { OrganizerApplicationStatusCard } from "../components/organizer-application/OrganizerApplicationStatusCard";
 import {
   createOrUpdateOrganizerDraft,
   getCurrentOrganizerApplication,
@@ -23,6 +34,7 @@ import {
 } from "../services/organizer.service";
 import type {
   CurrentOrganizerApplicationResponse,
+  DocumentChecklistItem,
   VerificationDocumentType,
   VerificationUploadFile,
 } from "../types/organizer";
@@ -33,29 +45,35 @@ import {
 import {
   canEditOrganizerDraftMotivation,
   canSaveOrganizerDraftInfo,
-  isDocumentsPhase,
+  canStartDocumentUpload,
   isDraftBlockedByAge,
   isSubmitEligible,
   mergeDraftUpdateChecklist,
   resolveApplicationTypeForAccount,
-  resolveInitialDraftStep,
   resolveOrganizerScreenPhase,
-  shouldShowDraftSubmit,
   shouldShowResubmit,
   toDocumentCardReviewStatus,
   validateVerificationUploadFile,
 } from "../utils/organizer-verification";
+import {
+  canProceedFromDocumentStep,
+  findFirstIncompleteDocumentStep,
+  getNextWizardStep,
+  getPreviousWizardStep,
+  getWizardSteps,
+  isDocumentWizardStep,
+  isWizardSubmitEnabled,
+  resolveInitialWizardStep,
+  resolveWizardDocumentType,
+  type OrganizerWizardStepId,
+  validateOrganizerMotivation,
+} from "../utils/organizer-verification-wizard";
 import { meetsOrganizerMinimumAge } from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
   "OrganizerApplicationScreen"
 >;
-
-type DraftStep = "info" | "documents";
-
-const MIN_REASON_LENGTH = 10;
-const MAX_REASON_LENGTH = 2000;
 
 const legacyStatusMessage = (status: OrganizerStatus) => {
   if (status === "pending") {
@@ -74,10 +92,11 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
   const { user, refreshSession } = useAuth();
   const accountType = user?.accountType ?? "personal";
   const applicationType = resolveApplicationTypeForAccount(accountType);
+  const wizardSteps = useMemo(() => getWizardSteps(applicationType), [applicationType]);
 
   const [current, setCurrent] = useState<CurrentOrganizerApplicationResponse | null>(null);
   const [motivation, setMotivation] = useState("");
-  const [draftStep, setDraftStep] = useState<DraftStep>("info");
+  const [wizardStep, setWizardStep] = useState<OrganizerWizardStepId>("intro");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -91,6 +110,7 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
   const reviewStatus = current?.application?.reviewStatus ?? null;
   const applicationId = current?.application?.id ?? null;
   const checklist = current?.documentChecklist ?? [];
+  const effectiveReviewStatus = current?.application?.reviewStatus ?? "DRAFT";
 
   const isBlockedByAge = isDraftBlockedByAge(
     applicationType,
@@ -112,6 +132,15 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
   const infoMessage = useMemo(() => legacyStatusMessage(organizerStatus), [organizerStatus]);
   const submitReady = isSubmitEligible(checklist);
   const showReadOnly = screenPhase === "read_only";
+  const isResubmit = shouldShowResubmit(screenPhase);
+  const canSubmit = isWizardSubmitEnabled(checklist, screenPhase);
+
+  const currentDocumentType = isDocumentWizardStep(wizardStep)
+    ? resolveWizardDocumentType(wizardStep)
+    : null;
+  const currentChecklistItem = currentDocumentType
+    ? checklist.find((item) => item.documentType === currentDocumentType)
+    : undefined;
 
   const loadCurrent = useCallback(async () => {
     setIsLoading(true);
@@ -125,11 +154,16 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
         setMotivation(response.application.reason);
       }
 
-      setDraftStep(
-        resolveInitialDraftStep({
-          organizerStatus,
-          reviewStatus: response.application?.reviewStatus ?? null,
+      setWizardStep(
+        resolveInitialWizardStep({
+          screenPhase: resolveOrganizerScreenPhase({
+            organizerStatus,
+            reviewStatus: response.application?.reviewStatus ?? null,
+            checklist: response.documentChecklist,
+          }),
+          applicationType,
           checklist: response.documentChecklist,
+          reviewStatus: response.application?.reviewStatus ?? null,
         }),
       );
 
@@ -140,38 +174,37 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, [organizerStatus]);
+  }, [applicationType, organizerStatus]);
 
   useEffect(() => {
     void loadCurrent();
   }, [loadCurrent]);
 
-  const onContinueDraft = async () => {
-    const saveInput = { screenPhase, reviewStatus, draftStep };
-
-    if (!canSaveOrganizerDraftInfo(saveInput)) {
-      return;
-    }
-
-    const reason = motivation.trim();
-
-    if (reason.length < MIN_REASON_LENGTH) {
-      setFormError("Lütfen en az 10 karakterlik bir motivasyon yaz.");
-      return;
-    }
-
-    if (reason.length > MAX_REASON_LENGTH) {
-      setFormError("Motivasyon en fazla 2000 karakter olabilir.");
-      return;
+  const onSaveMotivation = async (): Promise<{ saved: boolean; checklist: DocumentChecklistItem[] }> => {
+    const motivationError = validateOrganizerMotivation(motivation);
+    if (motivationError) {
+      setFormError(motivationError);
+      return { saved: false, checklist };
     }
 
     if (isBlockedByAge) {
       setFormError("Organizatör olmak için en az 18 yaşında olmalısın.");
-      return;
+      return { saved: false, checklist };
     }
 
     if (screenPhase === "draft_info" && !canStartApplication) {
-      return;
+      return { saved: false, checklist };
+    }
+
+    const canSaveInfo = canSaveOrganizerDraftInfo({
+      screenPhase,
+      reviewStatus,
+      draftStep: "info",
+    });
+
+    if (!canSaveInfo) {
+      setFormError("Bu aşamada motivasyon düzenlenemez.");
+      return { saved: false, checklist };
     }
 
     setIsSavingDraft(true);
@@ -181,8 +214,13 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     try {
       const draft = await createOrUpdateOrganizerDraft({
         type: applicationType,
-        reason,
+        reason: motivation.trim(),
       });
+
+      const nextChecklist = mergeDraftUpdateChecklist(
+        current?.documentChecklist ?? [],
+        draft.documentChecklist,
+      );
 
       setCurrent((previous) => ({
         application: {
@@ -195,14 +233,13 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
           createdAt: draft.application.createdAt,
           updatedAt: draft.application.updatedAt,
         },
-        documentChecklist: mergeDraftUpdateChecklist(
-          previous?.documentChecklist ?? [],
-          draft.documentChecklist,
-        ),
+        documentChecklist: nextChecklist,
       }));
-      setDraftStep("documents");
+
+      return { saved: true, checklist: nextChecklist };
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Taslak kaydedilemedi.");
+      return { saved: false, checklist };
     } finally {
       setIsSavingDraft(false);
     }
@@ -245,11 +282,11 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     documentType: VerificationDocumentType,
     pickFile: () => Promise<VerificationUploadFile | null>,
   ) => {
-    if (activeUploadType) {
+    if (!canStartDocumentUpload(activeUploadType)) {
       return;
     }
 
-    if (!applicationId || !isDocumentsPhase(screenPhase)) {
+    if (!applicationId || showReadOnly) {
       return;
     }
 
@@ -274,7 +311,7 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     }
   };
 
-  const onSubmitApplication = (isResubmit: boolean) => {
+  const onSubmitApplication = () => {
     if (!applicationId || !submitReady || isSubmitting) {
       return;
     }
@@ -316,137 +353,273 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     );
   };
 
+  const goToNextStep = () => {
+    const next = getNextWizardStep(wizardSteps, wizardStep);
+    if (next) {
+      setWizardStep(next);
+    }
+  };
+
+  const goToPreviousStep = () => {
+    const previous = getPreviousWizardStep(wizardSteps, wizardStep);
+    if (!previous) {
+      navigation.goBack();
+      return;
+    }
+
+    if (
+      screenPhase === "changes_requested" ||
+      screenPhase === "legacy_submitted_completion"
+    ) {
+      if (previous === "motivation" || previous === "intro") {
+        navigation.goBack();
+        return;
+      }
+    }
+
+    setWizardStep(previous);
+  };
+
+  const resolveStepAfterMotivation = (nextChecklist: DocumentChecklistItem[]) => {
+    return (
+      findFirstIncompleteDocumentStep(nextChecklist, applicationType) ??
+      "review"
+    );
+  };
+
+  const onPrimaryAction = () => {
+    void (async () => {
+      setFormError(null);
+
+      if (wizardStep === "intro") {
+        setWizardStep("motivation");
+        return;
+      }
+
+      if (wizardStep === "motivation") {
+        const result = await onSaveMotivation();
+        if (!result.saved) {
+          return;
+        }
+
+        setWizardStep(resolveStepAfterMotivation(result.checklist));
+        return;
+      }
+
+      if (isDocumentWizardStep(wizardStep)) {
+        goToNextStep();
+        return;
+      }
+
+      if (wizardStep === "review") {
+        onSubmitApplication();
+      }
+    })();
+  };
+
+  const primaryDisabled = useMemo(() => {
+    if (wizardStep === "motivation") {
+      return isBlockedByAge || isSavingDraft || Boolean(validateOrganizerMotivation(motivation));
+    }
+
+    if (isDocumentWizardStep(wizardStep)) {
+      return (
+        !canProceedFromDocumentStep(currentChecklistItem) ||
+        activeUploadType !== null
+      );
+    }
+
+    if (wizardStep === "review") {
+      return !canSubmit || !submitReady || isSubmitting || activeUploadType !== null;
+    }
+
+    return false;
+  }, [
+    wizardStep,
+    isBlockedByAge,
+    isSavingDraft,
+    motivation,
+    currentChecklistItem,
+    effectiveReviewStatus,
+    activeUploadType,
+    canSubmit,
+    submitReady,
+    isSubmitting,
+  ]);
+
+  const primaryLabel = useMemo(() => {
+    if (wizardStep === "intro") {
+      return "Başlayalım";
+    }
+    if (wizardStep === "motivation") {
+      return isSavingDraft ? "Kaydediliyor..." : "Devam Et";
+    }
+    if (wizardStep === "review") {
+      if (isSubmitting) {
+        return "Gönderiliyor...";
+      }
+      return isResubmit ? "Tekrar Gönder" : "Gönder";
+    }
+    return "Devam";
+  }, [wizardStep, isSavingDraft, isSubmitting, isResubmit]);
+
+  const renderWizardStep = () => {
+    if (wizardStep === "intro") {
+      return <OrganizerApplicationIntroStep applicationType={applicationType} />;
+    }
+
+    if (wizardStep === "motivation") {
+      return (
+        <OrganizerApplicationMotivationStep
+          applicationType={applicationType}
+          error={formError}
+          isBlockedByAge={isBlockedByAge}
+          motivation={motivation}
+          onChangeMotivation={setMotivation}
+        />
+      );
+    }
+
+    if (isDocumentWizardStep(wizardStep) && currentDocumentType) {
+      return (
+        <OrganizerApplicationDocumentStep
+          disabled={activeUploadType !== null && activeUploadType !== currentDocumentType}
+          documentType={currentDocumentType}
+          isUploading={activeUploadType === currentDocumentType}
+          item={currentChecklistItem}
+          onPickDocument={(documentType) =>
+            void handleUpload(documentType, () => pickVerificationDocumentFile(documentType))
+          }
+          onPickSelfie={(source) =>
+            void handleUpload("SELFIE", () => pickVerificationSelfieFile(source))
+          }
+          reviewStatus={toDocumentCardReviewStatus(effectiveReviewStatus)}
+          uploadError={uploadErrors[currentDocumentType] ?? null}
+        />
+      );
+    }
+
+    if (wizardStep === "review") {
+      return (
+        <OrganizerApplicationReviewStep
+          checklist={checklist}
+          isResubmit={isResubmit}
+          motivation={motivation}
+          onEditMotivation={
+            canEditOrganizerDraftMotivation({ reviewStatus, screenPhase })
+              ? () => setWizardStep("motivation")
+              : undefined
+          }
+          submitReady={submitReady}
+        />
+      );
+    }
+
+    return null;
+  };
+
   if (isLoading) {
     return (
-      <Screen>
-        <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
-        <Card style={styles.stateCard}>
-          <Loader label="Başvuru bilgileri yükleniyor..." />
-        </Card>
-      </Screen>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.pagePadding}>
+          <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
+          <Card style={styles.stateCard}>
+            <Loader label="Başvuru bilgileri yükleniyor..." />
+          </Card>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (loadError) {
     return (
-      <Screen scroll>
-        <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.pagePadding} keyboardShouldPersistTaps="handled">
           <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
           <Card style={styles.warningCard}>
             <AppText variant="body">{loadError}</AppText>
             <AppButton label="Tekrar Dene" onPress={() => void loadCurrent()} />
           </Card>
-        </View>
-      </Screen>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   if (screenPhase === "approved") {
     return (
-      <Screen scroll>
-        <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.pagePadding} keyboardShouldPersistTaps="handled">
           <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
-          <Card style={styles.infoCard}>
-            <AppText variant="body">{infoMessage}</AppText>
-          </Card>
-          <AppButton label="Geri Dön" onPress={() => navigation.goBack()} variant="secondary" />
-        </View>
-      </Screen>
+          <OrganizerApplicationStatusCard
+            checklist={checklist}
+            message={infoMessage ?? "Organizatör hesabın onaylandı."}
+            onBack={() => navigation.goBack()}
+            readOnly
+            reviewStatus={toDocumentCardReviewStatus(effectiveReviewStatus)}
+            title="Onaylandı"
+          />
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
-  const effectiveReviewStatus = current?.application?.reviewStatus ?? "DRAFT";
-  const showDocumentsView = isDocumentsPhase(screenPhase) && draftStep === "documents";
-  const showSubmitSection = shouldShowDraftSubmit(screenPhase) || shouldShowResubmit(screenPhase);
+  if (showReadOnly) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.pagePadding} keyboardShouldPersistTaps="handled">
+          <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
+          <OrganizerApplicationStatusCard
+            checklist={checklist}
+            message={submitSuccess ?? "Başvurun inceleniyor. Onaylandığında etkinlik oluşturabilirsin."}
+            onBack={() => navigation.goBack()}
+            readOnly
+            reviewStatus={toDocumentCardReviewStatus(effectiveReviewStatus)}
+            title="Başvuru Durumu"
+          />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  const showChangesBanner = screenPhase === "changes_requested" && current?.application?.changeRequestReason;
+  const showLegacyBanner = screenPhase === "legacy_submitted_completion";
 
   return (
-    <Screen scroll>
-      <View style={styles.container}>
-        <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+        style={styles.flex}
+      >
+        <View style={styles.pagePadding}>
+          <ScreenBackHeader onBack={() => navigation.goBack()} title="Organizatör Başvurusu" />
+          <OrganizerApplicationProgress currentStepId={wizardStep} steps={wizardSteps} />
+        </View>
 
-        <Card style={styles.card}>
-          <AppText variant="title">Organizatör Başvurusu</AppText>
-          <AppText variant="bodyMuted">
-            Organizatörler, şehirlerinde güvenli ve faydalı topluluk etkinlikleri düzenler.
-          </AppText>
-          <View style={styles.badges}>
-            <Badge label={applicationType === "BUSINESS" ? "İşletme başvurusu" : "Bireysel başvuru"} />
-            <Badge label="Güvenli belge yükleme" />
-          </View>
-        </Card>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.pagePadding}>
+            {showChangesBanner ? (
+              <Card style={styles.warningCard}>
+                <AppText variant="sectionTitle">Düzeltme İstendi</AppText>
+                <AppText variant="body">{current?.application?.changeRequestReason}</AppText>
+              </Card>
+            ) : null}
 
-        {effectiveReviewStatus === "CHANGES_REQUESTED" && current?.application?.changeRequestReason ? (
-          <Card style={styles.warningCard}>
-            <AppText variant="sectionTitle">Düzeltme İstendi</AppText>
-            <AppText variant="body">{current.application.changeRequestReason}</AppText>
-          </Card>
-        ) : null}
+            {showLegacyBanner ? (
+              <Card style={styles.infoCard}>
+                <AppText variant="body">
+                  Başvurunu tamamlamak için eksik belgelerini yükle. Mevcut belgelerini değiştirmene gerek yok.
+                </AppText>
+              </Card>
+            ) : null}
 
-        {screenPhase === "legacy_submitted_completion" ? (
-          <Card style={styles.infoCard}>
-            <AppText variant="body">
-              Başvurunu tamamlamak için eksik belgelerini yükle. Mevcut belgelerini değiştirmene gerek yok.
-            </AppText>
-          </Card>
-        ) : null}
+            {renderWizardStep()}
 
-        {showReadOnly ? (
-          <>
-            <Card style={styles.infoCard}>
-              <AppText variant="body">
-                {submitSuccess ?? "Başvurun inceleniyor. Onaylandığında etkinlik oluşturabilirsin."}
-              </AppText>
-            </Card>
-
-            {checklist.map((item) => (
-              <OrganizerDocumentCard
-                key={item.documentType}
-                disabled
-                isUploading={false}
-                item={item}
-                onPickDocument={() => undefined}
-                onPickSelfie={() => undefined}
-                reviewStatus={toDocumentCardReviewStatus(effectiveReviewStatus)}
-                uploadError={null}
-              />
-            ))}
-
-            <AppButton label="Geri Dön" onPress={() => navigation.goBack()} variant="secondary" />
-          </>
-        ) : showDocumentsView ? (
-          <>
-            <Card style={styles.card}>
-              <AppText variant="sectionTitle">Belgeler</AppText>
-              <AppText variant="bodyMuted">
-                Zorunlu belgeleri yükle. Her belge güvenli ve imzalı bağlantı ile yüklenir.
-              </AppText>
-              {canEditOrganizerDraftMotivation({ reviewStatus, screenPhase }) && applicationId ? (
-                <AppButton
-                  label="Motivasyonu Düzenle"
-                  onPress={() => setDraftStep("info")}
-                  variant="secondary"
-                />
-              ) : null}
-            </Card>
-
-            {checklist.map((item) => (
-              <OrganizerDocumentCard
-                key={item.documentType}
-                disabled={activeUploadType !== null && activeUploadType !== item.documentType}
-                isUploading={activeUploadType === item.documentType}
-                item={item}
-                onPickDocument={(documentType) =>
-                  void handleUpload(documentType, () => pickVerificationDocumentFile(documentType))
-                }
-                onPickSelfie={(source) =>
-                  void handleUpload("SELFIE", () => pickVerificationSelfieFile(source))
-                }
-                reviewStatus={toDocumentCardReviewStatus(effectiveReviewStatus)}
-                uploadError={uploadErrors[item.documentType] ?? null}
-              />
-            ))}
-
-            {formError ? (
+            {formError && wizardStep !== "motivation" ? (
               <AppText style={styles.errorText} variant="caption">
                 {formError}
               </AppText>
@@ -459,87 +632,47 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
                 </AppText>
               </Card>
             ) : null}
+          </View>
+        </ScrollView>
 
-            {showSubmitSection ? (
-              <Card style={styles.card}>
-                <AppText variant="sectionTitle">
-                  {shouldShowResubmit(screenPhase) ? "Yeniden Gönder" : "Son Kontrol"}
-                </AppText>
-                <AppText variant="bodyMuted">
-                  {submitReady
-                    ? shouldShowResubmit(screenPhase)
-                      ? "Düzeltilen belgelerle başvurunu yeniden gönderebilirsin."
-                      : "Tüm zorunlu belgeler yüklendi. Başvurunu gönderebilirsin."
-                    : shouldShowResubmit(screenPhase)
-                      ? "Yeniden göndermek için reddedilen veya eksik belgeleri tamamla."
-                      : "Göndermek için tüm zorunlu belgelerin yüklenmiş olması gerekir."}
-                </AppText>
-                <AppButton
-                  disabled={!submitReady || isSubmitting || activeUploadType !== null}
-                  label={
-                    isSubmitting
-                      ? "Gönderiliyor..."
-                      : shouldShowResubmit(screenPhase)
-                        ? "Başvuruyu Yeniden Gönder"
-                        : "Başvuruyu Gönder"
-                  }
-                  onPress={() => onSubmitApplication(shouldShowResubmit(screenPhase))}
-                />
-              </Card>
-            ) : null}
-          </>
-        ) : (
-          <Card style={styles.card}>
-            <AppText variant="sectionTitle">Başvuru Bilgileri</AppText>
-            <AppText variant="bodyMuted">
-              {applicationType === "BUSINESS"
-                ? "İşletme hesabın için organizatör başvurusu yapıyorsun."
-                : "Bireysel hesabın için organizatör başvurusu yapıyorsun."}
-            </AppText>
-
-            {isBlockedByAge ? (
-              <AppText style={styles.errorText} variant="body">
-                Organizatör olmak için en az 18 yaşında olmalısın.
-              </AppText>
-            ) : null}
-
-            <AppInput
-              editable={!isBlockedByAge}
-              label="Motivasyon"
-              multiline
-              numberOfLines={5}
-              onChangeText={setMotivation}
-              placeholder="Motivasyonunu ve düzenlemek istediğin etkinlik türlerini yaz."
-              style={styles.textarea}
-              textAlignVertical="top"
-              value={motivation}
-            />
-
-            {formError ? (
-              <AppText style={styles.errorText} variant="caption">
-                {formError}
-              </AppText>
-            ) : null}
-
-            <AppButton
-              disabled={isBlockedByAge || isSavingDraft}
-              label={isSavingDraft ? "Kaydediliyor..." : "Devam Et"}
-              onPress={() => void onContinueDraft()}
-            />
-          </Card>
-        )}
-      </View>
-    </Screen>
+        <View style={styles.footerPadding}>
+          <OrganizerApplicationFooter
+            onBack={goToPreviousStep}
+            onPrimary={() => onPrimaryAction()}
+            primaryDisabled={primaryDisabled}
+            primaryLabel={primaryLabel}
+            primaryLoading={isSavingDraft || isSubmitting}
+            showBack={wizardStep !== "intro"}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+  safeArea: {
+    backgroundColor: theme.colors.background,
+    flex: 1,
   },
-  card: {
-    gap: theme.spacing.sm,
+  flex: {
+    flex: 1,
+  },
+  pagePadding: {
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: theme.spacing.md,
+  },
+  footerPadding: {
+    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  stateCard: {
+    flex: 1,
+    justifyContent: "center",
   },
   infoCard: {
     backgroundColor: "#EFF6FF",
@@ -554,18 +687,6 @@ const styles = StyleSheet.create({
   },
   successText: {
     color: "#047857",
-  },
-  stateCard: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  badges: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.xs,
-  },
-  textarea: {
-    minHeight: 120,
   },
   errorText: {
     color: theme.colors.danger,
