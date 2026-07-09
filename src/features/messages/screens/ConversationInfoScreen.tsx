@@ -14,17 +14,16 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
-import type { NavigationProp } from "@react-navigation/native";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
-import { ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
+import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
-import type { MainTabParamList, MessagesStackParamList } from "../../../navigation/types";
+import type { MessagesStackParamList } from "../../../navigation/types";
 import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import {
   getConversationInfo,
@@ -32,6 +31,10 @@ import {
   searchConversationMessages,
 } from "../services/messages.service";
 import type { ConversationInfo, ConversationMessage } from "../types";
+import {
+  buildMessageUserProfileParams,
+  canOpenMessageUserProfile,
+} from "../utils/conversationInfoNavigation";
 import {
   beginConversationSearchRequest,
   CONVERSATION_MEDIA_ERROR_MESSAGE,
@@ -230,7 +233,7 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
     [info?.sharedMediaPreview],
   );
   const mediaItems = showAllMedia ? allMedia : previewMedia;
-  const canOpenProfile = Boolean(info?.otherParticipant && !isSystemInbox);
+  const canOpenProfile = canOpenMessageUserProfile(info?.otherParticipant, isSystemInbox);
 
   const mediaTileSize = useMemo(() => {
     const horizontalPadding = theme.spacing.lg * 2;
@@ -240,23 +243,14 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
   }, [screenWidth]);
 
   const openProfile = () => {
-    if (!info?.otherParticipant) {
+    if (!info?.otherParticipant || !canOpenProfile) {
       return;
     }
 
-    const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
-    tabNavigation?.navigate(TabRoutes.ExploreTab, {
-      screen: ExploreRoutes.ExploreFeedScreen,
-      params: {
-        openUser: {
-          id: info.otherParticipant.id,
-          username: info.otherParticipant.username,
-          displayName: info.otherParticipant.displayName,
-          avatarUrl: info.otherParticipant.avatarUrl,
-          isOrganizer: info.otherParticipant.isOrganizer,
-        },
-      },
-    });
+    navigation.navigate(
+      MessagesRoutes.MessageUserProfileScreen,
+      buildMessageUserProfileParams(info.otherParticipant, route.params.threadId),
+    );
   };
 
   const toggleSearch = () => {

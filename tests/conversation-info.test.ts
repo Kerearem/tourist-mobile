@@ -5,7 +5,10 @@ import { describe, it } from "node:test";
 
 import {
   canOpenConversationInfo,
+  canOpenMessageUserProfile,
+  buildMessageUserProfileParams,
   resolveConversationInfoNavigation,
+  resolveMessageUserProfileNavigation,
 } from "../src/features/messages/utils/conversationInfoNavigation";
 import {
   beginConversationSearchRequest,
@@ -38,6 +41,87 @@ describe("conversation info navigation", () => {
 
   it("allows opening conversation info for supported threads", () => {
     assert.equal(canOpenConversationInfo(), true);
+  });
+
+  it("resolves message user profile route with participant params", () => {
+    const params = buildMessageUserProfileParams(
+      {
+        id: "user_1",
+        displayName: "Ada Lovelace",
+        username: "ada",
+        avatarUrl: "https://example.com/ada.jpg",
+        accountType: "personal",
+        isOrganizer: true,
+      },
+      "thread_123",
+    );
+
+    const target = resolveMessageUserProfileNavigation(params);
+    assert.equal(target.screen, "MessageUserProfileScreen");
+    assert.deepEqual(target.params, {
+      userId: "user_1",
+      displayName: "Ada Lovelace",
+      username: "ada",
+      avatarUrl: "https://example.com/ada.jpg",
+      isOrganizer: true,
+      sourceThreadId: "thread_123",
+    });
+  });
+
+  it("disables profile navigation for system inbox or missing participant", () => {
+    assert.equal(canOpenMessageUserProfile(undefined, false), false);
+    assert.equal(canOpenMessageUserProfile(null, false), false);
+    assert.equal(
+      canOpenMessageUserProfile(
+        {
+          id: "user_1",
+          displayName: "Tourist",
+          username: "tourist",
+          accountType: "personal",
+          isOrganizer: false,
+        },
+        true,
+      ),
+      false,
+    );
+    assert.equal(
+      canOpenMessageUserProfile(
+        {
+          id: "user_1",
+          displayName: "Ada",
+          username: "ada",
+          accountType: "personal",
+          isOrganizer: false,
+        },
+        false,
+      ),
+      true,
+    );
+  });
+
+  it("navigates to MessageUserProfileScreen from ConversationInfoScreen source", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/features/messages/screens/ConversationInfoScreen.tsx"),
+      "utf8",
+    );
+
+    assert.match(source, /MessagesRoutes\.MessageUserProfileScreen/);
+    assert.match(source, /buildMessageUserProfileParams/);
+    assert.doesNotMatch(source, /TabRoutes\.ExploreTab/);
+    assert.doesNotMatch(source, /ExploreRoutes/);
+  });
+
+  it("registers MessageUserProfileScreen in messages stack", () => {
+    const routesSource = readFileSync(join(process.cwd(), "src/constants/routes.ts"), "utf8");
+    const stackSource = readFileSync(
+      join(process.cwd(), "src/navigation/messages/MessagesStack.tsx"),
+      "utf8",
+    );
+    const typesSource = readFileSync(join(process.cwd(), "src/navigation/types.ts"), "utf8");
+
+    assert.match(routesSource, /MessageUserProfileScreen/);
+    assert.match(stackSource, /MessageUserProfileScreen/);
+    assert.match(typesSource, /MessageUserProfileScreen: MessageUserProfileScreenParams/);
   });
 });
 

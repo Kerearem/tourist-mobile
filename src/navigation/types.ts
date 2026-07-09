@@ -59,11 +59,21 @@ export type HelpStackParamList = {
   HelpDetailScreen: { helpId: string };
 };
 
+export type MessageUserProfileScreenParams = {
+  userId: string;
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string;
+  isOrganizer?: boolean;
+  sourceThreadId?: string;
+};
+
 export type MessagesStackParamList = {
   MessagesInboxScreen: undefined;
   MessageRequestsScreen: { hideThreadId?: string } | undefined;
   MessageThreadScreen: { threadId: string };
   ConversationInfoScreen: { threadId: string };
+  MessageUserProfileScreen: MessageUserProfileScreenParams;
   GroupDetailScreen: { eventId: string; conversationId?: string };
   GroupInfoScreen: { eventId: string };
   NotificationsScreen: undefined;

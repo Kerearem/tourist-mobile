@@ -35,6 +35,7 @@ export const MessagesRoutes = {
   MessageRequestsScreen: "MessageRequestsScreen",
   MessageThreadScreen: "MessageThreadScreen",
   ConversationInfoScreen: "ConversationInfoScreen",
+  MessageUserProfileScreen: "MessageUserProfileScreen",
   GroupDetailScreen: "GroupDetailScreen",
   GroupInfoScreen: "GroupInfoScreen",
   NotificationsScreen: "NotificationsScreen",
