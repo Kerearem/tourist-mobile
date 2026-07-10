@@ -29,6 +29,7 @@ import {
   normalizeOrganizerCapabilityStatus,
   type NormalizedOrganizerCapabilityStatus,
 } from "../utils/organizerCapabilityStatus";
+import { normalizeCurrentOrganizerApplicationResponse } from "../utils/organizer-verification";
 
 const getAccessToken = async () => {
   const state = await loadAuthState();
@@ -92,10 +93,15 @@ export async function getCurrentOrganizerApplication(): Promise<CurrentOrganizer
   }
 
   const token = await getAccessToken();
-  return apiRequest<CurrentOrganizerApplicationResponse>(API_ENDPOINTS.organizer.applications.current, {
-    method: "GET",
-    token,
-  });
+  const raw = await apiRequest<CurrentOrganizerApplicationResponse>(
+    API_ENDPOINTS.organizer.applications.current,
+    {
+      method: "GET",
+      token,
+    },
+  );
+
+  return normalizeCurrentOrganizerApplicationResponse(raw);
 }
 
 export async function createOrUpdateOrganizerDraft(

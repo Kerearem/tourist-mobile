@@ -40,6 +40,7 @@ import {
   isSubmitEligible,
   isUploadIntentExpired,
   mergeDraftUpdateChecklist,
+  normalizeCurrentOrganizerApplicationResponse,
   resolveApplicationTypeForAccount,
   resolveInitialDraftStep,
   resolveOrganizerScreenPhase,
@@ -572,4 +573,91 @@ test("changes requested allows upload only for rejected or reupload requested it
 
 test("legacy submitted completion resumes at first missing document step", () => {
   assert.equal(findFirstIncompleteDocumentStep(emptyChecklist, "INDIVIDUAL"), "identity_front");
+});
+
+test("normalizeCurrentOrganizerApplicationResponse treats null application as empty intro state", () => {
+  const normalized = normalizeCurrentOrganizerApplicationResponse({
+    application: null,
+    documentChecklist: [],
+  });
+
+  assert.equal(normalized.application, null);
+  assert.deepEqual(normalized.documentChecklist, []);
+
+  const screenPhase = resolveOrganizerScreenPhase({
+    organizerStatus: "not_applied",
+    reviewStatus: null,
+    checklist: normalized.documentChecklist,
+  });
+
+  assert.equal(screenPhase, "draft_info");
+  assert.equal(
+    resolveInitialWizardStep({
+      screenPhase,
+      applicationType: "INDIVIDUAL",
+      checklist: normalized.documentChecklist,
+      reviewStatus: null,
+    }),
+    "intro",
+  );
+});
+
+test("normalizeCurrentOrganizerApplicationResponse unwraps data envelope and defaults malformed payloads", () => {
+  assert.deepEqual(
+    normalizeCurrentOrganizerApplicationResponse({
+      data: { application: null, documentChecklist: [] },
+    }),
+    { application: null, documentChecklist: [] },
+  );
+  assert.deepEqual(normalizeCurrentOrganizerApplicationResponse(undefined), {
+    application: null,
+    documentChecklist: [],
+  });
+  assert.deepEqual(normalizeCurrentOrganizerApplicationResponse({ application: null, documentChecklist: [] }), {
+    application: null,
+    documentChecklist: [],
+  });
+});
+
+test("empty documentChecklist does not crash screen phase resolution", () => {
+  assert.equal(
+    resolveOrganizerScreenPhase({
+      organizerStatus: "not_applied",
+      reviewStatus: null,
+      checklist: [],
+    }),
+    "draft_info",
+  );
+});
+
+test("draft with missing documents still resumes wizard at first incomplete step", () => {
+  const draftChecklist = buildChecklist(["UPLOADED", null, null]);
+  assert.equal(
+    resolveOrganizerScreenPhase({
+      organizerStatus: "not_applied",
+      reviewStatus: "DRAFT",
+      checklist: draftChecklist,
+    }),
+    "draft_documents",
+  );
+  assert.equal(
+    resolveInitialWizardStep({
+      screenPhase: "draft_documents",
+      applicationType: "INDIVIDUAL",
+      checklist: draftChecklist,
+      reviewStatus: "DRAFT",
+    }),
+    "identity_back",
+  );
+});
+
+test("submitted and under review applications stay read-only", () => {
+  assert.equal(
+    resolveOrganizerScreenPhase(phaseInput("SUBMITTED", completeChecklist)),
+    "read_only",
+  );
+  assert.equal(
+    resolveOrganizerScreenPhase(phaseInput("UNDER_REVIEW", completeChecklist)),
+    "read_only",
+  );
 });

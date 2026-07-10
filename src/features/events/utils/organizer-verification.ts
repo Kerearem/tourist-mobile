@@ -1,6 +1,7 @@
 import type { AccountType, OrganizerStatus } from "../../../models/user";
 import type {
   DocumentChecklistItem,
+  CurrentOrganizerApplicationResponse,
   OrganizerApplicationType,
   OrganizerReviewStatus,
   VerificationDocumentStatus,
@@ -380,4 +381,26 @@ export function resolveUploadRetryDecision(input: {
   }
 
   return { action: "fail", message: "Belge yüklemesi tamamlanamadı." };
+}
+
+type ApiDataEnvelope<T> = {
+  data?: T | null;
+};
+
+export function normalizeCurrentOrganizerApplicationResponse(
+  raw: CurrentOrganizerApplicationResponse | ApiDataEnvelope<CurrentOrganizerApplicationResponse> | null | undefined,
+): CurrentOrganizerApplicationResponse {
+  const unwrapped =
+    raw && typeof raw === "object" && "data" in raw
+      ? ((raw as ApiDataEnvelope<CurrentOrganizerApplicationResponse>).data ?? null)
+      : (raw as CurrentOrganizerApplicationResponse | null | undefined);
+
+  if (!unwrapped || typeof unwrapped !== "object") {
+    return { application: null, documentChecklist: [] };
+  }
+
+  return {
+    application: unwrapped.application ?? null,
+    documentChecklist: Array.isArray(unwrapped.documentChecklist) ? unwrapped.documentChecklist : [],
+  };
 }

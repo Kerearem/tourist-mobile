@@ -114,7 +114,7 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
 
   const isBlockedByAge = isDraftBlockedByAge(
     applicationType,
-    user?.privateProfile.birthDate,
+    user?.privateProfile?.birthDate,
     meetsOrganizerMinimumAge,
   );
   const canStartApplication = organizerStatus === "not_applied" || organizerStatus === "rejected";
