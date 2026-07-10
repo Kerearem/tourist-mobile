@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ImageBackground, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -88,22 +88,26 @@ export function EventDetailScreen({ route }: Props) {
     void loadEvent();
   }, [route.params.eventId, user?.id]);
 
+  const loadGroupInfo = useCallback(async (eventId: string) => {
+    try {
+      const group = await getEventGroup(eventId);
+      setGroupInfo(group);
+      setGroupError(null);
+      return group;
+    } catch {
+      setGroupInfo(null);
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!event) {
       setGroupInfo(null);
       return;
     }
 
-    void (async () => {
-      try {
-        const group = await getEventGroup(event.id);
-        setGroupInfo(group);
-        setGroupError(null);
-      } catch {
-        setGroupInfo(null);
-      }
-    })();
-  }, [event?.id]);
+    void loadGroupInfo(event.id);
+  }, [event?.id, loadGroupInfo]);
 
   const onToggleAttend = async () => {
     if (!event || !user || isTogglingAttendance) {
@@ -122,6 +126,11 @@ export function EventDetailScreen({ route }: Props) {
       setEvent(updated);
       setAttendanceState(toAttendanceUiState(updated.attendanceStatus));
       setAttendanceError(null);
+      if (updated.attendanceStatus === "approved") {
+        await loadGroupInfo(updated.id);
+      } else if (updated.attendanceStatus === "none") {
+        setGroupInfo(null);
+      }
     } catch (toggleError) {
       setAttendanceError(resolveEventAttendanceError(toggleError));
     } finally {
@@ -153,6 +162,11 @@ export function EventDetailScreen({ route }: Props) {
       setGroupInfo(created);
       openGroupScreen(event.id, created.conversationId);
     } catch {
+      const existing = await loadGroupInfo(event.id);
+      if (existing) {
+        openGroupScreen(event.id, existing.conversationId);
+        return;
+      }
       setGroupError("Grup oluşturulamadı.");
     } finally {
       setIsGroupSubmitting(false);
@@ -281,6 +295,17 @@ export function EventDetailScreen({ route }: Props) {
           >
             <AppText style={styles.groupButtonLabel} variant="label">
               {isGroupSubmitting ? "Hazırlanıyor..." : groupInfo ? "Gruba Git" : "Grup Oluştur"}
+            </AppText>
+          </Pressable>
+        ) : null}
+
+        {!isHost && attendanceState === "approved" && groupInfo?.isMember ? (
+          <Pressable
+            onPress={() => openGroupScreen(event.id, groupInfo.conversationId)}
+            style={styles.groupButton}
+          >
+            <AppText style={styles.groupButtonLabel} variant="label">
+              Gruba Git
             </AppText>
           </Pressable>
         ) : null}

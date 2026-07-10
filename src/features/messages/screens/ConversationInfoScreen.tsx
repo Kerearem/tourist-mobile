@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -46,10 +45,6 @@ import {
 } from "../utils/conversationInfoSearch";
 import {
   CONVERSATION_INFO_MEDIA_GRID_COLUMNS,
-  CONVERSATION_INFO_MUTE_PLACEHOLDER_ALERT,
-  CONVERSATION_INFO_OPTIONS_PLACEHOLDER_ALERT,
-  CONVERSATION_INFO_PLACEHOLDER_ALERT,
-  CONVERSATION_INFO_SETTINGS_ROWS,
 } from "../utils/conversationInfoLayout";
 import {
   hasSharedMediaPreview,
@@ -93,32 +88,6 @@ function QuickAction({ icon, label, disabled, onPress }: QuickActionProps) {
       >
         {label}
       </AppText>
-    </Pressable>
-  );
-}
-
-type SettingsRowProps = {
-  title: string;
-  subtitle?: string;
-  onPress: () => void;
-  isLast?: boolean;
-};
-
-function SettingsRow({ title, subtitle, onPress, isLast }: SettingsRowProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.settingsRow, pressed && styles.settingsRowPressed, !isLast && styles.settingsRowBorder]}
-    >
-      <View style={styles.settingsRowText}>
-        <AppText variant="body">{title}</AppText>
-        {subtitle ? (
-          <AppText style={styles.settingsRowSubtitle} variant="caption">
-            {subtitle}
-          </AppText>
-        ) : null}
-      </View>
-      <Ionicons color={theme.colors.muted} name="chevron-forward" size={18} />
     </Pressable>
   );
 }
@@ -330,10 +299,6 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
     navigation.navigate(MessagesRoutes.MessageThreadScreen, { threadId: route.params.threadId });
   };
 
-  const showPlaceholderAlert = () => {
-    Alert.alert(CONVERSATION_INFO_PLACEHOLDER_ALERT);
-  };
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -414,16 +379,6 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
             onPress={canOpenProfile ? openProfile : undefined}
           />
           <QuickAction icon="search-outline" label="Ara" onPress={toggleSearch} />
-          <QuickAction
-            icon="notifications-outline"
-            label="Sessize al"
-            onPress={() => Alert.alert(CONVERSATION_INFO_MUTE_PLACEHOLDER_ALERT)}
-          />
-          <QuickAction
-            icon="ellipsis-horizontal"
-            label="Seçenekler"
-            onPress={() => Alert.alert(CONVERSATION_INFO_OPTIONS_PLACEHOLDER_ALERT)}
-          />
         </View>
 
         {isSearchOpen ? (
@@ -472,18 +427,6 @@ export function ConversationInfoScreen({ navigation, route }: Props) {
             />
           </View>
         ) : null}
-
-        <View style={styles.settingsSection}>
-          {CONVERSATION_INFO_SETTINGS_ROWS.map((row, index) => (
-            <SettingsRow
-              key={row.title}
-              isLast={index === CONVERSATION_INFO_SETTINGS_ROWS.length - 1}
-              onPress={showPlaceholderAlert}
-              subtitle={row.subtitle}
-              title={row.title}
-            />
-          ))}
-        </View>
 
         <View style={styles.mediaSection}>
           <View style={styles.mediaHeader}>
@@ -654,35 +597,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   searchResultDate: {
-    color: theme.colors.textSecondary,
-  },
-  settingsSection: {
-    borderBottomColor: theme.colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginBottom: theme.spacing.lg,
-  },
-  settingsRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  settingsRowPressed: {
-    backgroundColor: theme.colors.surface,
-  },
-  settingsRowBorder: {
-    borderBottomColor: theme.colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  settingsRowText: {
-    flex: 1,
-    gap: 2,
-    paddingRight: theme.spacing.sm,
-  },
-  settingsRowSubtitle: {
     color: theme.colors.textSecondary,
   },
   mediaSection: {

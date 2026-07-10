@@ -423,7 +423,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
             <View
               style={[styles.composerWrap, !isKeyboardVisible ? { paddingBottom: restingBottomInset } : null]}
             >
-              <MessageComposer disabled={!user} onSend={onSend} />
+              <MessageComposer disabled={!user} onSend={onSend} textOnly />
             </View>
           </Animated.View>
         ) : null}

@@ -105,11 +105,17 @@ export function MessageComposer({
               onPress={() => void handleSend()}
               style={[
                 styles.trailingActionButton,
-                hasText ? (announcementMode ? styles.trailingAnnouncementButton : styles.trailingSendButton) : styles.trailingMicButton,
+                hasText
+                  ? announcementMode
+                    ? styles.trailingAnnouncementButton
+                    : styles.trailingSendButton
+                  : textOnly || showLiveCameraButton
+                    ? styles.trailingDisabledButton
+                    : styles.trailingMicButton,
               ]}
             >
               <Ionicons
-                color={hasText ? "#FFFFFF" : theme.colors.textPrimary}
+                color={hasText ? "#FFFFFF" : theme.colors.muted}
                 name={hasText || textOnly || showLiveCameraButton ? "paper-plane-outline" : "mic-outline"}
                 size={20}
               />
@@ -201,6 +207,9 @@ const styles = StyleSheet.create({
   },
   trailingMicButton: {
     backgroundColor: "#FFFFFF",
+  },
+  trailingDisabledButton: {
+    backgroundColor: "#E5E7EB",
   },
   trailingSendButton: {
     backgroundColor: "#5B3CF6",
