@@ -14,8 +14,10 @@ import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { ConversationListItem } from "../components/ConversationListItem";
+import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import { getMessageRequests } from "../services/messages.service";
 import type { ConversationThread } from "../types";
+import { applyRequestConversationRealtimeUpdate } from "../utils/requestInboxRealtime";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageRequestsScreen">;
 
@@ -69,6 +71,15 @@ export function MessageRequestsScreen({ navigation, route }: Props) {
       return undefined;
     }, [navigation, route.params?.hideThreadId]),
   );
+
+  useMessagesRealtime({
+    onConversationUpdated: (event) => {
+      setItems((current) => applyRequestConversationRealtimeUpdate(current, event.payload.conversation));
+    },
+    onReconnect: () => {
+      void loadData("refresh");
+    },
+  });
 
   if (isLoading) {
     return (

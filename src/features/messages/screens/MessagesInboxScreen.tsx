@@ -30,6 +30,10 @@ import {
   type InboxLoadMode,
 } from "../utils/inboxLoadPresentation";
 import { upsertConversationThread } from "../utils/inboxRealtime";
+import {
+  applyRequestConversationRealtimeUpdate,
+  isPendingMessageRequest,
+} from "../utils/requestInboxRealtime";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessagesInboxScreen">;
 
@@ -97,13 +101,26 @@ export function MessagesInboxScreen({ navigation }: Props) {
     }, []),
   );
 
+  const refreshRequestCount = useCallback(async () => {
+    try {
+      const requests = await getMessageRequests();
+      setRequestCount(requests.length);
+    } catch {
+      // Keep the last known count when reconciliation fails.
+    }
+  }, []);
+
   useMessagesRealtime({
     onConversationUpdated: (event) => {
-      if (event.payload.conversation.metadata?.isRequestPending === "true") {
+      const conversation = event.payload.conversation;
+
+      if (isPendingMessageRequest(conversation)) {
+        void refreshRequestCount();
         return;
       }
 
-      setItems((current) => upsertConversationThread(current, event.payload.conversation));
+      setItems((current) => upsertConversationThread(current, conversation));
+      void refreshRequestCount();
     },
     onReconnect: () => {
       void loadData("silent");

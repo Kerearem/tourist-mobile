@@ -13,6 +13,12 @@ import {
   sortConversationThreads,
   upsertConversationThread,
 } from "../src/features/messages/utils/inboxRealtime";
+import {
+  applyRequestConversationRealtimeUpdate,
+  isPendingMessageRequest,
+  removeRequestThread,
+  upsertRequestThread,
+} from "../src/features/messages/utils/requestInboxRealtime";
 import { appendMessageDeduped } from "../src/features/messages/utils/threadRealtime";
 import {
   resolveIncomingMessageScrollPlan,
@@ -108,6 +114,71 @@ describe("incoming message auto-scroll", () => {
       pendingReason: "own_message_sent",
       shouldScrollImmediately: true,
     });
+  });
+});
+
+describe("request inbox realtime", () => {
+  it("detects pending request conversations from metadata", () => {
+    assert.equal(
+      isPendingMessageRequest(thread({ metadata: { isRequestPending: "true" } })),
+      true,
+    );
+    assert.equal(isPendingMessageRequest(thread({})), false);
+  });
+
+  it("upserts pending requests without duplicate rows", () => {
+    const initial = [
+      thread({
+        id: "req-1",
+        metadata: { isRequestPending: "true" },
+        lastMessageAt: "2026-01-01T10:00:00.000Z",
+      }),
+    ];
+    const updated = thread({
+      id: "req-1",
+      metadata: { isRequestPending: "true" },
+      lastMessageAt: "2026-01-02T10:00:00.000Z",
+      lastMessagePreview: "Merhaba",
+    });
+
+    const next = upsertRequestThread(initial, updated);
+    assert.equal(next.length, 1);
+    assert.equal(next[0]?.lastMessagePreview, "Merhaba");
+  });
+
+  it("removes accepted conversations from the request list", () => {
+    const requests = [
+      thread({ id: "req-1", metadata: { isRequestPending: "true" } }),
+      thread({ id: "req-2", metadata: { isRequestPending: "true" } }),
+    ];
+    const accepted = thread({ id: "req-1", lastMessagePreview: "Selam" });
+
+    const next = applyRequestConversationRealtimeUpdate(requests, accepted);
+    assert.deepEqual(next.map((item) => item.id), ["req-2"]);
+    assert.deepEqual(removeRequestThread(requests, "req-2").map((item) => item.id), ["req-1"]);
+  });
+});
+
+describe("messages request screens realtime wiring", () => {
+  it("refreshes request count on pending conversation updates in inbox", () => {
+    const inboxSource = readFileSync(
+      join(process.cwd(), "src/features/messages/screens/MessagesInboxScreen.tsx"),
+      "utf8",
+    );
+
+    assert.match(inboxSource, /isPendingMessageRequest\(conversation\)/);
+    assert.match(inboxSource, /refreshRequestCount/);
+    assert.doesNotMatch(inboxSource, /isRequestPending === "true"\) \{\s*return;\s*\}/s);
+  });
+
+  it("subscribes MessageRequestsScreen to conversation realtime updates", () => {
+    const requestsSource = readFileSync(
+      join(process.cwd(), "src/features/messages/screens/MessageRequestsScreen.tsx"),
+      "utf8",
+    );
+
+    assert.match(requestsSource, /useMessagesRealtime/);
+    assert.match(requestsSource, /applyRequestConversationRealtimeUpdate/);
   });
 });
 

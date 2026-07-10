@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, AppState, FlatList, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, useWindowDimensions, View, type ViewToken } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
+import { useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -13,25 +13,19 @@ import { theme } from "../../../constants/theme";
 import { useAnimatedKeyboardHeight } from "../../../hooks/useAnimatedKeyboardHeight";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ExploreStackParamList, MainTabParamList } from "../../../navigation/types";
-import { ProfileContentTabs } from "../../profile/components/ProfileContentTabs";
 import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
-import { ProfileAvatarRing } from "../../profile/components/ProfileAvatarRing";
-import { ProfileStatsRow } from "../../profile/components/ProfileStatsRow";
-import { getUserProfileStats, getUserPublicProfile, type UserProfileStats } from "../../profile/services/userProfile.service";
-import { blockUser, getUserBlockStatus, unblockUser, type UserBlockStatus } from "../../profile/services/block.service";
+import { PublicUserProfileView } from "../../profile/components/PublicUserProfileView";
+import {
+  createContentComplaint,
+  type ComplaintReason,
+} from "../../profile/services/complaints.service";
 import {
   followUser,
-  getFollowButtonLabel,
   getFollowStatus,
   unfollowUser,
   type FollowStatus,
 } from "../../profile/services/follow.service";
-import {
-  COMPLAINT_REASON_OPTIONS,
-  createUserComplaint,
-  createContentComplaint,
-  type ComplaintReason,
-} from "../../profile/services/complaints.service";
+import type { PublicUserProfileSeed } from "../../profile/types/publicUserProfile";
 import { getOrCreateDirectConversation } from "../../messages/services/messages.service";
 import { addSnapComment, getSnapComments, likeSnap, likeSnapComment, unlikeSnap, unlikeSnapComment } from "../../snaps/services/snaps.service";
 import {
@@ -57,23 +51,9 @@ import {
   markExplorePostReported,
 } from "../utils/exploreContentComplaint";
 import { resolveExploreReelEventNavigationTarget } from "../utils/exploreReelEventNavigation";
-import { formatProfileLocation } from "../../../utils/formatProfileLocation";
 import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
-type ExploreSearchUser = {
-  id: string;
-  username: string;
-  displayName: string;
-  countryCode: string;
-  city?: string;
-  bio?: string;
-  avatarUrl?: string;
-  accountType?: "personal" | "business";
-  isFollowing?: boolean;
-  hasNewPosts?: boolean;
-  isOrganizer?: boolean;
-  verificationBadge?: "organizer" | "business";
-};
+type ExploreSearchUser = PublicUserProfileSeed;
 
 type CommentReplyTarget = {
   commentId: string;
@@ -144,19 +124,10 @@ export function ExploreFeedScreen() {
   const [feedViewportHeight, setFeedViewportHeight] = useState(0);
   const [dismissedSearchUserIds, setDismissedSearchUserIds] = useState<string[]>([]);
   const [selectedSearchUser, setSelectedSearchUser] = useState<ExploreSearchUser | null>(null);
-  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
-  const [isFollowActionLoading, setIsFollowActionLoading] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [selectedReportReason, setSelectedReportReason] = useState<ComplaintReason | null>(null);
   const [reportingPost, setReportingPost] = useState<ExplorePost | null>(null);
   const [moreMenuPost, setMoreMenuPost] = useState<ExplorePost | null>(null);
   const [reportedPostKeys, setReportedPostKeys] = useState<Set<string>>(() => new Set());
   const [isContentReportSubmitting, setIsContentReportSubmitting] = useState(false);
-  const [profileBlockStatus, setProfileBlockStatus] = useState<UserBlockStatus | null>(null);
-  const [isProfileActionLoading, setIsProfileActionLoading] = useState(false);
-  const [profileContentRefreshToken, setProfileContentRefreshToken] = useState(0);
-  const [profileStats, setProfileStats] = useState<UserProfileStats | null>(null);
   const [activeVisiblePostKey, setActiveVisiblePostKey] = useState<string | null>(null);
   const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === "active");
   const audienceAnim = useRef(new Animated.Value(0)).current;
@@ -186,13 +157,11 @@ export function ExploreFeedScreen() {
       isShareOpen: isShareVisible,
       isMoreMenuOpen: Boolean(moreMenuPost),
       isContentReportOpen: Boolean(reportingPost),
-      isProfileMenuOpen: Boolean(selectedSearchUser) && isProfileMenuOpen,
-      isProfileReportOpen: Boolean(selectedSearchUser) && isReportModalOpen,
+      isProfileMenuOpen: false,
+      isProfileReportOpen: false,
     }),
     [
       activeCommentsPost,
-      isProfileMenuOpen,
-      isReportModalOpen,
       isSearchOpen,
       isShareVisible,
       moreMenuPost,
@@ -217,55 +186,6 @@ export function ExploreFeedScreen() {
     [activeVisiblePostKey, isAppActive, isScreenFocused, playbackOverlayState, reportedPostKeys],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      setProfileContentRefreshToken((value) => value + 1);
-    }, []),
-  );
-
-  useEffect(() => {
-    if (!selectedSearchUser?.id) {
-      setProfileBlockStatus(null);
-      setFollowStatus(null);
-      setProfileStats(null);
-      return;
-    }
-
-    void (async () => {
-      try {
-        const [blockStatus, nextFollowStatus, publicProfile, stats] = await Promise.all([
-          getUserBlockStatus(selectedSearchUser.id),
-          getFollowStatus(selectedSearchUser.id),
-          getUserPublicProfile(selectedSearchUser.id),
-          getUserProfileStats(selectedSearchUser.id),
-        ]);
-        setProfileBlockStatus(blockStatus);
-        setFollowStatus(nextFollowStatus);
-        setProfileStats(stats);
-        setSelectedSearchUser((current) =>
-          current?.id === selectedSearchUser.id
-            ? {
-                ...current,
-                username: publicProfile.username || current.username,
-                displayName: publicProfile.displayName || current.displayName,
-                avatarUrl: publicProfile.avatarUrl ?? current.avatarUrl,
-                bio: publicProfile.bio ?? current.bio,
-                city: publicProfile.city ?? current.city,
-                countryCode: publicProfile.countryCode ?? current.countryCode,
-                accountType: publicProfile.accountType,
-                isOrganizer: publicProfile.isOrganizer,
-                verificationBadge: publicProfile.verificationBadge,
-              }
-            : current,
-        );
-      } catch {
-        setProfileBlockStatus(null);
-        setFollowStatus(null);
-        setProfileStats(null);
-      }
-    })();
-  }, [selectedSearchUser?.id]);
-
   useEffect(() => {
     const tabNavigation = navigation.getParent<BottomTabNavigationProp<MainTabParamList>>();
     if (!tabNavigation) {
@@ -277,8 +197,6 @@ export function ExploreFeedScreen() {
         return;
       }
       setSelectedSearchUser(null);
-      setIsProfileMenuOpen(false);
-      setIsReportModalOpen(false);
       setIsSearchOpen(false);
     });
 
@@ -304,44 +222,13 @@ export function ExploreFeedScreen() {
 
   const openSearchUserProfile = (searchUser: ExploreSearchUser) => {
     setIsSearchOpen(false);
-    // Avoid modal stacking race: open profile after search modal fully starts closing.
     setTimeout(() => {
       setSelectedSearchUser(searchUser);
     }, 120);
   };
-  const toggleFollowUser = () => {
-    if (!selectedSearchUser || isFollowActionLoading || profileBlockStatus?.isBlocked) {
-      return;
-    }
 
-    void (async () => {
-      setIsFollowActionLoading(true);
-      try {
-        if (followStatus?.iFollow) {
-          await unfollowUser(selectedSearchUser.id);
-        } else {
-          await followUser(selectedSearchUser.id);
-        }
-        const nextStatus = await getFollowStatus(selectedSearchUser.id);
-        setFollowStatus(nextStatus);
-      } catch (err) {
-        Alert.alert("Hata", err instanceof Error ? err.message : "Takip işlemi tamamlanamadı.");
-      } finally {
-        setIsFollowActionLoading(false);
-      }
-    })();
-  };
   const openDirectMessage = async (targetUser: ExploreSearchUser) => {
     if (!user?.id) {
-      return;
-    }
-    if (profileBlockStatus?.isBlocked) {
-      Alert.alert(
-        "Mesaj gönderilemiyor",
-        profileBlockStatus.blockedByMe
-          ? "Bu kullanıcıyı engellediniz."
-          : "Bu kullanıcıyla mesajlaşamazsın.",
-      );
       return;
     }
     try {
@@ -363,53 +250,6 @@ export function ExploreFeedScreen() {
       });
     } catch (err) {
       Alert.alert("Mesaj gönderilemiyor", err instanceof Error ? err.message : "Bu kullanıcıyla mesajlaşamazsın.");
-    }
-  };
-
-  const onToggleBlockUser = async () => {
-    if (!selectedSearchUser || isProfileActionLoading) {
-      return;
-    }
-
-    setIsProfileActionLoading(true);
-    try {
-      if (profileBlockStatus?.blockedByMe) {
-        await unblockUser(selectedSearchUser.id);
-        setProfileBlockStatus({ blockedByMe: false, blockedMe: false, isBlocked: false });
-        Alert.alert("Engel kaldırıldı", `${selectedSearchUser.displayName} kullanıcısının engeli kaldırıldı.`);
-      } else {
-        await blockUser(selectedSearchUser.id);
-        setProfileBlockStatus({ blockedByMe: true, blockedMe: false, isBlocked: true });
-        setFollowStatus({ iFollow: false, followsMe: false, isFriend: false });
-        Alert.alert("Engellendi", `${selectedSearchUser.displayName} kullanıcısını engellediniz.`);
-      }
-      setIsProfileMenuOpen(false);
-    } catch (err) {
-      Alert.alert("Hata", err instanceof Error ? err.message : "İşlem tamamlanamadı.");
-    } finally {
-      setIsProfileActionLoading(false);
-    }
-  };
-
-  const onSubmitReport = async () => {
-    if (!selectedSearchUser || !selectedReportReason || isProfileActionLoading) {
-      return;
-    }
-
-    setIsProfileActionLoading(true);
-    try {
-      await createUserComplaint({
-        targetUserId: selectedSearchUser.id,
-        reason: selectedReportReason,
-      });
-      setIsReportModalOpen(false);
-      setSelectedReportReason(null);
-      setIsProfileMenuOpen(false);
-      Alert.alert("Şikayet alındı", "Şikayetiniz incelenmek üzere kaydedildi.");
-    } catch (err) {
-      Alert.alert("Hata", err instanceof Error ? err.message : "Şikayet gönderilemedi.");
-    } finally {
-      setIsProfileActionLoading(false);
     }
   };
 
@@ -457,16 +297,6 @@ export function ExploreFeedScreen() {
   const searchableUsers = useMemo(
     () => searchResults.filter((item) => !dismissedSearchUserIds.includes(item.id)),
     [dismissedSearchUserIds, searchResults],
-  );
-  const selectedProfileLocation = useMemo(
-    () => formatProfileLocation(selectedSearchUser?.city, selectedSearchUser?.countryCode),
-    [selectedSearchUser?.city, selectedSearchUser?.countryCode],
-  );
-  const selectedProfileIsOrganizer = Boolean(
-    selectedSearchUser &&
-      (selectedSearchUser.id === user?.id
-        ? user?.organizerStatus === "approved"
-        : selectedSearchUser.isOrganizer),
   );
   const isApprovedOrganizerUser = user?.organizerStatus === "approved";
 
@@ -1054,139 +884,17 @@ export function ExploreFeedScreen() {
     <SafeAreaView style={[styles.safeArea, selectedSearchUser ? styles.safeAreaLight : null]}>
       <View style={[styles.container, selectedSearchUser ? styles.containerLight : null]}>
         {selectedSearchUser ? (
-          <ScrollView
-            contentContainerStyle={styles.searchProfileScrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.searchProfileContainer}>
-              <View style={styles.searchProfileHeader}>
-                <Pressable
-                  onPress={() => {
-                    setIsProfileMenuOpen(false);
-                    setSelectedSearchUser(null);
-                  }}
-                  style={styles.searchProfileBack}
-                >
-                  <Ionicons color={theme.colors.textPrimary} name="chevron-back" size={22} />
-                </Pressable>
-                <View style={styles.searchProfileHeaderCenter} />
-                <View style={styles.searchProfileHeaderActions}>
-                  <Pressable onPress={() => setIsProfileMenuOpen(true)} style={styles.searchProfileMoreButton}>
-                    <Ionicons color={theme.colors.textPrimary} name="ellipsis-vertical" size={18} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.searchProfileIdentity}>
-                <ProfileAvatarRing displayName={selectedSearchUser.displayName} showPlus={false} />
-                <VerifiedNameRow
-                  accountType={selectedSearchUser.accountType}
-                  badgeSize={20}
-                  isOrganizer={selectedProfileIsOrganizer}
-                  name={selectedSearchUser.displayName}
-                  style={styles.searchProfileDisplayNameRow}
-                  textStyle={styles.searchProfileDisplayName}
-                  verificationBadge={selectedSearchUser.verificationBadge}
-                />
-                <AppText muted style={styles.searchProfileUsername} variant="bodyMuted">
-                  @{selectedSearchUser.username}
-                </AppText>
-                {profileBlockStatus?.isBlocked ? (
-                  <View style={styles.searchProfileRestricted}>
-                    <Ionicons color={theme.colors.textSecondary} name="eye-off-outline" size={28} />
-                    <AppText style={styles.searchProfileRestrictedTitle} variant="label">
-                      {profileBlockStatus.blockedByMe ? "Bu kullanıcıyı engellediniz" : "Profil görüntülenemiyor"}
-                    </AppText>
-                    <AppText style={styles.searchProfileRestrictedText} variant="bodyMuted">
-                      {profileBlockStatus.blockedByMe
-                        ? "Engeli kaldırmak için menüden Engeli Kaldır seçeneğini kullanabilirsin."
-                        : "Bu kullanıcıyla etkileşim kuramazsın."}
-                    </AppText>
-                  </View>
-                ) : (
-                  <>
-                    {selectedProfileLocation ? (
-                      <View style={styles.searchProfileLocationRow}>
-                        <Ionicons color={theme.colors.textSecondary} name="location-outline" size={16} />
-                        <AppText style={styles.searchProfileLocation} variant="bodyMuted">
-                          {selectedProfileLocation}
-                        </AppText>
-                      </View>
-                    ) : null}
-                    <AppText style={styles.searchProfileBio} variant="body">
-                      {selectedSearchUser.bio ?? `${selectedSearchUser.displayName} is part of the Tourist community.`}
-                    </AppText>
-                  </>
-                )}
-              </View>
-
-              {!profileBlockStatus?.isBlocked ? (
-                <>
-                  <ProfileStatsRow
-                    events={profileStats?.events}
-                    helped={profileStats?.helped}
-                    organized={profileStats?.organized}
-                    showOrganized={selectedProfileIsOrganizer}
-                  />
-
-                  <Pressable style={styles.searchProfileInstagramButton}>
-                    <Ionicons color={theme.colors.textPrimary} name="logo-instagram" size={22} />
-                    <AppText style={styles.searchProfileInstagramText} variant="label">
-                      Instagram Profile
-                    </AppText>
-                  </Pressable>
-                  <View style={styles.searchProfilePrimaryActions}>
-                    <Pressable
-                      disabled={isFollowActionLoading}
-                      onPress={toggleFollowUser}
-                      style={[
-                        styles.followButton,
-                        styles.searchProfilePrimaryActionButton,
-                        followStatus?.iFollow && styles.followButtonActive,
-                        followStatus?.isFriend && styles.followButtonFriend,
-                      ]}
-                    >
-                      <AppText
-                        style={[
-                          styles.followButtonText,
-                          followStatus?.iFollow && styles.followButtonTextActive,
-                          followStatus?.isFriend && styles.followButtonTextFriend,
-                        ]}
-                        variant="caption"
-                      >
-                        {isFollowActionLoading
-                          ? "..."
-                          : followStatus
-                            ? getFollowButtonLabel(followStatus)
-                            : "Takip Et"}
-                      </AppText>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => void openDirectMessage(selectedSearchUser)}
-                      style={[styles.messageButton, styles.searchProfilePrimaryActionButton]}
-                    >
-                      <AppText style={styles.messageButtonText} variant="caption">
-                        Mesaj
-                      </AppText>
-                    </Pressable>
-                  </View>
-
-                  <ProfileContentTabs
-                    isOrganizer={selectedProfileIsOrganizer}
-                    isOwnProfile={selectedSearchUser.id === user?.id}
-                    onActiveEventPress={openExploreActiveEvent}
-                    onEventPress={openExploreActiveEvent}
-                    onMemberEventPress={openExplorePastEvent}
-                    onPastEventPress={openExplorePastEvent}
-                    organizerDisplayName={selectedSearchUser.displayName}
-                    refreshToken={profileContentRefreshToken}
-                    userId={selectedSearchUser.id}
-                  />
-                </>
-              ) : null}
-            </View>
-          </ScrollView>
+          <PublicUserProfileView
+            onActiveEventPress={openExploreActiveEvent}
+            onBack={() => setSelectedSearchUser(null)}
+            onMemberEventPress={openExplorePastEvent}
+            onOpenMessage={(profile) => void openDirectMessage(profile)}
+            onPastEventPress={openExplorePastEvent}
+            seed={selectedSearchUser}
+            userId={selectedSearchUser.id}
+            viewerId={user?.id}
+            viewerOrganizerStatus={user?.organizerStatus}
+          />
         ) : (
           <>
             <View style={styles.scopeOverlay}>
@@ -1374,103 +1082,6 @@ export function ExploreFeedScreen() {
             />
           </View>
         </SafeAreaView>
-      </Modal>
-      <Modal
-        animationType="slide"
-        onRequestClose={() => setIsProfileMenuOpen(false)}
-        transparent
-        visible={Boolean(selectedSearchUser) && isProfileMenuOpen}
-      >
-        <Pressable onPress={() => setIsProfileMenuOpen(false)} style={styles.profileMenuBackdrop}>
-          <View style={styles.profileMenuWrap}>
-            <Pressable style={styles.profileMenuSheet}>
-              <Pressable
-                onPress={() => {
-                  setIsProfileMenuOpen(false);
-                  setSelectedReportReason(null);
-                  setIsReportModalOpen(true);
-                }}
-                style={styles.profileMenuItem}
-              >
-                <AppText style={[styles.profileMenuItemText, styles.profileMenuItemTextDanger]} variant="body">
-                  Şikayet Et
-                </AppText>
-              </Pressable>
-              <Pressable disabled={isProfileActionLoading} onPress={() => void onToggleBlockUser()} style={styles.profileMenuItem}>
-                <AppText style={styles.profileMenuItemText} variant="body">
-                  {profileBlockStatus?.blockedByMe ? "Engeli Kaldır" : "Engelle"}
-                </AppText>
-              </Pressable>
-            </Pressable>
-            <Pressable onPress={() => setIsProfileMenuOpen(false)} style={styles.profileMenuCancel}>
-              <AppText style={styles.profileMenuCancelText} variant="body">
-                İptal
-              </AppText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-      <Modal
-        animationType="slide"
-        onRequestClose={() => {
-          setIsReportModalOpen(false);
-          setSelectedReportReason(null);
-        }}
-        transparent
-        visible={Boolean(selectedSearchUser) && isReportModalOpen}
-      >
-        <Pressable
-          onPress={() => {
-            setIsReportModalOpen(false);
-            setSelectedReportReason(null);
-          }}
-          style={styles.profileMenuBackdrop}
-        >
-          <View style={styles.profileMenuWrap}>
-            <Pressable style={styles.profileMenuSheet}>
-              <AppText style={styles.reportModalTitle} variant="label">
-                Şikayet sebebi
-              </AppText>
-              {COMPLAINT_REASON_OPTIONS.map((item) => (
-                <Pressable
-                  key={item.value}
-                  onPress={() => setSelectedReportReason(item.value)}
-                  style={styles.profileMenuItem}
-                >
-                  <AppText
-                    style={[
-                      styles.profileMenuItemText,
-                      selectedReportReason === item.value && styles.reportReasonSelected,
-                    ]}
-                    variant="body"
-                  >
-                    {item.label}
-                  </AppText>
-                </Pressable>
-              ))}
-              <Pressable
-                disabled={!selectedReportReason || isProfileActionLoading}
-                onPress={() => void onSubmitReport()}
-                style={[styles.reportSubmitButton, !selectedReportReason && styles.reportSubmitButtonDisabled]}
-              >
-                <AppText style={styles.reportSubmitButtonText} variant="label">
-                  {isProfileActionLoading ? "Gönderiliyor..." : "Şikayeti Gönder"}
-                </AppText>
-              </Pressable>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setIsReportModalOpen(false);
-                setSelectedReportReason(null);
-              }}
-              style={styles.profileMenuCancel}
-            >
-              <AppText style={styles.profileMenuCancelText} variant="body">
-                İptal
-              </AppText>
-            </Pressable>
-          </View>
-        </Pressable>
       </Modal>
       <Modal
         animationType="slide"
