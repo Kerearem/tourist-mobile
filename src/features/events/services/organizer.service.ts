@@ -29,7 +29,10 @@ import {
   normalizeOrganizerCapabilityStatus,
   type NormalizedOrganizerCapabilityStatus,
 } from "../utils/organizerCapabilityStatus";
-import { normalizeCurrentOrganizerApplicationResponse } from "../utils/organizer-verification";
+import {
+  normalizeCurrentOrganizerApplicationResponse,
+  normalizeVerificationUploadFileMetadata,
+} from "../utils/organizer-verification";
 
 const getAccessToken = async () => {
   const state = await loadAuthState();
@@ -173,20 +176,35 @@ export async function uploadVerificationDocument(
   file: VerificationUploadFile,
   input: CreateUploadIntentInput,
 ): Promise<FinalizeVerificationUploadResponse> {
+  const normalizedFile = normalizeVerificationUploadFileMetadata(
+    {
+      uri: file.uri,
+      name: file.name,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+    },
+    input.documentType,
+  );
+
   return orchestrateVerificationUpload({
     createIntent: async () => {
       if (USE_MOCK_BACKEND) {
         return createMockUploadIntent({ documentType: input.documentType });
       }
 
-      return createVerificationUploadIntent(applicationId, input);
+      return createVerificationUploadIntent(applicationId, {
+        ...input,
+        originalFileName: normalizedFile.name,
+        mimeType: normalizedFile.mimeType,
+        sizeBytes: normalizedFile.sizeBytes,
+      });
     },
     uploadToCloudinary: async (intent) => {
       if (USE_MOCK_BACKEND) {
         return;
       }
 
-      await uploadVerificationFileToCloudinary(file, intent);
+      await uploadVerificationFileToCloudinary(normalizedFile, intent);
     },
     finalize: async (intentId) => {
       if (USE_MOCK_BACKEND) {

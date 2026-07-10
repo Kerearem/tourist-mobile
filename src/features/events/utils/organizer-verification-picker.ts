@@ -3,46 +3,21 @@ import * as ImagePicker from "expo-image-picker";
 
 import type { VerificationDocumentType, VerificationUploadFile } from "../types/organizer";
 import {
+  extensionForVerificationMimeType,
+  heicUploadRejectionMessage,
+  isHeicMimeType,
   normalizeMimeType,
+  normalizeVerificationUploadFileMetadata,
+  resolveVerificationFileSizeBytes,
+  resolveVerificationUploadMimeType,
+  sanitizeVerificationFileName,
   validateVerificationUploadFile,
   VERIFICATION_MAX_FILE_BYTES,
 } from "../utils/organizer-verification";
 
 const DEFAULT_DOCUMENT_MIME_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 
-async function resolveFileSizeBytes(uri: string, reportedSize?: number | null): Promise<number> {
-  if (typeof reportedSize === "number" && reportedSize > 0) {
-    return reportedSize;
-  }
-
-  try {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    if (blob.size > 0) {
-      return blob.size;
-    }
-  } catch {
-    // fall through
-  }
-
-  return 0;
-}
-
-function sanitizeFileName(name: string, fallbackExtension: string) {
-  const trimmed = name.trim();
-  if (trimmed) {
-    return trimmed;
-  }
-
-  return `belge-${Date.now()}.${fallbackExtension}`;
-}
-
-function extensionForMimeType(mimeType: string) {
-  const normalized = normalizeMimeType(mimeType);
-  if (normalized === "image/png") return "png";
-  if (normalized === "application/pdf") return "pdf";
-  return "jpg";
-}
+export { resolveVerificationFileSizeBytes } from "../utils/organizer-verification";
 
 export async function pickVerificationDocumentFile(
   documentType: VerificationDocumentType,
@@ -58,21 +33,23 @@ export async function pickVerificationDocumentFile(
   }
 
   const asset = result.assets[0];
-  const mimeType = normalizeMimeType(asset.mimeType ?? "application/octet-stream");
-  const sizeBytes = await resolveFileSizeBytes(asset.uri, asset.size ?? null);
-  const file: VerificationUploadFile = {
-    uri: asset.uri,
-    name: sanitizeFileName(asset.name ?? "", extensionForMimeType(mimeType)),
-    mimeType,
-    sizeBytes,
-  };
+  const resolvedMimeType = resolveVerificationUploadMimeType(asset.mimeType, asset.name ?? "");
 
-  const validationError = validateVerificationUploadFile(file, documentType);
-  if (validationError) {
-    throw new Error(validationError);
+  if (isHeicMimeType(resolvedMimeType)) {
+    throw new Error(heicUploadRejectionMessage());
   }
 
-  return file;
+  const sizeBytes = await resolveVerificationFileSizeBytes(asset.uri, asset.size ?? null);
+
+  return normalizeVerificationUploadFileMetadata(
+    {
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: resolvedMimeType,
+      sizeBytes,
+    },
+    documentType,
+  );
 }
 
 export async function pickVerificationSelfieFile(source: "camera" | "library"): Promise<VerificationUploadFile | null> {
@@ -107,17 +84,17 @@ export async function pickVerificationSelfieFile(source: "camera" | "library"): 
   }
 
   const asset = result.assets[0];
-  const rawMimeType = asset.mimeType ?? "image/jpeg";
-  const mimeType = normalizeMimeType(rawMimeType);
+  const resolvedMimeType = resolveVerificationUploadMimeType(asset.mimeType, asset.fileName ?? "");
 
-  if (mimeType === "image/heic" || mimeType === "image/heif") {
-    throw new Error("HEIC formatı desteklenmiyor. Lütfen JPEG veya PNG seç.");
+  if (isHeicMimeType(resolvedMimeType)) {
+    throw new Error(heicUploadRejectionMessage());
   }
 
-  const sizeBytes = await resolveFileSizeBytes(asset.uri, asset.fileSize ?? null);
+  const sizeBytes = await resolveVerificationFileSizeBytes(asset.uri, asset.fileSize ?? null);
+  const mimeType = normalizeMimeType(resolvedMimeType);
   const file: VerificationUploadFile = {
     uri: asset.uri,
-    name: sanitizeFileName(asset.fileName ?? "", extensionForMimeType(mimeType)),
+    name: sanitizeVerificationFileName(asset.fileName ?? "", extensionForVerificationMimeType(mimeType)),
     mimeType,
     sizeBytes,
   };

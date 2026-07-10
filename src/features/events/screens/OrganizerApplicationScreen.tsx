@@ -49,6 +49,7 @@ import {
   isDraftBlockedByAge,
   isSubmitEligible,
   mergeDraftUpdateChecklist,
+  mapVerificationUploadApiError,
   resolveApplicationTypeForAccount,
   resolveOrganizerScreenPhase,
   shouldShowResubmit,
@@ -304,7 +305,7 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     } catch (error) {
       setUploadErrors((previous) => ({
         ...previous,
-        [documentType]: error instanceof Error ? error.message : "Belge yüklenemedi.",
+        [documentType]: mapVerificationUploadApiError(error),
       }));
     } finally {
       setActiveUploadType(null);

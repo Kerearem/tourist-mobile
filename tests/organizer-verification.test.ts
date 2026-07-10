@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ApiRequestError } from "../src/services/api/apiRequestError";
+
 import {
   createMockOrganizerDraft,
   createMockUploadIntent,
@@ -39,9 +41,15 @@ import {
   isReadOnlyReviewStatus,
   isSubmitEligible,
   isUploadIntentExpired,
+  inferMimeTypeFromFileName,
+  isHeicMimeType,
+  mapVerificationUploadApiError,
   mergeDraftUpdateChecklist,
+  normalizeVerificationUploadFileMetadata,
   normalizeCurrentOrganizerApplicationResponse,
   resolveApplicationTypeForAccount,
+  resolveVerificationFileSizeBytes,
+  resolveVerificationUploadMimeType,
   resolveInitialDraftStep,
   resolveOrganizerScreenPhase,
   resolveUploadRetryDecision,
@@ -573,6 +581,71 @@ test("changes requested allows upload only for rejected or reupload requested it
 
 test("legacy submitted completion resumes at first missing document step", () => {
   assert.equal(findFirstIncompleteDocumentStep(emptyChecklist, "INDIVIDUAL"), "identity_front");
+});
+
+test("infers mime type from file name when picker metadata is missing", () => {
+  assert.equal(inferMimeTypeFromFileName("kimlik.JPG"), "image/jpeg");
+  assert.equal(inferMimeTypeFromFileName("scan.pdf"), "application/pdf");
+  assert.equal(resolveVerificationUploadMimeType(null, "belge.png"), "image/png");
+  assert.equal(resolveVerificationUploadMimeType("application/octet-stream", "belge.jpeg"), "image/jpeg");
+});
+
+test("rejects heic files before upload with clear turkish message", () => {
+  assert.equal(isHeicMimeType("image/heic"), true);
+  assert.throws(
+    () =>
+      normalizeVerificationUploadFileMetadata(
+        {
+          uri: "file:///tmp/photo.heic",
+          name: "photo.heic",
+          mimeType: "image/heic",
+          sizeBytes: 1024,
+        },
+        "IDENTITY_FRONT",
+      ),
+    /HEIC formatı desteklenmiyor/,
+  );
+});
+
+test("fills missing file name before validation", () => {
+  const normalized = normalizeVerificationUploadFileMetadata(
+    {
+      uri: "file:///tmp/kimlik.jpg",
+      name: "",
+      mimeType: "image/jpeg",
+      sizeBytes: 2048,
+    },
+    "IDENTITY_FRONT",
+  );
+
+  assert.match(normalized.name, /^belge-\d+\.jpg$/);
+  assert.equal(normalized.mimeType, "image/jpeg");
+});
+
+test("resolveVerificationFileSizeBytes falls back to blob size when picker size missing", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    ({
+      blob: async () => ({ size: 4096 }),
+    }) as Response;
+
+  try {
+    assert.equal(await resolveVerificationFileSizeBytes("file:///tmp/kimlik.jpg", null), 4096);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("mapVerificationUploadApiError hides generic internal server error text", () => {
+  assert.equal(
+    mapVerificationUploadApiError(new ApiRequestError("Internal server error", 500)),
+    "Belge yüklenemedi. Lütfen tekrar dene.",
+  );
+  assert.equal(
+    mapVerificationUploadApiError(new ApiRequestError("Desteklenmeyen dosya türü.", 400)),
+    "Desteklenmeyen dosya türü.",
+  );
+  assert.equal(mapVerificationUploadApiError(new Error("Dosya boyutu okunamadı.")), "Dosya boyutu okunamadı.");
 });
 
 test("normalizeCurrentOrganizerApplicationResponse treats null application as empty intro state", () => {

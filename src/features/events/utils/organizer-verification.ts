@@ -1,4 +1,5 @@
 import type { AccountType, OrganizerStatus } from "../../../models/user";
+import { ApiRequestError } from "../../../services/api/apiRequestError";
 import type {
   DocumentChecklistItem,
   CurrentOrganizerApplicationResponse,
@@ -18,6 +19,13 @@ export const VERIFICATION_ALLOWED_DOCUMENT_MIME_TYPES = [
 ] as const;
 
 export const VERIFICATION_ALLOWED_SELFIE_MIME_TYPES = ["image/jpeg", "image/png"] as const;
+
+export const VERIFICATION_HEIC_MIME_TYPES = [
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+] as const;
 
 export const DOCUMENT_TYPE_LABELS: Record<VerificationDocumentType, string> = {
   IDENTITY_FRONT: "Kimlik ön yüz",
@@ -299,6 +307,146 @@ export function isSubmitEligible(checklist: DocumentChecklistItem[]): boolean {
 
 export function normalizeMimeType(mimeType: string): string {
   return mimeType.trim().toLowerCase();
+}
+
+export function inferMimeTypeFromFileName(fileName: string): string | null {
+  const extension = fileName.split(".").pop()?.trim().toLowerCase();
+  if (!extension) {
+    return null;
+  }
+
+  switch (extension) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "pdf":
+      return "application/pdf";
+    case "heic":
+    case "heif":
+      return "image/heic";
+    default:
+      return null;
+  }
+}
+
+export function isHeicMimeType(mimeType: string): boolean {
+  const normalized = normalizeMimeType(mimeType);
+  return (VERIFICATION_HEIC_MIME_TYPES as readonly string[]).includes(normalized);
+}
+
+export function heicUploadRejectionMessage(): string {
+  return "HEIC formatı desteklenmiyor. Lütfen JPEG veya PNG seç.";
+}
+
+export function resolveVerificationUploadMimeType(
+  mimeType: string | null | undefined,
+  fileName: string,
+): string {
+  const normalized = normalizeMimeType(mimeType ?? "");
+  if (normalized && normalized !== "application/octet-stream") {
+    return normalized;
+  }
+
+  return inferMimeTypeFromFileName(fileName) ?? "application/octet-stream";
+}
+
+export function sanitizeVerificationFileName(name: string, fallbackExtension: string): string {
+  const trimmed = name.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  return `belge-${Date.now()}.${fallbackExtension}`;
+}
+
+export function extensionForVerificationMimeType(mimeType: string): string {
+  const normalized = normalizeMimeType(mimeType);
+  if (normalized === "image/png") {
+    return "png";
+  }
+  if (normalized === "application/pdf") {
+    return "pdf";
+  }
+  return "jpg";
+}
+
+export function normalizeVerificationUploadFileMetadata(
+  input: {
+    uri: string;
+    name?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+  },
+  documentType: VerificationDocumentType,
+): VerificationUploadFile {
+  const resolvedMimeType = resolveVerificationUploadMimeType(input.mimeType, input.name ?? "");
+  const name = sanitizeVerificationFileName(
+    input.name ?? "",
+    extensionForVerificationMimeType(resolvedMimeType),
+  );
+
+  if (isHeicMimeType(resolvedMimeType)) {
+    throw new Error(heicUploadRejectionMessage());
+  }
+
+  const file: VerificationUploadFile = {
+    uri: input.uri,
+    name,
+    mimeType: resolvedMimeType,
+    sizeBytes: typeof input.sizeBytes === "number" && input.sizeBytes > 0 ? input.sizeBytes : 0,
+  };
+
+  const validationError = validateVerificationUploadFile(file, documentType);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  return file;
+}
+
+export function mapVerificationUploadApiError(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    const message = error.message.trim();
+    if (message && !/^internal server error$/i.test(message)) {
+      return message;
+    }
+
+    if (error.status >= 500) {
+      return "Belge yüklenemedi. Lütfen tekrar dene.";
+    }
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message && !/^internal server error$/i.test(message)) {
+      return message;
+    }
+  }
+
+  return "Belge yüklenemedi. Lütfen tekrar dene.";
+}
+
+export async function resolveVerificationFileSizeBytes(
+  uri: string,
+  reportedSize?: number | null,
+): Promise<number> {
+  if (typeof reportedSize === "number" && reportedSize > 0) {
+    return reportedSize;
+  }
+
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    if (blob.size > 0) {
+      return blob.size;
+    }
+  } catch {
+    // fall through
+  }
+
+  return 0;
 }
 
 export function isAllowedMimeTypeForDocument(
