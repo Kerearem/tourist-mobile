@@ -200,6 +200,7 @@ export async function uploadVerificationDocument(
     mimeType: normalizedFile.mimeType,
     sizeBytes: normalizedFile.sizeBytes,
   };
+  let finalizeAttempt = 0;
 
   return orchestrateVerificationUpload({
     createIntent: async () => {
@@ -266,13 +267,33 @@ export async function uploadVerificationDocument(
         return finalizeMockUploadIntent(intentId);
       }
 
+      finalizeAttempt += 1;
+      const attempt = finalizeAttempt;
+
+      logVerificationUploadDiagnostic({
+        step: "finalize",
+        phase: "start",
+        attempt,
+        ...diagnosticBase,
+      });
+
       try {
-        return await finalizeVerificationUpload(applicationId, intentId);
+        const result = await finalizeVerificationUpload(applicationId, intentId);
+        logVerificationUploadDiagnostic({
+          step: "finalize",
+          phase: "success",
+          attempt,
+          status: 200,
+          ...diagnosticBase,
+        });
+        return result;
       } catch (error) {
         const status = resolveErrorStatus(error);
         const message = error instanceof Error ? error.message : "finalize failed";
         logVerificationUploadDiagnostic({
           step: "finalize",
+          phase: "failure",
+          attempt,
           ...diagnosticBase,
           status,
           message,

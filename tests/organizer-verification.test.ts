@@ -41,6 +41,8 @@ import {
   VERIFICATION_UPLOAD_TIMEOUT_MS,
 } from "../src/services/media/cloudinary-verification";
 import {
+  isVerificationUploadDiagnosticsEnabled,
+  logVerificationUploadDiagnostic,
   mapVerificationUploadStepError,
   sanitizeUploadDiagnosticMessage,
   VerificationUploadStepError,
@@ -926,4 +928,52 @@ test("cloudinary client message sanitizer strips signatures and urls", () => {
 
   assert.equal(/deadbeef/.test(sanitized), false);
   assert.equal(/res\.cloudinary\.com/.test(sanitized), false);
+});
+
+test("verification upload diagnostics are enabled outside production", () => {
+  assert.equal(isVerificationUploadDiagnosticsEnabled(), process.env.NODE_ENV !== "production");
+});
+
+test("logVerificationUploadDiagnostic emits grep-friendly Metro line with required fields", () => {
+  const warnings: string[] = [];
+  const logs: string[] = [];
+  const originalWarn = console.warn;
+  const originalLog = console.log;
+
+  console.warn = (line: string) => {
+    warnings.push(String(line));
+  };
+  console.log = (line: string) => {
+    logs.push(String(line));
+  };
+
+  try {
+    logVerificationUploadDiagnostic({
+      step: "finalize",
+      phase: "failure",
+      attempt: 2,
+      documentType: "IDENTITY_FRONT",
+      mimeType: "image/jpeg",
+      sizeBytes: 2048,
+      status: 500,
+      message: "Internal server error signature=abc https://example.com/doc",
+    });
+
+    assert.equal(warnings.length, 1);
+    assert.equal(logs.length, 1);
+    assert.match(warnings[0] ?? "", /^\[verification-upload\] /);
+    assert.match(warnings[0] ?? "", /"step":"finalize"/);
+    assert.match(warnings[0] ?? "", /"phase":"failure"/);
+    assert.match(warnings[0] ?? "", /"attempt":2/);
+    assert.match(warnings[0] ?? "", /"documentType":"IDENTITY_FRONT"/);
+    assert.match(warnings[0] ?? "", /"mimeType":"image\/jpeg"/);
+    assert.match(warnings[0] ?? "", /"sizeBytes":2048/);
+    assert.match(warnings[0] ?? "", /"status":500/);
+    assert.match(warnings[0] ?? "", /Internal server error/);
+    assert.equal(/signature=abc/.test(warnings[0] ?? ""), false);
+    assert.equal(/https:\/\/example.com/.test(warnings[0] ?? ""), false);
+  } finally {
+    console.warn = originalWarn;
+    console.log = originalLog;
+  }
 });

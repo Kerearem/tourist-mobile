@@ -2,8 +2,12 @@ import { ApiRequestError } from "../../../services/api/apiRequestError";
 
 export type VerificationUploadStep = "createIntent" | "uploadCloudinary" | "finalize";
 
+export type VerificationUploadDiagnosticPhase = "start" | "failure" | "success";
+
 export type VerificationUploadDiagnostic = {
   step: VerificationUploadStep;
+  phase?: VerificationUploadDiagnosticPhase;
+  attempt?: number;
   documentType?: string;
   mimeType?: string;
   sizeBytes?: number;
@@ -27,15 +31,23 @@ export function sanitizeUploadDiagnosticMessage(message: string): string {
 
 declare const __DEV__: boolean | undefined;
 
-const isDevEnvironment = (): boolean => typeof __DEV__ !== "undefined" && __DEV__ === true;
+export function isVerificationUploadDiagnosticsEnabled(): boolean {
+  if (typeof __DEV__ !== "undefined") {
+    return __DEV__;
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
 
 export function logVerificationUploadDiagnostic(entry: VerificationUploadDiagnostic): void {
-  if (!isDevEnvironment()) {
+  if (!isVerificationUploadDiagnosticsEnabled()) {
     return;
   }
 
   const safe: VerificationUploadDiagnostic = {
     step: entry.step,
+    phase: entry.phase,
+    attempt: entry.attempt,
     documentType: entry.documentType,
     mimeType: entry.mimeType,
     sizeBytes: entry.sizeBytes,
@@ -44,8 +56,15 @@ export function logVerificationUploadDiagnostic(entry: VerificationUploadDiagnos
     message: entry.message ? sanitizeUploadDiagnosticMessage(entry.message) : undefined,
   };
 
+  const payload = JSON.stringify(safe);
+
+  // Single grep-friendly line for Metro/Xcode consoles.
   // eslint-disable-next-line no-console
-  console.warn("[verification-upload]", JSON.stringify(safe));
+  console.warn(`[verification-upload] ${payload}`);
+
+  // Some dev setups surface console.log more reliably than warn.
+  // eslint-disable-next-line no-console
+  console.log(`[verification-upload] ${payload}`);
 }
 
 export class VerificationUploadStepError extends Error {
