@@ -12,6 +12,7 @@ import {
   getChecklistItemDisplayStatus,
   isChecklistItemComplete,
 } from "../../utils/organizer-verification";
+import { getDocumentCaptureActions } from "../../utils/organizer-verification-capture";
 import { getDocumentStepGuidance } from "../../utils/organizer-verification-wizard";
 
 type Props = {
@@ -21,8 +22,9 @@ type Props = {
   isUploading: boolean;
   uploadError: string | null;
   disabled: boolean;
-  onPickDocument: (documentType: VerificationDocumentType) => void;
-  onPickSelfie: (source: "camera" | "library") => void;
+  onOpenGuidedCamera: (documentType: VerificationDocumentType) => void;
+  onPickGallery: (documentType: VerificationDocumentType) => void;
+  onPickFile: (documentType: VerificationDocumentType) => void;
 };
 
 export function OrganizerApplicationDocumentStep({
@@ -32,10 +34,12 @@ export function OrganizerApplicationDocumentStep({
   isUploading,
   uploadError,
   disabled,
-  onPickDocument,
-  onPickSelfie,
+  onOpenGuidedCamera,
+  onPickGallery,
+  onPickFile,
 }: Props) {
   const guidance = getDocumentStepGuidance(documentType);
+  const actions = getDocumentCaptureActions(documentType);
   const checklistItem = item ?? {
     documentType,
     required: true,
@@ -47,6 +51,20 @@ export function OrganizerApplicationDocumentStep({
   const canUpload = canUploadChecklistItem(checklistItem, reviewStatus);
   const statusLabel = getChecklistItemDisplayStatus(checklistItem);
   const isUploaded = isChecklistItemComplete(checklistItem);
+
+  const handleAction = (kind: (typeof actions)[number]["kind"]) => {
+    if (kind === "guided_camera") {
+      onOpenGuidedCamera(documentType);
+      return;
+    }
+
+    if (kind === "gallery") {
+      onPickGallery(documentType);
+      return;
+    }
+
+    onPickFile(documentType);
+  };
 
   return (
     <Card style={styles.card}>
@@ -90,36 +108,16 @@ export function OrganizerApplicationDocumentStep({
 
       {canUpload && reviewStatus !== "UNDER_REVIEW" ? (
         <View style={styles.actions}>
-          {documentType === "SELFIE" ? (
-            <>
-              <AppButton
-                accessibilityLabel={`${guidance.title} çek`}
-                disabled={disabled || isUploading}
-                label={isUploading ? "Yükleniyor..." : "Kamera ile Çek"}
-                onPress={() => onPickSelfie("camera")}
-              />
-              <AppButton
-                accessibilityLabel={`${guidance.title} galeriden seç`}
-                disabled={disabled || isUploading}
-                label="Galeriden Seç"
-                onPress={() => onPickSelfie("library")}
-                variant="secondary"
-              />
-            </>
-          ) : (
+          {actions.map((action) => (
             <AppButton
-              accessibilityLabel={`${guidance.title} ${checklistItem.latestDocumentId ? "değiştir" : "yükle"}`}
+              key={action.kind}
+              accessibilityLabel={`${guidance.title} ${action.label.toLowerCase()}`}
               disabled={disabled || isUploading}
-              label={
-                isUploading
-                  ? "Yükleniyor..."
-                  : checklistItem.latestDocumentId
-                    ? "Değiştir"
-                    : "Yükle"
-              }
-              onPress={() => onPickDocument(documentType)}
+              label={isUploading && action.primary ? "Yükleniyor..." : action.label}
+              onPress={() => handleAction(action.kind)}
+              variant={action.primary ? "primary" : "secondary"}
             />
-          )}
+          ))}
           {isUploading ? (
             <View style={styles.progressRow}>
               <ActivityIndicator color={theme.colors.primary} size="small" />

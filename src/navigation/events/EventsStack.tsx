@@ -9,6 +9,7 @@ import { EventDetailScreen } from "../../features/events/screens/EventDetailScre
 import { EventsListScreen } from "../../features/events/screens/EventsListScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
+import { VerificationGuidedCaptureScreen } from "../../features/events/screens/VerificationGuidedCaptureScreen";
 import type { EventsStackParamList } from "../types";
 
 const Stack = createNativeStackNavigator<EventsStackParamList>();
@@ -29,6 +30,11 @@ export function EventsStack() {
       <Stack.Screen component={CreateMomentScreen} name={EventsRoutes.CreateMomentScreen} />
       <Stack.Screen component={CreateEventScreen} name={EventsRoutes.CreateEventScreen} />
       <Stack.Screen component={OrganizerApplicationScreen} name={EventsRoutes.OrganizerApplicationScreen} />
+      <Stack.Screen
+        component={VerificationGuidedCaptureScreen}
+        name={EventsRoutes.VerificationGuidedCaptureScreen}
+        options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+      />
       <Stack.Screen component={MyOrganizerEventsScreen} name={EventsRoutes.MyOrganizerEventsScreen} />
     </Stack.Navigator>
   );

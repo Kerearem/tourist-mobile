@@ -16,6 +16,7 @@ import { Card } from "../../../components/ui/Card";
 import { Loader } from "../../../components/ui/Loader";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
+import { EventsRoutes } from "../../../constants/routes";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
 import type { OrganizerStatus } from "../../../models/user";
@@ -39,9 +40,13 @@ import type {
   VerificationUploadFile,
 } from "../types/organizer";
 import {
+  buildVerificationUploadFileFromCapture,
   pickVerificationDocumentFile,
-  pickVerificationSelfieFile,
+  pickVerificationGalleryFile,
 } from "../utils/organizer-verification-picker";
+import {
+  resolveGuidedCaptureMode,
+} from "../utils/organizer-verification-capture";
 import {
   canEditOrganizerDraftMotivation,
   canSaveOrganizerDraftInfo,
@@ -89,7 +94,7 @@ const legacyStatusMessage = (status: OrganizerStatus) => {
   return null;
 };
 
-export function OrganizerApplicationScreen({ navigation }: Props) {
+export function OrganizerApplicationScreen({ navigation, route }: Props) {
   const { user, refreshSession } = useAuth();
   const accountType = user?.accountType ?? "personal";
   const applicationType = resolveApplicationTypeForAccount(accountType);
@@ -312,6 +317,33 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
     }
   };
 
+  useEffect(() => {
+    const captureResult = route.params?.captureResult;
+    if (!captureResult) {
+      return;
+    }
+
+    navigation.setParams({ captureResult: undefined });
+
+    void handleUpload(captureResult.documentType, async () =>
+      buildVerificationUploadFileFromCapture({
+        uri: captureResult.uri,
+        documentType: captureResult.documentType,
+      }),
+    );
+  }, [navigation, route.params?.captureResult]);
+
+  useEffect(() => {
+    const documentType = route.params?.openGalleryForDocumentType;
+    if (!documentType) {
+      return;
+    }
+
+    navigation.setParams({ openGalleryForDocumentType: undefined });
+
+    void handleUpload(documentType, () => pickVerificationGalleryFile(documentType));
+  }, [navigation, route.params?.openGalleryForDocumentType]);
+
   const onSubmitApplication = () => {
     if (!applicationId || !submitReady || isSubmitting) {
       return;
@@ -488,11 +520,22 @@ export function OrganizerApplicationScreen({ navigation }: Props) {
           documentType={currentDocumentType}
           isUploading={activeUploadType === currentDocumentType}
           item={currentChecklistItem}
-          onPickDocument={(documentType) =>
+          onOpenGuidedCamera={(documentType) => {
+            const mode = resolveGuidedCaptureMode(documentType);
+            if (!mode) {
+              return;
+            }
+
+            navigation.navigate(EventsRoutes.VerificationGuidedCaptureScreen, {
+              documentType,
+              mode,
+            });
+          }}
+          onPickFile={(documentType) =>
             void handleUpload(documentType, () => pickVerificationDocumentFile(documentType))
           }
-          onPickSelfie={(source) =>
-            void handleUpload("SELFIE", () => pickVerificationSelfieFile(source))
+          onPickGallery={(documentType) =>
+            void handleUpload(documentType, () => pickVerificationGalleryFile(documentType))
           }
           reviewStatus={toDocumentCardReviewStatus(effectiveReviewStatus)}
           uploadError={uploadErrors[currentDocumentType] ?? null}

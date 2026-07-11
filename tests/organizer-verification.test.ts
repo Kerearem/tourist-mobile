@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  CANONICAL_ORGANIZER_BUSINESS_DOCUMENT_TYPES,
+  CANONICAL_ORGANIZER_INDIVIDUAL_DOCUMENT_TYPES,
+  getDocumentCaptureActions,
+  getGuidedCaptureCopy,
+  resolveGuidedCaptureMode,
+} from "../src/features/events/utils/organizer-verification-capture";
+import {
+  resolveVerificationCameraAvailabilityState,
+  SIMULATOR_CAMERA_UNAVAILABLE_MESSAGE,
+} from "../src/features/events/utils/organizer-verification-camera";
 import { ApiRequestError } from "../src/services/api/apiRequestError";
 
 import {
@@ -23,7 +34,9 @@ import {
 } from "../src/features/events/utils/organizer-verification-wizard";
 import {
   buildVerificationUploadFormEntries,
+  mapCloudinaryUploadError,
   parseCloudinaryUploadResponse,
+  VERIFICATION_UPLOAD_TIMEOUT_MS,
 } from "../src/services/media/cloudinary-verification";
 import { orchestrateVerificationUpload } from "../src/features/events/utils/organizer-verification-upload";
 import {
@@ -733,4 +746,81 @@ test("submitted and under review applications stay read-only", () => {
     resolveOrganizerScreenPhase(phaseInput("UNDER_REVIEW", completeChecklist)),
     "read_only",
   );
+});
+
+test("identity and selfie document steps expose camera and gallery actions", () => {
+  assert.deepEqual(getDocumentCaptureActions("IDENTITY_FRONT"), [
+    { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
+    { kind: "gallery", label: "Galeriden Seç", primary: false },
+  ]);
+  assert.deepEqual(getDocumentCaptureActions("IDENTITY_BACK"), [
+    { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
+    { kind: "gallery", label: "Galeriden Seç", primary: false },
+  ]);
+  assert.deepEqual(getDocumentCaptureActions("SELFIE"), [
+    { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
+    { kind: "gallery", label: "Galeriden Seç", primary: false },
+  ]);
+});
+
+test("business document steps expose file picker action only", () => {
+  for (const documentType of ["TAX_DOCUMENT", "BUSINESS_REGISTRATION", "AUTHORIZED_SIGNATORY"] as const) {
+    assert.deepEqual(getDocumentCaptureActions(documentType), [
+      { kind: "file_picker", label: "Dosyadan Seç", primary: true },
+    ]);
+  }
+});
+
+test("guided capture mode resolves identity vs selfie copy", () => {
+  assert.equal(resolveGuidedCaptureMode("IDENTITY_FRONT"), "identity");
+  assert.equal(resolveGuidedCaptureMode("IDENTITY_BACK"), "identity");
+  assert.equal(resolveGuidedCaptureMode("SELFIE"), "selfie");
+  assert.equal(resolveGuidedCaptureMode("TAX_DOCUMENT"), null);
+
+  const identityCopy = getGuidedCaptureCopy("identity");
+  assert.match(identityCopy.primaryInstruction, /Kimliğini çerçevenin içine hizala/);
+  assert.match(identityCopy.secondaryInstruction, /parlama olmasın/);
+
+  const selfieCopy = getGuidedCaptureCopy("selfie");
+  assert.match(selfieCopy.primaryInstruction, /Yüzünü çerçevenin içine al/);
+  assert.match(selfieCopy.secondaryInstruction, /net görünsün/);
+});
+
+test("cloudinary upload timeout uses 90 seconds and turkish timeout copy", () => {
+  assert.equal(VERIFICATION_UPLOAD_TIMEOUT_MS, 90_000);
+  const abortError = new Error("Aborted");
+  abortError.name = "AbortError";
+  assert.equal(
+    mapCloudinaryUploadError(abortError),
+    "Belge yükleme zaman aşımına uğradı. İnternet bağlantını kontrol edip tekrar dene.",
+  );
+});
+
+test("camera unavailable resolves simulator-friendly fallback state", () => {
+  assert.equal(
+    resolveVerificationCameraAvailabilityState({
+      isChecking: false,
+      cameraAvailable: false,
+      permissionGranted: true,
+    }),
+    "unavailable",
+  );
+  assert.match(SIMULATOR_CAMERA_UNAVAILABLE_MESSAGE, /Simülatörde kamera kullanılamıyor/);
+  assert.match(SIMULATOR_CAMERA_UNAVAILABLE_MESSAGE, /Galeriden seçerek devam edebilirsin/);
+});
+
+test("identity and selfie still expose gallery actions when camera unavailable", () => {
+  for (const documentType of ["IDENTITY_FRONT", "IDENTITY_BACK", "SELFIE"] as const) {
+    const actions = getDocumentCaptureActions(documentType);
+    assert.equal(actions.some((action) => action.kind === "gallery"), true);
+  }
+});
+
+test("mobile required document types match canonical organizer schema", () => {
+  assert.deepEqual(getRequiredDocumentTypes("INDIVIDUAL"), [...CANONICAL_ORGANIZER_INDIVIDUAL_DOCUMENT_TYPES]);
+  assert.deepEqual(getRequiredDocumentTypes("BUSINESS"), [...CANONICAL_ORGANIZER_BUSINESS_DOCUMENT_TYPES]);
+  assert.equal(DOCUMENT_TYPE_LABELS.AUTHORIZED_SIGNATORY, "Yetkili imza belgesi");
+  assert.equal(DOCUMENT_TYPE_LABELS.IDENTITY_FRONT, "Kimlik ön yüz");
+  assert.equal(DOCUMENT_TYPE_LABELS.IDENTITY_BACK, "Kimlik arka yüz");
+  assert.equal(DOCUMENT_TYPE_LABELS.SELFIE, "Canlılık/selfie");
 });

@@ -1,6 +1,6 @@
 import type { UploadIntentResponse, VerificationUploadFile } from "../../features/events/types/organizer";
 
-export const VERIFICATION_UPLOAD_TIMEOUT_MS = 60_000;
+export const VERIFICATION_UPLOAD_TIMEOUT_MS = 90_000;
 
 export type VerificationUploadFormDataEntry = {
   name: string;
@@ -45,7 +45,7 @@ export function buildVerificationUploadFormData(
 export function mapCloudinaryUploadError(error: unknown): string {
   if (error instanceof Error) {
     if (error.name === "AbortError") {
-      return "Belge yükleme zaman aşımına uğradı. Lütfen tekrar dene.";
+      return "Belge yükleme zaman aşımına uğradı. İnternet bağlantını kontrol edip tekrar dene.";
     }
 
     const message = error.message.trim();

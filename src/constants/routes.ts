@@ -48,6 +48,7 @@ export const EventsRoutes = {
   CreateMomentScreen: "CreateMomentScreen",
   CreateEventScreen: "CreateEventScreen",
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
+  VerificationGuidedCaptureScreen: "VerificationGuidedCaptureScreen",
   MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
 } as const;
 
@@ -63,6 +64,7 @@ export const ProfileRoutes = {
   CreateEventScreen: "CreateEventScreen",
   MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
+  VerificationGuidedCaptureScreen: "VerificationGuidedCaptureScreen",
   EventDetailScreen: "EventDetailScreen",
   EventAlbumScreen: "EventAlbumScreen",
   CreateMomentScreen: "CreateMomentScreen",

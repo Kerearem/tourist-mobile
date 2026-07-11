@@ -1,4 +1,5 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
+import type { VerificationDocumentType } from "../features/events/types/organizer";
 import type { UserLanguage } from "../models/user";
 
 export type AuthStackParamList = {
@@ -79,13 +80,27 @@ export type MessagesStackParamList = {
   NotificationsScreen: undefined;
 };
 
+export type VerificationCaptureResult = {
+  documentType: VerificationDocumentType;
+  uri: string;
+};
+
+export type OrganizerApplicationScreenParams = {
+  captureResult?: VerificationCaptureResult;
+  openGalleryForDocumentType?: VerificationDocumentType;
+} | undefined;
+
 export type EventsStackParamList = {
   EventsListScreen: undefined;
   EventDetailScreen: { eventId: string };
   EventAlbumScreen: { eventId: string };
   CreateMomentScreen: { eventId: string };
   CreateEventScreen: undefined;
-  OrganizerApplicationScreen: undefined;
+  OrganizerApplicationScreen: OrganizerApplicationScreenParams;
+  VerificationGuidedCaptureScreen: {
+    documentType: VerificationDocumentType;
+    mode: "identity" | "selfie";
+  };
   MyOrganizerEventsScreen: undefined;
 };
 
@@ -100,7 +115,11 @@ export type ProfileStackParamList = {
   DeleteAccountScreen: undefined;
   CreateEventScreen: undefined;
   MyOrganizerEventsScreen: undefined;
-  OrganizerApplicationScreen: undefined;
+  OrganizerApplicationScreen: OrganizerApplicationScreenParams;
+  VerificationGuidedCaptureScreen: {
+    documentType: VerificationDocumentType;
+    mode: "identity" | "selfie";
+  };
   EventDetailScreen: { eventId: string };
   EventAlbumScreen: { eventId: string };
   CreateMomentScreen: { eventId: string };

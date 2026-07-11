@@ -6,13 +6,9 @@ import {
   extensionForVerificationMimeType,
   heicUploadRejectionMessage,
   isHeicMimeType,
-  normalizeMimeType,
   normalizeVerificationUploadFileMetadata,
   resolveVerificationFileSizeBytes,
   resolveVerificationUploadMimeType,
-  sanitizeVerificationFileName,
-  validateVerificationUploadFile,
-  VERIFICATION_MAX_FILE_BYTES,
 } from "../utils/organizer-verification";
 
 const DEFAULT_DOCUMENT_MIME_TYPES = ["image/jpeg", "image/png", "application/pdf"];
@@ -52,32 +48,20 @@ export async function pickVerificationDocumentFile(
   );
 }
 
-export async function pickVerificationSelfieFile(source: "camera" | "library"): Promise<VerificationUploadFile | null> {
-  const permission =
-    source === "camera"
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+export async function pickVerificationGalleryFile(
+  documentType: VerificationDocumentType,
+): Promise<VerificationUploadFile | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
   if (!permission.granted) {
-    throw new Error(
-      source === "camera"
-        ? "Selfie çekmek için kamera izni gerekli."
-        : "Selfie seçmek için galeri izni gerekli.",
-    );
+    throw new Error("Belge seçmek için galeri izni gerekli.");
   }
 
-  const result =
-    source === "camera"
-      ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"],
-          allowsEditing: true,
-          quality: 0.9,
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          allowsEditing: true,
-          quality: 0.9,
-        });
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    allowsEditing: true,
+    quality: 0.9,
+  });
 
   if (result.canceled || !result.assets?.[0]) {
     return null;
@@ -91,22 +75,36 @@ export async function pickVerificationSelfieFile(source: "camera" | "library"): 
   }
 
   const sizeBytes = await resolveVerificationFileSizeBytes(asset.uri, asset.fileSize ?? null);
-  const mimeType = normalizeMimeType(resolvedMimeType);
-  const file: VerificationUploadFile = {
-    uri: asset.uri,
-    name: sanitizeVerificationFileName(asset.fileName ?? "", extensionForVerificationMimeType(mimeType)),
-    mimeType,
-    sizeBytes,
-  };
 
-  const validationError = validateVerificationUploadFile(file, "SELFIE");
-  if (validationError) {
-    throw new Error(validationError);
-  }
+  return normalizeVerificationUploadFileMetadata(
+    {
+      uri: asset.uri,
+      name: asset.fileName,
+      mimeType: resolvedMimeType,
+      sizeBytes,
+    },
+    documentType,
+  );
+}
 
-  if (file.sizeBytes > VERIFICATION_MAX_FILE_BYTES) {
-    throw new Error("Dosya boyutu en fazla 10 MB olabilir.");
-  }
+export async function buildVerificationUploadFileFromCapture(input: {
+  uri: string;
+  documentType: VerificationDocumentType;
+  fileName?: string;
+}): Promise<VerificationUploadFile> {
+  const defaultName =
+    input.documentType === "SELFIE"
+      ? `selfie-${Date.now()}.jpg`
+      : `kimlik-${Date.now()}.jpg`;
+  const sizeBytes = await resolveVerificationFileSizeBytes(input.uri, null);
 
-  return file;
+  return normalizeVerificationUploadFileMetadata(
+    {
+      uri: input.uri,
+      name: input.fileName ?? defaultName,
+      mimeType: "image/jpeg",
+      sizeBytes,
+    },
+    input.documentType,
+  );
 }

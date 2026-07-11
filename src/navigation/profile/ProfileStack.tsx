@@ -9,6 +9,7 @@ import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
+import { VerificationGuidedCaptureScreen } from "../../features/events/screens/VerificationGuidedCaptureScreen";
 import { AccountManagementScreen } from "../../features/profile/screens/AccountManagementScreen";
 import { BlockedUsersScreen } from "../../features/profile/screens/BlockedUsersScreen";
 import { ChangePasswordScreen } from "../../features/profile/screens/ChangePasswordScreen";
@@ -41,6 +42,11 @@ export function ProfileStack() {
       <Stack.Screen component={CreateEventScreen} name={ProfileRoutes.CreateEventScreen} />
       <Stack.Screen component={MyOrganizerEventsScreen} name={ProfileRoutes.MyOrganizerEventsScreen} />
       <Stack.Screen component={OrganizerApplicationScreen} name={ProfileRoutes.OrganizerApplicationScreen} />
+      <Stack.Screen
+        component={VerificationGuidedCaptureScreen}
+        name={ProfileRoutes.VerificationGuidedCaptureScreen}
+        options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+      />
       <Stack.Screen component={EventDetailScreen} name={ProfileRoutes.EventDetailScreen} />
       <Stack.Screen component={EventAlbumScreen} name={ProfileRoutes.EventAlbumScreen} />
       <Stack.Screen component={CreateMomentScreen} name={ProfileRoutes.CreateMomentScreen} />
