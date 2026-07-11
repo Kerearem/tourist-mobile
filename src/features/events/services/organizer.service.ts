@@ -15,7 +15,10 @@ import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
 import { apiRequest } from "../../../services/api/client";
-import { uploadVerificationFileToCloudinary } from "../../../services/media/cloudinary-verification";
+import {
+  CloudinaryUploadError,
+  uploadVerificationFileToCloudinary,
+} from "../../../services/media/cloudinary-verification";
 import {
   createMockOrganizerDraft,
   createMockUploadIntent,
@@ -33,6 +36,12 @@ import {
   normalizeCurrentOrganizerApplicationResponse,
   normalizeVerificationUploadFileMetadata,
 } from "../utils/organizer-verification";
+import {
+  logVerificationUploadDiagnostic,
+  resolveErrorStatus,
+  sanitizeUploadDiagnosticMessage,
+  VerificationUploadStepError,
+} from "../utils/organizer-verification-upload-diagnostics";
 
 const getAccessToken = async () => {
   const state = await loadAuthState();
@@ -186,32 +195,90 @@ export async function uploadVerificationDocument(
     input.documentType,
   );
 
+  const diagnosticBase = {
+    documentType: input.documentType,
+    mimeType: normalizedFile.mimeType,
+    sizeBytes: normalizedFile.sizeBytes,
+  };
+
   return orchestrateVerificationUpload({
     createIntent: async () => {
       if (USE_MOCK_BACKEND) {
         return createMockUploadIntent({ documentType: input.documentType });
       }
 
-      return createVerificationUploadIntent(applicationId, {
-        ...input,
-        originalFileName: normalizedFile.name,
-        mimeType: normalizedFile.mimeType,
-        sizeBytes: normalizedFile.sizeBytes,
-      });
+      try {
+        return await createVerificationUploadIntent(applicationId, {
+          ...input,
+          originalFileName: normalizedFile.name,
+          mimeType: normalizedFile.mimeType,
+          sizeBytes: normalizedFile.sizeBytes,
+        });
+      } catch (error) {
+        const status = resolveErrorStatus(error);
+        const message = error instanceof Error ? error.message : "createIntent failed";
+        logVerificationUploadDiagnostic({
+          step: "createIntent",
+          ...diagnosticBase,
+          status,
+          message,
+        });
+        throw new VerificationUploadStepError("createIntent", message, status);
+      }
     },
     uploadToCloudinary: async (intent) => {
       if (USE_MOCK_BACKEND) {
         return;
       }
 
-      await uploadVerificationFileToCloudinary(normalizedFile, intent);
+      try {
+        const result = await uploadVerificationFileToCloudinary(normalizedFile, intent);
+        logVerificationUploadDiagnostic({
+          step: "uploadCloudinary",
+          ...diagnosticBase,
+          resourceType: intent.resourceType,
+          status: result.status,
+        });
+      } catch (error) {
+        if (error instanceof CloudinaryUploadError) {
+          logVerificationUploadDiagnostic({
+            step: "uploadCloudinary",
+            ...diagnosticBase,
+            resourceType: intent.resourceType,
+            status: error.status,
+            message: error.sanitizedMessage,
+          });
+          throw new VerificationUploadStepError("uploadCloudinary", error.message, error.status);
+        }
+
+        const message = error instanceof Error ? error.message : "uploadCloudinary failed";
+        logVerificationUploadDiagnostic({
+          step: "uploadCloudinary",
+          ...diagnosticBase,
+          resourceType: intent.resourceType,
+          message: sanitizeUploadDiagnosticMessage(message),
+        });
+        throw new VerificationUploadStepError("uploadCloudinary", message);
+      }
     },
     finalize: async (intentId) => {
       if (USE_MOCK_BACKEND) {
         return finalizeMockUploadIntent(intentId);
       }
 
-      return finalizeVerificationUpload(applicationId, intentId);
+      try {
+        return await finalizeVerificationUpload(applicationId, intentId);
+      } catch (error) {
+        const status = resolveErrorStatus(error);
+        const message = error instanceof Error ? error.message : "finalize failed";
+        logVerificationUploadDiagnostic({
+          step: "finalize",
+          ...diagnosticBase,
+          status,
+          message,
+        });
+        throw new VerificationUploadStepError("finalize", message, status);
+      }
     },
   });
 }

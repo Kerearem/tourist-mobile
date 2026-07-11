@@ -7,6 +7,33 @@ export type VerificationUploadFormDataEntry = {
   value: string;
 };
 
+/**
+ * Structured Cloudinary upload failure. Carries the HTTP status and a sanitized
+ * (non-sensitive) technical message for dev diagnostics, plus a safe Turkish
+ * user-facing message.
+ */
+export class CloudinaryUploadError extends Error {
+  readonly status?: number;
+  readonly sanitizedMessage: string;
+
+  constructor(userMessage: string, sanitizedMessage: string, status?: number) {
+    super(userMessage);
+    this.name = "CloudinaryUploadError";
+    this.status = status;
+    this.sanitizedMessage = sanitizedMessage;
+  }
+}
+
+export function sanitizeCloudinaryClientMessage(message: string): string {
+  return message
+    .replace(/signature[=:]\s*\S+/gi, "[redacted]")
+    .replace(/api[_-]?key[=:]\s*\S+/gi, "[redacted]")
+    .replace(/api[_-]?secret[=:]\s*\S+/gi, "[redacted]")
+    .replace(/public[_-]?id[=:]\s*\S+/gi, "[redacted]")
+    .replace(/https?:\/\/\S+/gi, "[redacted-url]")
+    .trim();
+}
+
 export function buildVerificationUploadFormEntries(
   file: VerificationUploadFile,
   intent: UploadIntentResponse,
@@ -74,12 +101,18 @@ export function parseCloudinaryUploadResponse(payload: unknown): { ok: true } | 
   return { ok: true };
 }
 
+export type CloudinaryUploadResult = {
+  status: number;
+};
+
 export async function uploadVerificationFileToCloudinary(
   file: VerificationUploadFile,
   intent: UploadIntentResponse,
-): Promise<void> {
+): Promise<CloudinaryUploadResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), VERIFICATION_UPLOAD_TIMEOUT_MS);
+
+  let status: number | undefined;
 
   try {
     const response = await fetch(intent.uploadUrl, {
@@ -88,18 +121,46 @@ export async function uploadVerificationFileToCloudinary(
       signal: controller.signal,
     });
 
-    const payload = (await response.json()) as unknown;
-    const parsed = parseCloudinaryUploadResponse(payload);
+    status = response.status;
 
-    if (!parsed.ok) {
-      throw new Error(parsed.message);
+    const payload = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string };
+      secure_url?: string;
+    };
+
+    if (payload.error?.message) {
+      throw new CloudinaryUploadError(
+        mapCloudinaryUploadError(new Error(payload.error.message)),
+        sanitizeCloudinaryClientMessage(payload.error.message),
+        status,
+      );
     }
 
     if (!response.ok) {
-      throw new Error(mapCloudinaryUploadError(new Error("Cloudinary upload failed")));
+      throw new CloudinaryUploadError(
+        "Belge yüklenemedi. Lütfen tekrar dene.",
+        `cloudinary responded with status ${status}`,
+        status,
+      );
     }
+
+    if (!payload.secure_url) {
+      throw new CloudinaryUploadError(
+        "Belge yüklenemedi. Lütfen tekrar dene.",
+        "cloudinary response missing secure_url",
+        status,
+      );
+    }
+
+    return { status };
   } catch (error) {
-    throw new Error(mapCloudinaryUploadError(error));
+    if (error instanceof CloudinaryUploadError) {
+      throw error;
+    }
+
+    const sanitized =
+      error instanceof Error ? sanitizeCloudinaryClientMessage(error.message) : "unknown error";
+    throw new CloudinaryUploadError(mapCloudinaryUploadError(error), sanitized, status);
   } finally {
     clearTimeout(timeout);
   }

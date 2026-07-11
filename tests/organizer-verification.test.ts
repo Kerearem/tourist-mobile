@@ -33,11 +33,18 @@ import {
   validateOrganizerMotivation,
 } from "../src/features/events/utils/organizer-verification-wizard";
 import {
+  buildVerificationUploadFormData,
   buildVerificationUploadFormEntries,
   mapCloudinaryUploadError,
   parseCloudinaryUploadResponse,
+  sanitizeCloudinaryClientMessage,
   VERIFICATION_UPLOAD_TIMEOUT_MS,
 } from "../src/services/media/cloudinary-verification";
+import {
+  mapVerificationUploadStepError,
+  sanitizeUploadDiagnosticMessage,
+  VerificationUploadStepError,
+} from "../src/features/events/utils/organizer-verification-upload-diagnostics";
 import { orchestrateVerificationUpload } from "../src/features/events/utils/organizer-verification-upload";
 import {
   canUploadChecklistItem,
@@ -823,4 +830,100 @@ test("mobile required document types match canonical organizer schema", () => {
   assert.equal(DOCUMENT_TYPE_LABELS.IDENTITY_FRONT, "Kimlik ön yüz");
   assert.equal(DOCUMENT_TYPE_LABELS.IDENTITY_BACK, "Kimlik arka yüz");
   assert.equal(DOCUMENT_TYPE_LABELS.SELFIE, "Canlılık/selfie");
+});
+
+test("mapVerificationUploadStepError maps each step to a specific message", () => {
+  assert.equal(
+    mapVerificationUploadStepError(
+      new VerificationUploadStepError("createIntent", "Internal server error", 500),
+    ),
+    "Belge yükleme başlatılamadı. Lütfen tekrar dene.",
+  );
+  assert.equal(
+    mapVerificationUploadStepError(
+      new VerificationUploadStepError("createIntent", "Desteklenmeyen dosya türü.", 400),
+    ),
+    "Desteklenmeyen dosya türü.",
+  );
+  assert.equal(
+    mapVerificationUploadStepError(
+      new VerificationUploadStepError(
+        "uploadCloudinary",
+        "Belge yükleme zaman aşımına uğradı. İnternet bağlantını kontrol edip tekrar dene.",
+      ),
+    ),
+    "Belge yükleme zaman aşımına uğradı. İnternet bağlantını kontrol edip tekrar dene.",
+  );
+  assert.equal(
+    mapVerificationUploadStepError(
+      new VerificationUploadStepError("finalize", "Internal server error", 500),
+    ),
+    "Belge doğrulanamadı. Lütfen tekrar dene.",
+  );
+  assert.equal(
+    mapVerificationUploadStepError(
+      new VerificationUploadStepError(
+        "finalize",
+        "Cloudinary üzerinde doğrulanabilir asset bulunamadı.",
+        400,
+      ),
+    ),
+    "Cloudinary üzerinde doğrulanabilir asset bulunamadı.",
+  );
+});
+
+test("VerificationUploadStepError carries step and status", () => {
+  const error = new VerificationUploadStepError("uploadCloudinary", "boom", 401);
+  assert.equal(error.step, "uploadCloudinary");
+  assert.equal(error.status, 401);
+  assert.equal(error.name, "VerificationUploadStepError");
+});
+
+test("FormData file field includes uri, name and type", () => {
+  class FakeFormData {
+    entries: Array<{ name: string; value: unknown }> = [];
+    append(name: string, value: unknown) {
+      this.entries.push({ name, value });
+    }
+  }
+
+  const originalFormData = globalThis.FormData;
+  (globalThis as { FormData: unknown }).FormData = FakeFormData;
+
+  try {
+    const intent = sampleIntent("intent-1", new Date(Date.now() + 60_000).toISOString());
+    const formData = buildVerificationUploadFormData(sampleFile(), intent) as unknown as FakeFormData;
+    const fileEntry = formData.entries.find((entry) => entry.name === "file");
+
+    assert.ok(fileEntry);
+    assert.deepEqual(fileEntry?.value, {
+      uri: "file:///tmp/kimlik.jpg",
+      name: "kimlik.jpg",
+      type: "image/jpeg",
+    });
+  } finally {
+    (globalThis as { FormData: unknown }).FormData = originalFormData;
+  }
+});
+
+test("upload diagnostics sanitizer redacts sensitive cloudinary fields", () => {
+  const sanitized = sanitizeUploadDiagnosticMessage(
+    "signature=abc123 api_key=999 public_id=tourist/verification/doc failed at https://res.cloudinary.com/demo/x.jpg",
+  );
+
+  assert.equal(/abc123/.test(sanitized), false);
+  assert.equal(/999/.test(sanitized), false);
+  assert.equal(/tourist\/verification\/doc/.test(sanitized), false);
+  assert.equal(/res\.cloudinary\.com/.test(sanitized), false);
+  assert.match(sanitized, /\[redacted\]/);
+  assert.match(sanitized, /\[redacted-url\]/);
+});
+
+test("cloudinary client message sanitizer strips signatures and urls", () => {
+  const sanitized = sanitizeCloudinaryClientMessage(
+    "Invalid signature=deadbeef for https://res.cloudinary.com/demo/image/upload",
+  );
+
+  assert.equal(/deadbeef/.test(sanitized), false);
+  assert.equal(/res\.cloudinary\.com/.test(sanitized), false);
 });

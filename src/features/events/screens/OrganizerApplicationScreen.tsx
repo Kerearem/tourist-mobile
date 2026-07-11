@@ -47,6 +47,7 @@ import {
 import {
   resolveGuidedCaptureMode,
 } from "../utils/organizer-verification-capture";
+import { mapVerificationUploadStepError } from "../utils/organizer-verification-upload-diagnostics";
 import {
   canEditOrganizerDraftMotivation,
   canSaveOrganizerDraftInfo,
@@ -54,7 +55,6 @@ import {
   isDraftBlockedByAge,
   isSubmitEligible,
   mergeDraftUpdateChecklist,
-  mapVerificationUploadApiError,
   resolveApplicationTypeForAccount,
   resolveOrganizerScreenPhase,
   shouldShowResubmit,
@@ -310,7 +310,7 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
     } catch (error) {
       setUploadErrors((previous) => ({
         ...previous,
-        [documentType]: mapVerificationUploadApiError(error),
+        [documentType]: mapVerificationUploadStepError(error),
       }));
     } finally {
       setActiveUploadType(null);

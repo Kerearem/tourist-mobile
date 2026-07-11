@@ -1,6 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
+import { resolveImagePickerAssetUri } from "../../../services/media/resolveImagePickerAssetUri";
 import type { VerificationDocumentType, VerificationUploadFile } from "../types/organizer";
 import {
   extensionForVerificationMimeType,
@@ -74,11 +75,12 @@ export async function pickVerificationGalleryFile(
     throw new Error(heicUploadRejectionMessage());
   }
 
-  const sizeBytes = await resolveVerificationFileSizeBytes(asset.uri, asset.fileSize ?? null);
+  const uploadableUri = await resolveImagePickerAssetUri(asset);
+  const sizeBytes = await resolveVerificationFileSizeBytes(uploadableUri, asset.fileSize ?? null);
 
   return normalizeVerificationUploadFileMetadata(
     {
-      uri: asset.uri,
+      uri: uploadableUri,
       name: asset.fileName,
       mimeType: resolvedMimeType,
       sizeBytes,
