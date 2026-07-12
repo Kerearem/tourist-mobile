@@ -91,8 +91,12 @@ export type OrganizerApplicationScreenParams = {
   openGalleryForDocumentType?: VerificationDocumentType;
 } | undefined;
 
+export type EventsListScreenParams = {
+  section?: "discover" | "attended" | "created";
+};
+
 export type EventsStackParamList = {
-  EventsListScreen: undefined;
+  EventsListScreen: EventsListScreenParams | undefined;
   EventDetailScreen: { eventId: string };
   EventAlbumScreen: { eventId: string };
   CreateMomentScreen: { eventId: string };
@@ -102,7 +106,7 @@ export type EventsStackParamList = {
     documentType: VerificationDocumentType;
     mode: "identity" | "selfie";
   };
-  MyOrganizerEventsScreen: undefined;
+  MyOrganizerEventsScreen: { section?: "attended" | "created" } | undefined;
   OrganizerEventSubmissionScreen: {
     event: OrganizerEventSubmissionSnapshot;
   };
@@ -118,7 +122,7 @@ export type ProfileStackParamList = {
   ReportProblemScreen: undefined;
   DeleteAccountScreen: undefined;
   CreateEventScreen: undefined;
-  MyOrganizerEventsScreen: undefined;
+  MyOrganizerEventsScreen: { section?: "attended" | "created" } | undefined;
   OrganizerApplicationScreen: OrganizerApplicationScreenParams;
   VerificationGuidedCaptureScreen: {
     documentType: VerificationDocumentType;

@@ -255,7 +255,8 @@ export function SettingsScreen({ navigation }: Props) {
 
             <SettingsRow
               icon="calendar-outline"
-              onPress={() => navigation.navigate(ProfileRoutes.MyOrganizerEventsScreen)}
+              onPress={() => navigation.navigate(ProfileRoutes.MyOrganizerEventsScreen, { section: "created" })}
+              subtitle="Oluşturduğun ve katıldığın etkinlikler"
               title="Etkinliklerim"
             />
           </>

@@ -1,25 +1,30 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { CreationMediaTile } from "../../../components/media/CreationMediaTile";
+import { MediaUploadPreviewModal } from "../../../components/media/MediaUploadPreviewModal";
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
+import { getCreationTileSize } from "../../../services/media/mediaContentContracts";
+import {
+  pickUserContentMedia,
+  type PickedUserContentMedia,
+} from "../../../services/media/pickUserContentMedia";
+import { uploadImage, uploadVideo } from "../../../services/media/cloudinary";
 import { createEventMoment } from "../services/events.service";
 import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
-import { uploadImage, uploadVideo } from "../../../services/media/cloudinary";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
@@ -40,6 +45,9 @@ export function CreateMomentScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<PickedUserContentMedia | null>(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const addTileSize = getCreationTileSize("moment");
 
   const pickMedia = async () => {
     if (media.length >= MAX_MEDIA) {
@@ -47,32 +55,47 @@ export function CreateMomentScreen({ navigation, route }: Props) {
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError("Galeri erişim izni gerekli.");
+    try {
+      const picked = await pickUserContentMedia("moment");
+      if (!picked) {
+        return;
+      }
+      setPreviewMedia(picked);
+      setIsPreviewVisible(true);
+      setError(null);
+    } catch (pickError) {
+      setError(pickError instanceof Error ? pickError.message : "Medya seçilemedi.");
+    }
+  };
+
+  const confirmPreview = () => {
+    if (!previewMedia) {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      allowsMultipleSelection: true,
-      selectionLimit: MAX_MEDIA - media.length,
-      quality: 0.85,
-      videoMaxDuration: 60,
-    });
+    setMedia((current) =>
+      [
+        ...current,
+        {
+          id: `${previewMedia.uri}_${Date.now()}_${Math.random()}`,
+          uri: previewMedia.uri,
+          type: previewMedia.type,
+        },
+      ].slice(0, MAX_MEDIA),
+    );
+    setPreviewMedia(null);
+    setIsPreviewVisible(false);
+  };
 
-    if (result.canceled || result.assets.length === 0) {
-      return;
-    }
+  const retakePreview = () => {
+    setIsPreviewVisible(false);
+    setPreviewMedia(null);
+    void pickMedia();
+  };
 
-    const nextItems: SelectedMedia[] = result.assets.map((asset) => ({
-      id: `${asset.assetId ?? asset.uri}_${Date.now()}_${Math.random()}`,
-      uri: asset.uri,
-      type: asset.type === "video" ? "VIDEO" : "IMAGE",
-    }));
-
-    setMedia((current) => [...current, ...nextItems].slice(0, MAX_MEDIA));
-    setError(null);
+  const cancelPreview = () => {
+    setIsPreviewVisible(false);
+    setPreviewMedia(null);
   };
 
   const removeMedia = (id: string) => {
@@ -127,26 +150,26 @@ export function CreateMomentScreen({ navigation, route }: Props) {
         <ScreenBackHeader onBack={() => navigation.goBack()} title="Anı Paylaş" />
 
         <AppText style={styles.hint} variant="bodyMuted">
-          Etkinlikten 1-10 fotoğraf veya video seç. Kişi başına bir anı paylaşabilirsin.
+          Etkinlikten 1-10 fotoğraf veya video seç. Her medya için önizleme gösterilir.
         </AppText>
 
         <View style={styles.mediaGrid}>
           {media.map((item) => (
-            <View key={item.id} style={styles.mediaTile}>
-              <Image resizeMode="cover" source={{ uri: item.uri }} style={styles.mediaPreview} />
-              {item.type === "VIDEO" ? (
-                <View style={styles.videoBadge}>
-                  <Ionicons color="#FFFFFF" name="videocam" size={16} />
-                </View>
-              ) : null}
-              <Pressable onPress={() => removeMedia(item.id)} style={styles.removeButton}>
-                <Ionicons color="#FFFFFF" name="close" size={16} />
-              </Pressable>
-            </View>
+            <CreationMediaTile
+              key={item.id}
+              kind="moment"
+              onRemove={() => removeMedia(item.id)}
+              type={item.type}
+              uri={item.uri}
+            />
           ))}
 
           {media.length < MAX_MEDIA ? (
-            <Pressable disabled={isSubmitting} onPress={() => void pickMedia()} style={styles.addTile}>
+            <Pressable
+              disabled={isSubmitting}
+              onPress={() => void pickMedia()}
+              style={[styles.addTile, { height: addTileSize.height, width: addTileSize.width }]}
+            >
               <Ionicons color={theme.colors.primary} name="add" size={32} />
               <AppText variant="caption">Ekle</AppText>
             </Pressable>
@@ -182,6 +205,15 @@ export function CreateMomentScreen({ navigation, route }: Props) {
           onPress={() => void submitMoment()}
         />
       </ScrollView>
+
+      <MediaUploadPreviewModal
+        kind="moment"
+        media={previewMedia}
+        onCancel={cancelPreview}
+        onConfirm={confirmPreview}
+        onRetake={retakePreview}
+        visible={isPreviewVisible}
+      />
     </SafeAreaView>
   );
 }
@@ -205,36 +237,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: theme.spacing.sm,
   },
-  mediaTile: {
-    borderRadius: theme.radius.md,
-    height: 104,
-    overflow: "hidden",
-    position: "relative",
-    width: 104,
-  },
-  mediaPreview: {
-    height: "100%",
-    width: "100%",
-  },
-  videoBadge: {
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: theme.radius.sm,
-    bottom: theme.spacing.xs,
-    left: theme.spacing.xs,
-    padding: 4,
-    position: "absolute",
-  },
-  removeButton: {
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    borderRadius: 12,
-    height: 24,
-    justifyContent: "center",
-    position: "absolute",
-    right: 4,
-    top: 4,
-    width: 24,
-  },
   addTile: {
     alignItems: "center",
     backgroundColor: theme.colors.surfaceElevated,
@@ -242,9 +244,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     borderStyle: "dashed",
     borderWidth: 1,
-    height: 104,
     justifyContent: "center",
-    width: 104,
   },
   progressRow: {
     alignItems: "center",

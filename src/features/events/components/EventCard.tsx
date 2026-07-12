@@ -6,8 +6,9 @@ import { AppText } from "../../../components/ui/AppText";
 import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { theme } from "../../../constants/theme";
-import type { EventItem } from "../types";
+import { MEDIA_CONTENT_CONTRACTS } from "../../../services/media/mediaContentContracts";
 import { getEventTypeLabel } from "../constants/eventTypes";
+import type { EventItem } from "../types";
 import { formatEventTicketCardLabel } from "../utils/eventTicketPricing";
 import { formatEventDateBadge, formatEventTimeLabel } from "../utils/eventTimezone";
 
@@ -130,7 +131,8 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   cover: {
-    height: 204,
+    aspectRatio:
+      MEDIA_CONTENT_CONTRACTS.eventCover.aspectWidth / MEDIA_CONTENT_CONTRACTS.eventCover.aspectHeight,
     justifyContent: "space-between",
     padding: theme.spacing.md,
   },

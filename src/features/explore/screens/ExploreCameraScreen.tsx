@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "../../../components/ui/AppText";
 import { ExploreRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
+import { getMediaContentContract } from "../../../services/media/mediaContentContracts";
 import type { ExploreStackParamList } from "../../../navigation/types";
 
 type CapturePhase = "idle" | "capturing_back" | "switching" | "capturing_front" | "preview";
@@ -232,6 +233,10 @@ export function ExploreCameraScreen() {
           <View style={styles.iconButton} />
         </View>
 
+        <AppText style={styles.previewGuidance} variant="caption">
+          {getMediaContentContract("snap").previewGuidance}
+        </AppText>
+
         <View style={styles.previewBody}>
           <View style={styles.heroWrap}>
             <Image resizeMode="cover" source={{ uri: backUri }} style={styles.heroImage} />
@@ -442,6 +447,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "700",
+  },
+  previewGuidance: {
+    color: "rgba(255,255,255,0.75)",
+    paddingHorizontal: theme.spacing.lg,
+    textAlign: "center",
   },
   previewBody: {
     flex: 1,

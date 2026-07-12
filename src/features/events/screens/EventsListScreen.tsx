@@ -14,7 +14,9 @@ import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList } from "../../../navigation/types";
 import { EventCard } from "../components/EventCard";
 import { EventsFilterSheet } from "../components/EventsFilterSheet";
+import { EventsTabSegmentControl } from "../components/EventsTabSegmentControl";
 import { EventTopSearch } from "../components/EventTopSearch";
+import { PersonalEventsList } from "../components/PersonalEventsList";
 import { getEvents, toggleEventAttendance } from "../services/events.service";
 import type { EventItem } from "../types";
 import {
@@ -22,12 +24,29 @@ import {
   buildEventsListQuery,
   type EventsFilterState,
 } from "../types/filters";
+import {
+  normalizeEventsTabSection,
+  resolveEventsTabSegments,
+  type EventsTabSection,
+} from "../utils/eventsTabUx";
 import { canUseAlcoholAndSmokingFilters } from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<EventsStackParamList, "EventsListScreen">;
 
-export function EventsListScreen({ navigation }: Props) {
+export function EventsListScreen({ navigation, route }: Props) {
   const { user } = useAuth();
+  const userContext = useMemo(
+    () => ({
+      organizerStatus: user?.organizerStatus ?? null,
+      accountType: user?.accountType ?? null,
+    }),
+    [user?.accountType, user?.organizerStatus],
+  );
+  const segments = useMemo(() => resolveEventsTabSegments(userContext), [userContext]);
+  const [activeSection, setActiveSection] = useState<EventsTabSection>(() =>
+    normalizeEventsTabSection(route.params?.section, userContext),
+  );
+
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,6 +57,18 @@ export function EventsListScreen({ navigation }: Props) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTERS);
+
+  useEffect(() => {
+    if (route.params?.section) {
+      setActiveSection(normalizeEventsTabSection(route.params.section, userContext));
+    }
+  }, [route.params?.section, userContext]);
+
+  useEffect(() => {
+    if (!segments.some((segment) => segment.key === activeSection)) {
+      setActiveSection("discover");
+    }
+  }, [activeSection, segments]);
 
   const scopedEvents = useMemo(() => {
     if (!user) {
@@ -72,6 +103,10 @@ export function EventsListScreen({ navigation }: Props) {
 
   const loadEvents = useCallback(
     async (mode: "initial" | "refresh") => {
+      if (activeSection !== "discover") {
+        return;
+      }
+
       if (mode === "initial") {
         setIsLoading(true);
       } else {
@@ -90,7 +125,7 @@ export function EventsListScreen({ navigation }: Props) {
         setRefreshing(false);
       }
     },
-    [listQuery],
+    [activeSection, listQuery],
   );
 
   useEffect(() => {
@@ -126,68 +161,90 @@ export function EventsListScreen({ navigation }: Props) {
     setDraftFilters(DEFAULT_EVENTS_FILTERS);
   };
 
-  if (isLoading) {
-    return (
-      <Screen>
+  const renderDiscover = () => {
+    if (isLoading) {
+      return (
         <Card style={styles.stateCard}>
           <Loader label="Etkinlikler yükleniyor..." />
         </Card>
-      </Screen>
-    );
-  }
+      );
+    }
 
-  if (error) {
-    return (
-      <Screen>
+    if (error) {
+      return (
         <Card style={styles.stateCard}>
           <ErrorState onRetry={() => void loadEvents("initial")} subtitle={error} title="Etkinlikler yüklenemedi" />
         </Card>
-      </Screen>
+      );
+    }
+
+    if (scopedEvents.length === 0) {
+      return (
+        <Card style={styles.stateCard}>
+          <EmptyState
+            actionLabel="Yenile"
+            description="Filtreleri değiştir veya daha sonra tekrar dene."
+            onActionPress={() => void loadEvents("initial")}
+            title="Etkinlik bulunamadı"
+          />
+        </Card>
+      );
+    }
+
+    return (
+      <FlatList
+        data={scopedEvents}
+        keyExtractor={(item) => item.id}
+        onRefresh={() => void loadEvents("refresh")}
+        refreshing={refreshing}
+        renderItem={({ item }) => (
+          <EventCard
+            event={item}
+            isJoined={Boolean(item.isUserAttending)}
+            onToggleJoin={() => void onToggleJoin(item)}
+            onPress={() => navigation.navigate(EventsRoutes.EventDetailScreen, { eventId: item.id })}
+          />
+        )}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
     );
-  }
+  };
 
   return (
     <Screen>
       <View style={styles.container}>
-        <View style={styles.topSearchWrap}>
-          <EventTopSearch
-            locationLabel={`${user?.publicProfile.currentCity || "Her yer"} · Bu hafta`}
-            onChangeText={setSearchText}
-            value={searchText}
-          />
-          <Pressable onPress={() => setIsFilterOpen(true)} style={styles.filterTapTarget}>
-            <Ionicons color={theme.colors.textPrimary} name="options-outline" size={20} />
-          </Pressable>
-        </View>
+        <EventsTabSegmentControl
+          activeSection={activeSection}
+          onChange={setActiveSection}
+          segments={segments}
+        />
 
-        {scopedEvents.length === 0 ? (
-          <Card style={styles.stateCard}>
-            <EmptyState
-              actionLabel="Yenile"
-              description="Filtreleri değiştir veya daha sonra tekrar dene."
-              onActionPress={() => void loadEvents("initial")}
-              title="Etkinlik bulunamadı"
-            />
-          </Card>
-        ) : (
-          <FlatList
-            data={scopedEvents}
-            keyExtractor={(item) => item.id}
-            onRefresh={() => void loadEvents("refresh")}
-            refreshing={refreshing}
-            renderItem={({ item }) => (
-              <EventCard
-                event={item}
-                isJoined={Boolean(item.isUserAttending)}
-                onToggleJoin={() => void onToggleJoin(item)}
-                onPress={() => navigation.navigate(EventsRoutes.EventDetailScreen, { eventId: item.id })}
+        {activeSection === "discover" ? (
+          <>
+            <View style={styles.topSearchWrap}>
+              <EventTopSearch
+                locationLabel={`${user?.publicProfile.currentCity || "Her yer"} · Bu hafta`}
+                onChangeText={setSearchText}
+                value={searchText}
               />
-            )}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+              <Pressable onPress={() => setIsFilterOpen(true)} style={styles.filterTapTarget}>
+                <Ionicons color={theme.colors.textPrimary} name="options-outline" size={20} />
+              </Pressable>
+            </View>
+            {renderDiscover()}
+          </>
+        ) : null}
+
+        {activeSection === "attended" ? (
+          <PersonalEventsList mode="attended" navigation={navigation} userContext={userContext} />
+        ) : null}
+
+        {activeSection === "created" ? (
+          <PersonalEventsList mode="created" navigation={navigation} userContext={userContext} />
+        ) : null}
       </View>
+
       <EventsFilterSheet
         filters={draftFilters}
         onApply={onApplyFilters}
@@ -195,7 +252,7 @@ export function EventsListScreen({ navigation }: Props) {
         onClearAll={onClearFilters}
         onClose={() => setIsFilterOpen(false)}
         showAlcoholAndSmokingFilters={showAlcoholAndSmokingFilters}
-        visible={isFilterOpen}
+        visible={isFilterOpen && activeSection === "discover"}
       />
     </Screen>
   );

@@ -29,6 +29,10 @@ import {
 import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
 import { buildReelSharePayload } from "../../share/utils/buildSharePayloads";
 import { deleteOrganizerReel } from "../services/reels.service";
+import {
+  pressReelEventNavigationTarget,
+  shouldShowReelEventTag,
+} from "../../events/utils/reelEventNavigation";
 import type { ReelCommentItem } from "../types/reelEngagement";
 import type { ReelItem } from "../types/reels";
 
@@ -39,7 +43,8 @@ type ProfileReelsFeedViewerProps = {
   onClose: () => void;
   organizerDisplayName: string;
   isOwnProfile?: boolean;
-  onEventPress?: (eventId: string) => void;
+  onEventDetailPress?: (eventId: string) => void;
+  onEventAlbumPress?: (eventId: string) => void;
   onReelDeleted?: (reelId: string) => void;
 };
 
@@ -72,7 +77,8 @@ type ReelFeedPageProps = {
   isLikeLoading: boolean;
   onToggleLike: () => void;
   onOpenComments: () => void;
-  onEventPress?: (eventId: string) => void;
+  onEventDetailPress?: (eventId: string) => void;
+  onEventAlbumPress?: (eventId: string) => void;
   onDelete: () => void;
   onShare: () => void;
   onReport?: () => void;
@@ -92,7 +98,8 @@ function ReelFeedPage({
   isLikeLoading,
   onToggleLike,
   onOpenComments,
-  onEventPress,
+  onEventDetailPress,
+  onEventAlbumPress,
   onDelete,
   onShare,
   onReport,
@@ -129,11 +136,19 @@ function ReelFeedPage({
             {reel.caption}
           </AppText>
         ) : null}
-        {reel.event ? (
-          <Pressable onPress={() => onEventPress?.(reel.event!.id)} style={styles.eventTag}>
+        {shouldShowReelEventTag(true, reel.event, false) ? (
+          <Pressable
+            onPress={() =>
+              pressReelEventNavigationTarget(reel.event!, {
+                onDetail: onEventDetailPress,
+                onAlbum: onEventAlbumPress,
+              })
+            }
+            style={styles.eventTag}
+          >
             <Ionicons color="#FFFFFF" name="calendar-outline" size={14} />
             <AppText numberOfLines={1} style={styles.eventTagText} variant="caption">
-              {reel.event.title}
+              {reel.event!.title}
             </AppText>
           </Pressable>
         ) : null}
@@ -193,7 +208,8 @@ export function ProfileReelsFeedViewer({
   onClose,
   organizerDisplayName,
   isOwnProfile = false,
-  onEventPress,
+  onEventDetailPress,
+  onEventAlbumPress,
   onReelDeleted,
 }: ProfileReelsFeedViewerProps) {
   const insets = useSafeAreaInsets();
@@ -473,7 +489,8 @@ export function ProfileReelsFeedViewer({
                   isPageActive={activeReelId === item.id}
                   likeCount={engagement.likeCount}
                   onDelete={() => confirmDelete(item)}
-                  onEventPress={onEventPress}
+                  onEventAlbumPress={onEventAlbumPress}
+                  onEventDetailPress={onEventDetailPress}
                   onOpenComments={() => void openComments(item)}
                   onReport={() => setReportReel(item)}
                   onShare={() => shareReel(item)}

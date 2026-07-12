@@ -9,6 +9,7 @@ import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
 import { TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
+import { getMediaContentContract } from "../../../services/media/mediaContentContracts";
 import { useAuth } from "../../../hooks/useAuth";
 import { resetExploreToFeed } from "../../../navigation/explore/resetExploreStack";
 import type { ExploreStackParamList } from "../../../navigation/types";
@@ -105,6 +106,10 @@ export function PublishSnapScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        <AppText style={styles.previewGuidance} variant="caption">
+          {getMediaContentContract("snap").previewGuidance}
+        </AppText>
+
         <AppInput
           label="Caption (opsiyonel)"
           multiline
@@ -162,6 +167,10 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     overflow: "hidden",
     width: "100%",
+  },
+  previewGuidance: {
+    color: theme.colors.textSecondary,
+    textAlign: "center",
   },
   heroImage: {
     height: "100%",

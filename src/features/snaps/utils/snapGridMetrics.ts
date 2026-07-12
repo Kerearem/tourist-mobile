@@ -1,8 +1,13 @@
-export const SNAP_GRID_COLUMNS = 3;
-export const SNAP_GRID_CELL_ASPECT = 0.58;
+import {
+  getMediaGridTileMetrics,
+  MEDIA_CONTENT_CONTRACTS,
+  MEDIA_GRID_COLUMNS,
+} from "../../../services/media/mediaContentContracts";
+
+export { MEDIA_GRID_COLUMNS as SNAP_GRID_COLUMNS };
+
+export const SNAP_GRID_CELL_ASPECT = MEDIA_CONTENT_CONTRACTS.snap.gridCellWidthOverHeight;
 
 export function getSnapGridTileMetrics(containerWidth: number) {
-  const tileSize = Math.floor(containerWidth / SNAP_GRID_COLUMNS);
-  const tileHeight = Math.floor(tileSize / SNAP_GRID_CELL_ASPECT);
-  return { tileSize, tileHeight };
+  return getMediaGridTileMetrics("snap", containerWidth);
 }

@@ -11,6 +11,7 @@ import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
 import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
+import { MEDIA_CONTENT_CONTRACTS } from "../../../services/media/mediaContentContracts";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, MainTabParamList } from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
@@ -376,7 +377,8 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   heroCover: {
-    height: 220,
+    aspectRatio:
+      MEDIA_CONTENT_CONTRACTS.eventCover.aspectWidth / MEDIA_CONTENT_CONTRACTS.eventCover.aspectHeight,
     justifyContent: "space-between",
     padding: theme.spacing.md,
   },

@@ -98,7 +98,8 @@ export function ProfileContentTabs({
             <View style={{ display: organizerTab === "intro" ? "flex" : "none" }}>
               <ProfileIntroTab
                 isOwnProfile={isOwnProfile}
-                onEventPress={onEventPress}
+                onEventAlbumPress={onPastEventPress ?? onMemberEventPress}
+                onEventDetailPress={onActiveEventPress ?? onEventPress}
                 organizerDisplayName={organizerDisplayName}
                 refreshToken={refreshToken}
                 showAddHint={Boolean(isOwnProfile && isOrganizer)}

@@ -3,9 +3,9 @@ import { Image, Pressable, StyleSheet, useWindowDimensions, View } from "react-n
 import { Ionicons } from "@expo/vector-icons";
 
 import { cloudinaryVideoPoster } from "../../../components/media/MediaCarousel";
+import { getMediaGridTileMetrics } from "../../../services/media/mediaContentContracts";
 import { theme } from "../../../constants/theme";
 import type { EventAlbumMoment } from "../types";
-import { getSnapGridTileMetrics } from "../../snaps/utils/snapGridMetrics";
 import { EventMomentFeedViewer } from "./EventMomentFeedViewer";
 
 type EventMomentsGridProps = {
@@ -32,7 +32,7 @@ export function EventMomentsGrid({ containerWidth, eventId, moments }: EventMome
   const [feedInitialIndex, setFeedInitialIndex] = useState(0);
   const [isFeedOpen, setIsFeedOpen] = useState(false);
 
-  const { tileSize, tileHeight } = useMemo(() => getSnapGridTileMetrics(gridWidth), [gridWidth]);
+  const { tileSize, tileHeight } = useMemo(() => getMediaGridTileMetrics("moment", gridWidth), [gridWidth]);
 
   const openMomentFeed = (index: number) => {
     setFeedInitialIndex(index);

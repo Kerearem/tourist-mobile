@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { cloudinaryVideoPoster } from "../../../components/media/MediaCarousel";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import { getMediaGridTileMetrics } from "../../../services/media/mediaContentContracts";
 import { getOrganizerReels } from "../services/reels.service";
 import type { ReelItem } from "../types/reels";
 import { ProfileReelsFeedViewer } from "./ProfileReelsFeedViewer";
@@ -22,7 +23,8 @@ type ProfileIntroTabProps = {
   isOwnProfile?: boolean;
   showAddHint?: boolean;
   organizerDisplayName?: string;
-  onEventPress?: (eventId: string) => void;
+  onEventDetailPress?: (eventId: string) => void;
+  onEventAlbumPress?: (eventId: string) => void;
 };
 
 const getReelPreviewUrl = (reel: ReelItem) => {
@@ -42,7 +44,8 @@ export function ProfileIntroTab({
   isOwnProfile = false,
   showAddHint = false,
   organizerDisplayName = "Organizatör",
-  onEventPress,
+  onEventDetailPress,
+  onEventAlbumPress,
 }: ProfileIntroTabProps) {
   const { width } = useWindowDimensions();
   const [reels, setReels] = useState<ReelItem[]>([]);
@@ -52,7 +55,7 @@ export function ProfileIntroTab({
   const [isFeedOpen, setIsFeedOpen] = useState(false);
 
   const tileSize = useMemo(() => Math.floor(width / 3), [width]);
-  const tileHeight = useMemo(() => Math.floor(tileSize * 1.35), [tileSize]);
+  const tileHeight = useMemo(() => getMediaGridTileMetrics("reel", width).tileHeight, [width]);
 
   useEffect(() => {
     if (!userId) {
@@ -174,7 +177,8 @@ export function ProfileIntroTab({
         initialIndex={feedInitialIndex}
         isOwnProfile={isOwnProfile}
         onClose={() => setIsFeedOpen(false)}
-        onEventPress={onEventPress}
+        onEventAlbumPress={onEventAlbumPress}
+        onEventDetailPress={onEventDetailPress}
         onReelDeleted={(reelId) => {
           setReels((current) => current.filter((item) => item.id !== reelId));
         }}

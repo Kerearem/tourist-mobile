@@ -1,32 +1,9 @@
-export type ExploreReelEventSummary = {
-  id: string;
-  status: string;
-};
+export type {
+  ReelEventNavigationSummary as ExploreReelEventSummary,
+  ReelEventNavigationTarget as ExploreReelEventNavigationTarget,
+} from "../../events/utils/reelEventNavigation";
 
-export type ExploreReelEventNavigationTarget = "detail" | "album";
-
-export function resolveExploreReelEventNavigationTarget(
-  status: string,
-): ExploreReelEventNavigationTarget | null {
-  if (status === "APPROVED") {
-    return "detail";
-  }
-
-  if (status === "COMPLETED") {
-    return "album";
-  }
-
-  return null;
-}
-
-export function shouldShowExploreReelEventTag(
-  isReel: boolean,
-  event: ExploreReelEventSummary | null | undefined,
-  isReportedHidden: boolean,
-): boolean {
-  if (!isReel || isReportedHidden || !event) {
-    return false;
-  }
-
-  return resolveExploreReelEventNavigationTarget(event.status) !== null;
-}
+export {
+  resolveReelEventNavigationTarget as resolveExploreReelEventNavigationTarget,
+  shouldShowReelEventTag as shouldShowExploreReelEventTag,
+} from "../../events/utils/reelEventNavigation";

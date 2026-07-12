@@ -7,6 +7,7 @@ import { Card } from "../../../../components/ui/Card";
 import { getCountryByCode, getCountryLabel } from "../../../../constants/countries";
 import { theme } from "../../../../constants/theme";
 import { getEventTypeEmoji, getEventTypeLabel } from "../../constants/eventTypes";
+import { getDisplayResizeMode } from "../../../../services/media/mediaContentContracts";
 import type { EventCreationDraft } from "../../types/eventCreation";
 import { formatEventTicketOfferingLabel } from "../../utils/eventTicketPricing";
 import { formatTimezoneOptionLabel, formatWallClockInTimezone, wallClockFromDate } from "../../utils/eventTimezone";
@@ -37,7 +38,11 @@ export function EventCreationPreviewCard({ draft }: EventCreationPreviewCardProp
   return (
     <Card style={styles.card}>
       {draft.coverUri ? (
-        <Image source={{ uri: draft.coverUri }} style={styles.cover} />
+        <Image
+          resizeMode={getDisplayResizeMode("eventCover")}
+          source={{ uri: draft.coverUri }}
+          style={styles.cover}
+        />
       ) : (
         <View style={styles.coverPlaceholder}>
           <Ionicons color={theme.colors.muted} name="image-outline" size={36} />

@@ -23,6 +23,7 @@ import { TokenWalletScreen } from "../../features/token/screens/TokenWalletScree
 import { TokenPackagesScreen } from "../../features/token/screens/TokenPackagesScreen";
 import { FinanceScreen } from "../../features/token/screens/FinanceScreen";
 import type { ProfileStackParamList } from "../types";
+import { createEventScreenOptions } from "../createEventScreenOptions";
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -40,7 +41,11 @@ export function ProfileStack() {
       <Stack.Screen component={BlockedUsersScreen} name={ProfileRoutes.BlockedUsersScreen} />
       <Stack.Screen component={FollowConnectionsScreen} name={ProfileRoutes.FollowConnectionsScreen} />
       <Stack.Screen component={ReportProblemScreen} name={ProfileRoutes.ReportProblemScreen} />
-      <Stack.Screen component={CreateEventScreen} name={ProfileRoutes.CreateEventScreen} />
+      <Stack.Screen
+        component={CreateEventScreen}
+        name={ProfileRoutes.CreateEventScreen}
+        options={createEventScreenOptions}
+      />
       <Stack.Screen component={MyOrganizerEventsScreen} name={ProfileRoutes.MyOrganizerEventsScreen} />
       <Stack.Screen
         component={OrganizerEventSubmissionScreen}

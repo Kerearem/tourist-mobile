@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { CreationMediaTile } from "../../../components/media/CreationMediaTile";
+import { MediaUploadPreviewModal } from "../../../components/media/MediaUploadPreviewModal";
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
 import { AppText } from "../../../components/ui/AppText";
@@ -20,11 +20,16 @@ import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
 import type { ExploreStackParamList, ProfileStackParamList } from "../../../navigation/types";
+import { getCreationTileSize } from "../../../services/media/mediaContentContracts";
+import {
+  pickUserContentMedia,
+  type PickedUserContentMedia,
+} from "../../../services/media/pickUserContentMedia";
+import { uploadImage, uploadVideo } from "../../../services/media/cloudinary";
 import { getMyOrganizerEvents } from "../../events/services/organizer.service";
 import type { EventItem } from "../../events/types";
 import { createOrganizerReel } from "../services/reels.service";
 import { getReelsPublishBlockMessage } from "../services/reelsPublishing";
-import { uploadImage, uploadVideo } from "../../../services/media/cloudinary";
 
 type Props = NativeStackScreenProps<
   ProfileStackParamList & ExploreStackParamList,
@@ -50,9 +55,12 @@ export function CreateReelScreen({ navigation }: Props) {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<PickedUserContentMedia | null>(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
   const organizerStatus = user?.organizerStatus;
   const publishAllowed = organizerStatus === "approved";
+  const addTileSize = getCreationTileSize("reel");
 
   useEffect(() => {
     if (!publishAllowed) {
@@ -92,32 +100,47 @@ export function CreateReelScreen({ navigation }: Props) {
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError("Galeri erişim izni gerekli.");
+    try {
+      const picked = await pickUserContentMedia("reel");
+      if (!picked) {
+        return;
+      }
+      setPreviewMedia(picked);
+      setIsPreviewVisible(true);
+      setError(null);
+    } catch (pickError) {
+      setError(pickError instanceof Error ? pickError.message : "Medya seçilemedi.");
+    }
+  };
+
+  const confirmPreview = () => {
+    if (!previewMedia) {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      allowsMultipleSelection: true,
-      selectionLimit: MAX_MEDIA - media.length,
-      quality: 0.85,
-      videoMaxDuration: 60,
-    });
+    setMedia((current) =>
+      [
+        ...current,
+        {
+          id: `${previewMedia.uri}_${Date.now()}_${Math.random()}`,
+          uri: previewMedia.uri,
+          type: previewMedia.type,
+        },
+      ].slice(0, MAX_MEDIA),
+    );
+    setPreviewMedia(null);
+    setIsPreviewVisible(false);
+  };
 
-    if (result.canceled || result.assets.length === 0) {
-      return;
-    }
+  const retakePreview = () => {
+    setIsPreviewVisible(false);
+    setPreviewMedia(null);
+    void pickMedia();
+  };
 
-    const nextItems: SelectedMedia[] = result.assets.map((asset) => ({
-      id: `${asset.assetId ?? asset.uri}_${Date.now()}_${Math.random()}`,
-      uri: asset.uri,
-      type: asset.type === "video" ? "VIDEO" : "IMAGE",
-    }));
-
-    setMedia((current) => [...current, ...nextItems].slice(0, MAX_MEDIA));
-    setError(null);
+  const cancelPreview = () => {
+    setIsPreviewVisible(false);
+    setPreviewMedia(null);
   };
 
   const removeMedia = (id: string) => {
@@ -199,47 +222,46 @@ export function CreateReelScreen({ navigation }: Props) {
         <ScreenBackHeader onBack={() => navigation.goBack()} title="Tanıtım Ekle" />
 
         <AppText style={styles.hint} variant="bodyMuted">
-          Profiline 1-10 fotoğraf veya video ekle. Sırayı ok tuşlarıyla düzenleyebilirsin.
+          Profiline 1-10 fotoğraf veya video ekle. Her medya için önizleme gösterilir; sırayı ok tuşlarıyla
+          düzenleyebilirsin.
         </AppText>
 
         <View style={styles.mediaGrid}>
           {media.map((item, index) => (
-            <View key={item.id} style={styles.mediaTile}>
-              <Image resizeMode="cover" source={{ uri: item.uri }} style={styles.mediaPreview} />
-              <View style={styles.orderBadge}>
-                <AppText style={styles.orderText} variant="caption">
-                  {index + 1}
-                </AppText>
-              </View>
-              {item.type === "VIDEO" ? (
-                <View style={styles.videoBadge}>
-                  <Ionicons color="#FFFFFF" name="videocam" size={16} />
+            <CreationMediaTile
+              key={item.id}
+              footer={
+                <View style={styles.reorderRow}>
+                  <Pressable
+                    disabled={index === 0}
+                    onPress={() => moveMedia(index, -1)}
+                    style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
+                  >
+                    <Ionicons color="#FFFFFF" name="chevron-back" size={14} />
+                  </Pressable>
+                  <Pressable
+                    disabled={index === media.length - 1}
+                    onPress={() => moveMedia(index, 1)}
+                    style={[styles.reorderButton, index === media.length - 1 && styles.reorderButtonDisabled]}
+                  >
+                    <Ionicons color="#FFFFFF" name="chevron-forward" size={14} />
+                  </Pressable>
                 </View>
-              ) : null}
-              <View style={styles.reorderRow}>
-                <Pressable
-                  disabled={index === 0}
-                  onPress={() => moveMedia(index, -1)}
-                  style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
-                >
-                  <Ionicons color="#FFFFFF" name="chevron-back" size={14} />
-                </Pressable>
-                <Pressable
-                  disabled={index === media.length - 1}
-                  onPress={() => moveMedia(index, 1)}
-                  style={[styles.reorderButton, index === media.length - 1 && styles.reorderButtonDisabled]}
-                >
-                  <Ionicons color="#FFFFFF" name="chevron-forward" size={14} />
-                </Pressable>
-              </View>
-              <Pressable onPress={() => removeMedia(item.id)} style={styles.removeButton}>
-                <Ionicons color="#FFFFFF" name="close" size={16} />
-              </Pressable>
-            </View>
+              }
+              kind="reel"
+              onRemove={() => removeMedia(item.id)}
+              orderLabel={String(index + 1)}
+              type={item.type}
+              uri={item.uri}
+            />
           ))}
 
           {media.length < MAX_MEDIA ? (
-            <Pressable disabled={isSubmitting} onPress={() => void pickMedia()} style={styles.addTile}>
+            <Pressable
+              disabled={isSubmitting}
+              onPress={() => void pickMedia()}
+              style={[styles.addTile, { height: addTileSize.height, width: addTileSize.width }]}
+            >
               <Ionicons color={theme.colors.primary} name="add" size={32} />
               <AppText variant="caption">Ekle</AppText>
             </Pressable>
@@ -314,6 +336,15 @@ export function CreateReelScreen({ navigation }: Props) {
           onPress={() => void submitReel()}
         />
       </ScrollView>
+
+      <MediaUploadPreviewModal
+        kind="reel"
+        media={previewMedia}
+        onCancel={cancelPreview}
+        onConfirm={confirmPreview}
+        onRetake={retakePreview}
+        visible={isPreviewVisible}
+      />
     </SafeAreaView>
   );
 }
@@ -345,39 +376,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: theme.spacing.sm,
   },
-  mediaTile: {
-    borderRadius: theme.radius.md,
-    height: 120,
-    overflow: "hidden",
-    position: "relative",
-    width: 104,
-  },
-  mediaPreview: {
-    height: "100%",
-    width: "100%",
-  },
-  orderBadge: {
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: theme.radius.sm,
-    left: theme.spacing.xs,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    position: "absolute",
-    top: theme.spacing.xs,
-  },
-  orderText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  videoBadge: {
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: theme.radius.sm,
-    bottom: 28,
-    left: theme.spacing.xs,
-    padding: 4,
-    position: "absolute",
-  },
   reorderRow: {
     bottom: 4,
     flexDirection: "row",
@@ -396,17 +394,6 @@ const styles = StyleSheet.create({
   reorderButtonDisabled: {
     opacity: 0.35,
   },
-  removeButton: {
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    borderRadius: 12,
-    height: 24,
-    justifyContent: "center",
-    position: "absolute",
-    right: 4,
-    top: 28,
-    width: 24,
-  },
   addTile: {
     alignItems: "center",
     backgroundColor: theme.colors.surfaceElevated,
@@ -414,9 +401,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     borderStyle: "dashed",
     borderWidth: 1,
-    height: 120,
     justifyContent: "center",
-    width: 104,
   },
   eventSection: {
     gap: theme.spacing.sm,

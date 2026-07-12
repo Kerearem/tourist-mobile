@@ -17,6 +17,7 @@ describe("resolveExploreReelEventNavigationTarget", () => {
 
   it("returns null for unsupported statuses", () => {
     assert.equal(resolveExploreReelEventNavigationTarget("PENDING_REVIEW"), null);
+    assert.equal(resolveExploreReelEventNavigationTarget("REJECTED"), null);
     assert.equal(resolveExploreReelEventNavigationTarget("CANCELLED"), null);
     assert.equal(resolveExploreReelEventNavigationTarget("unknown"), null);
   });
@@ -40,6 +41,13 @@ describe("shouldShowExploreReelEventTag", () => {
   it("hides the tag for PENDING_REVIEW events", () => {
     assert.equal(
       shouldShowExploreReelEventTag(true, { id: "event-1", status: "PENDING_REVIEW" }, false),
+      false,
+    );
+  });
+
+  it("hides the tag for REJECTED events", () => {
+    assert.equal(
+      shouldShowExploreReelEventTag(true, { id: "event-1", status: "REJECTED" }, false),
       false,
     );
   });

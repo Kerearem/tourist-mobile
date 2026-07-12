@@ -1,11 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
+import { MediaUploadPreviewModal } from "../../../../../components/media/MediaUploadPreviewModal";
 import { AppInput } from "../../../../../components/ui/AppInput";
 import { AppText } from "../../../../../components/ui/AppText";
 import { theme } from "../../../../../constants/theme";
+import { getDisplayResizeMode } from "../../../../../services/media/mediaContentContracts";
+import {
+  pickEventCoverImage,
+  type PickedUserContentMedia,
+} from "../../../../../services/media/pickUserContentMedia";
 import { EVENT_TYPES, type EventType } from "../../../constants/eventTypes";
 import type { EventCreationDraft, EventCreationFieldErrors } from "../../../types/eventCreation";
 import { FieldError, SELECTED_BG, SELECTED_BORDER, StepSection, errorBorder, inputFieldStyle, FIELD_RADIUS } from "../createEventUi";
@@ -18,23 +23,40 @@ type BasicsStepProps = {
 };
 
 export function BasicsStep({ draft, errors, onChange, onClearError }: BasicsStepProps) {
+  const [previewMedia, setPreviewMedia] = useState<PickedUserContentMedia | null>(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const coverResizeMode = getDisplayResizeMode("eventCover");
+
   const pickCoverImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("İzin gerekli", "Kapak fotoğrafı seçmek için galeri izni gerekiyor.");
-      return;
+    try {
+      const picked = await pickEventCoverImage();
+      if (!picked) {
+        return;
+      }
+      setPreviewMedia(picked);
+      setIsPreviewVisible(true);
+    } catch (error) {
+      Alert.alert("İzin gerekli", error instanceof Error ? error.message : "Kapak fotoğrafı seçilemedi.");
     }
+  };
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.85,
-    });
-
-    if (!result.canceled && result.assets[0]?.uri) {
-      onChange({ coverUri: result.assets[0].uri });
+  const confirmCover = () => {
+    if (previewMedia) {
+      onChange({ coverUri: previewMedia.uri });
     }
+    setPreviewMedia(null);
+    setIsPreviewVisible(false);
+  };
+
+  const retakeCover = () => {
+    setIsPreviewVisible(false);
+    setPreviewMedia(null);
+    void pickCoverImage();
+  };
+
+  const cancelCoverPreview = () => {
+    setIsPreviewVisible(false);
+    setPreviewMedia(null);
   };
 
   return (
@@ -98,9 +120,9 @@ export function BasicsStep({ draft, errors, onChange, onClearError }: BasicsStep
 
       <View style={styles.fieldBlock}>
         <AppText variant="label">Kapak Fotoğrafı</AppText>
-        <AppText variant="caption">Opsiyonel · yayınlarken yüklenir</AppText>
+        <AppText variant="caption">Opsiyonel · 16:9 kırpma ve önizleme sonrası yüklenir</AppText>
         {draft.coverUri ? (
-          <Image source={{ uri: draft.coverUri }} style={styles.coverPreview} />
+          <Image resizeMode={coverResizeMode} source={{ uri: draft.coverUri }} style={styles.coverPreview} />
         ) : (
           <Pressable onPress={() => void pickCoverImage()} style={styles.coverUpload}>
             <Ionicons color={theme.colors.muted} name="cloud-upload-outline" size={32} />
@@ -115,6 +137,15 @@ export function BasicsStep({ draft, errors, onChange, onClearError }: BasicsStep
           </AppText>
         </Pressable>
       </View>
+
+      <MediaUploadPreviewModal
+        kind="eventCover"
+        media={previewMedia}
+        onCancel={cancelCoverPreview}
+        onConfirm={confirmCover}
+        onRetake={retakeCover}
+        visible={isPreviewVisible}
+      />
     </StepSection>
   );
 }

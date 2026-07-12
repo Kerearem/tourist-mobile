@@ -163,10 +163,13 @@ export function ProfileScreen({ navigation }: Props) {
             <ProfileContentTabs
               isOrganizer={user.organizerStatus === "approved"}
               isOwnProfile
-              onEventPress={(eventId) =>
+              onActiveEventPress={(eventId) =>
                 navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId })
               }
               onMemberEventPress={(eventId) =>
+                navigation.navigate(ProfileRoutes.EventAlbumScreen, { eventId })
+              }
+              onPastEventPress={(eventId) =>
                 navigation.navigate(ProfileRoutes.EventAlbumScreen, { eventId })
               }
               organizerDisplayName={profileDisplay.displayName}
