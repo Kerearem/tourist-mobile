@@ -1,4 +1,5 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
+import type { OrganizerEventSubmissionSnapshot } from "../features/events/utils/organizerCreatedEventNavigation";
 import type { VerificationDocumentType } from "../features/events/types/organizer";
 import type { UserLanguage } from "../models/user";
 
@@ -102,6 +103,9 @@ export type EventsStackParamList = {
     mode: "identity" | "selfie";
   };
   MyOrganizerEventsScreen: undefined;
+  OrganizerEventSubmissionScreen: {
+    event: OrganizerEventSubmissionSnapshot;
+  };
 };
 
 export type ProfileStackParamList = {
@@ -127,6 +131,9 @@ export type ProfileStackParamList = {
   TokenWalletScreen: undefined;
   TokenPackagesScreen: undefined;
   FinanceScreen: undefined;
+  OrganizerEventSubmissionScreen: {
+    event: OrganizerEventSubmissionSnapshot;
+  };
 };
 
 export type MainTabParamList = {

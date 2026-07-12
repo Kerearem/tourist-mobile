@@ -1,10 +1,23 @@
 export type EventCreationExitDecision = "allow" | "block" | "confirm";
 
 export const EVENT_CREATION_EXIT_ALERT = {
-  title: "Etkinlik taslağından çıkmak istiyor musun?",
-  message: "Kaydedilmemiş değişiklikler kaybolacak.",
-  stayLabel: "Devam Et",
-  leaveLabel: "Çık",
+  title: "Kaydedilmemiş değişiklikler var",
+  message: "Çıkarsan taslağın bu oturum boyunca saklanır ve daha sonra devam edebilirsin.",
+  stayLabel: "Düzenlemeye devam",
+  leaveLabel: "Çık ve sakla",
+} as const;
+
+export const EVENT_CREATION_RESUME_ALERT = {
+  title: "Etkinlik taslağına devam et?",
+  message: "Kaydedilmemiş bir etkinlik taslağın var.",
+  continueLabel: "Devam et",
+  discardLabel: "Sil ve yeni başla",
+} as const;
+
+export const EVENT_CREATION_SUBMITTING_ALERT = {
+  title: "Gönderiliyor",
+  message: "Etkinlik gönderilirken ekrandan çıkamazsın.",
+  dismissLabel: "Tamam",
 } as const;
 
 export function resolveEventCreationExitDecision(input: {

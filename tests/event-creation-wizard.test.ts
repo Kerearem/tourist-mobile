@@ -15,10 +15,19 @@ import {
 } from "../src/features/events/utils/eventCreationPayload";
 import {
   EVENT_CREATION_EXIT_ALERT,
+  EVENT_CREATION_RESUME_ALERT,
   resolveEventCreationExitDecision,
   resolveProtectedEventCreationExitDecision,
   shouldPreventNavigationRemoval,
 } from "../src/features/events/utils/eventCreationNavigation";
+import {
+  clearEventCreationSession,
+  deserializeEventCreationDraft,
+  getEventCreationSession,
+  hasEventCreationSession,
+  saveEventCreationSession,
+  serializeEventCreationDraft,
+} from "../src/features/events/utils/eventCreationDraftSession";
 import {
   EVENT_CAPACITY_OVER_LIMIT_MESSAGE,
   hasUnsavedDraftChanges,
@@ -305,8 +314,65 @@ describe("event creation exit navigation", () => {
       ),
       true,
     );
-    assert.equal(EVENT_CREATION_EXIT_ALERT.stayLabel, "Devam Et");
-    assert.equal(EVENT_CREATION_EXIT_ALERT.leaveLabel, "Çık");
+    assert.equal(EVENT_CREATION_EXIT_ALERT.stayLabel, "Düzenlemeye devam");
+    assert.equal(EVENT_CREATION_EXIT_ALERT.leaveLabel, "Çık ve sakla");
+  });
+});
+
+describe("event creation draft session", () => {
+  it("saves and restores draft state within the app session", () => {
+    clearEventCreationSession();
+    const draft = buildValidDraft();
+    saveEventCreationSession(draft, 3);
+    assert.equal(hasEventCreationSession(), true);
+
+    const session = getEventCreationSession();
+    assert.ok(session);
+    assert.equal(session.step, 3);
+
+    const restored = deserializeEventCreationDraft(session.draft);
+    assert.equal(restored.title, draft.title);
+    assert.equal(restored.startsAt.getTime(), draft.startsAt.getTime());
+
+    clearEventCreationSession();
+    assert.equal(hasEventCreationSession(), false);
+  });
+
+  it("serializes dates for session storage", () => {
+    const draft = buildValidDraft();
+    const serialized = serializeEventCreationDraft(draft);
+    assert.equal(typeof serialized.startsAt, "string");
+    assert.equal(typeof serialized.endsAt, "string");
+  });
+});
+
+describe("event creation resume navigation", () => {
+  it("allows re-entry after successful submission flag is set", () => {
+    assert.equal(
+      resolveProtectedEventCreationExitDecision({
+        hasEnteredWizard: true,
+        isDirty: true,
+        isSubmitting: false,
+        allowNavigationAfterSuccess: true,
+      }),
+      "allow",
+    );
+    assert.equal(
+      shouldPreventNavigationRemoval(
+        resolveProtectedEventCreationExitDecision({
+          hasEnteredWizard: false,
+          isDirty: true,
+          isSubmitting: false,
+          allowNavigationAfterSuccess: false,
+        }),
+      ),
+      false,
+    );
+  });
+
+  it("exposes resume alert copy for saved drafts", () => {
+    assert.equal(EVENT_CREATION_RESUME_ALERT.continueLabel, "Devam et");
+    assert.equal(EVENT_CREATION_RESUME_ALERT.discardLabel, "Sil ve yeni başla");
   });
 });
 

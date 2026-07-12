@@ -50,6 +50,7 @@ export const EventsRoutes = {
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
   VerificationGuidedCaptureScreen: "VerificationGuidedCaptureScreen",
   MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
+  OrganizerEventSubmissionScreen: "OrganizerEventSubmissionScreen",
 } as const;
 
 export const ProfileRoutes = {
@@ -72,6 +73,7 @@ export const ProfileRoutes = {
   TokenWalletScreen: "TokenWalletScreen",
   TokenPackagesScreen: "TokenPackagesScreen",
   FinanceScreen: "FinanceScreen",
+  OrganizerEventSubmissionScreen: "OrganizerEventSubmissionScreen",
 } as const;
 
 export const TabRoutes = {

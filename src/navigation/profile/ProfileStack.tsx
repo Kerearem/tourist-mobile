@@ -9,6 +9,7 @@ import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
+import { OrganizerEventSubmissionScreen } from "../../features/events/screens/OrganizerEventSubmissionScreen";
 import { VerificationGuidedCaptureScreen } from "../../features/events/screens/VerificationGuidedCaptureScreen";
 import { AccountManagementScreen } from "../../features/profile/screens/AccountManagementScreen";
 import { BlockedUsersScreen } from "../../features/profile/screens/BlockedUsersScreen";
@@ -41,6 +42,10 @@ export function ProfileStack() {
       <Stack.Screen component={ReportProblemScreen} name={ProfileRoutes.ReportProblemScreen} />
       <Stack.Screen component={CreateEventScreen} name={ProfileRoutes.CreateEventScreen} />
       <Stack.Screen component={MyOrganizerEventsScreen} name={ProfileRoutes.MyOrganizerEventsScreen} />
+      <Stack.Screen
+        component={OrganizerEventSubmissionScreen}
+        name={ProfileRoutes.OrganizerEventSubmissionScreen}
+      />
       <Stack.Screen component={OrganizerApplicationScreen} name={ProfileRoutes.OrganizerApplicationScreen} />
       <Stack.Screen
         component={VerificationGuidedCaptureScreen}

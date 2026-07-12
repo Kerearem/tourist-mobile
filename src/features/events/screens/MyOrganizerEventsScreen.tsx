@@ -27,6 +27,7 @@ type TabKey = "created" | "attended";
 
 import { eventStatusLabel } from "../utils/eventStatusLabel";
 import { isActiveOrganizerProfileEvent } from "../../profile/utils/organizerProfileEvents";
+import { resolveOrganizerCreatedEventPressTarget } from "../utils/organizerCreatedEventNavigation";
 
 const attendanceLabel = (event: EventItem) => {
   if (event.attendanceStatus === "approved") return "Katıldın";
@@ -81,6 +82,19 @@ export function MyOrganizerEventsScreen({ navigation }: Props) {
     }
   };
 
+  const onCreatedEventPress = (item: EventItem) => {
+    const target = resolveOrganizerCreatedEventPressTarget(item);
+    if (target.kind === "public-detail") {
+      navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId: target.eventId });
+      return;
+    }
+    if (target.kind === "album") {
+      navigation.navigate(ProfileRoutes.EventAlbumScreen, { eventId: target.eventId });
+      return;
+    }
+    navigation.navigate(ProfileRoutes.OrganizerEventSubmissionScreen, { event: target.event });
+  };
+
   const renderEvent = (item: EventItem) => (
     <View style={styles.itemWrap}>
       <View style={styles.statusRow}>
@@ -97,7 +111,13 @@ export function MyOrganizerEventsScreen({ navigation }: Props) {
         event={item}
         isJoined={Boolean(item.isUserAttending)}
         onToggleJoin={() => undefined}
-        onPress={() => navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId: item.id })}
+        onPress={() => {
+          if (activeTab === "created") {
+            onCreatedEventPress(item);
+            return;
+          }
+          navigation.navigate(ProfileRoutes.EventDetailScreen, { eventId: item.id });
+        }}
       />
     </View>
   );

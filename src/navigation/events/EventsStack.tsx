@@ -9,6 +9,7 @@ import { EventDetailScreen } from "../../features/events/screens/EventDetailScre
 import { EventsListScreen } from "../../features/events/screens/EventsListScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
+import { OrganizerEventSubmissionScreen } from "../../features/events/screens/OrganizerEventSubmissionScreen";
 import { VerificationGuidedCaptureScreen } from "../../features/events/screens/VerificationGuidedCaptureScreen";
 import type { EventsStackParamList } from "../types";
 
@@ -36,6 +37,10 @@ export function EventsStack() {
         options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
       />
       <Stack.Screen component={MyOrganizerEventsScreen} name={EventsRoutes.MyOrganizerEventsScreen} />
+      <Stack.Screen
+        component={OrganizerEventSubmissionScreen}
+        name={EventsRoutes.OrganizerEventSubmissionScreen}
+      />
     </Stack.Navigator>
   );
 }

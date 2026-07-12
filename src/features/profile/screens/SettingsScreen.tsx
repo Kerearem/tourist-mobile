@@ -225,7 +225,7 @@ export function SettingsScreen({ navigation }: Props) {
                 {readyCapabilityState.usage.remainingActiveEventSlots > 0 ? (
                   <SettingsRow
                     icon="add-circle-outline"
-                    onPress={() => navigation.navigate(ProfileRoutes.CreateEventScreen)}
+                    onPress={() => navigation.push(ProfileRoutes.CreateEventScreen)}
                     subtitle={buildAvailableCreateSubtitle(
                       readyCapabilityState.usage,
                       readyCapabilityState.capabilities.maxConcurrentActiveEvents,

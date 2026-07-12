@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import type { NavigationAction } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppText } from "../../../components/ui/AppText";
@@ -54,9 +55,17 @@ import {
 } from "../utils/organizerCapabilityStatus";
 import {
   EVENT_CREATION_EXIT_ALERT,
+  EVENT_CREATION_RESUME_ALERT,
+  EVENT_CREATION_SUBMITTING_ALERT,
   resolveProtectedEventCreationExitDecision,
   shouldPreventNavigationRemoval,
 } from "../utils/eventCreationNavigation";
+import {
+  clearEventCreationSession,
+  deserializeEventCreationDraft,
+  getEventCreationSession,
+  saveEventCreationSession,
+} from "../utils/eventCreationDraftSession";
 import {
   parseCapacityInput,
   resolveActiveEventCheckFailureMessage,
@@ -86,7 +95,7 @@ export function CreateEventScreen({ navigation }: Props) {
     [user?.privateProfile.destinationCity, user?.privateProfile.destinationCountryCode, user?.publicProfile.currentCity],
   );
 
-  const { draft, patchDraft, setStartsAt, isDirty } = useEventCreationDraft(initialDraft);
+  const { draft, patchDraft, setStartsAt, resetDraft, isDirty } = useEventCreationDraft(initialDraft);
   const [currentStep, setCurrentStep] = useState<EventCreationStep>(1);
   const [fieldErrors, setFieldErrors] = useState<EventCreationFieldErrors>({});
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
@@ -99,6 +108,8 @@ export function CreateEventScreen({ navigation }: Props) {
   const allowNavigationRef = useRef(false);
   const hasEnteredWizardRef = useRef(false);
   const isExitAlertVisibleRef = useRef(false);
+  const resumePromptHandledRef = useRef(false);
+  const sessionResolutionRef = useRef<"pending" | "restored" | "discarded" | "none">("none");
 
   const isOrganizerApproved = user?.organizerStatus === "approved";
 
@@ -114,7 +125,14 @@ export function CreateEventScreen({ navigation }: Props) {
   );
 
   const completeExit = useCallback(
-    (action?: NavigationAction) => {
+    (action?: NavigationAction, options?: { saveSession?: boolean }) => {
+      const shouldSaveSession = options?.saveSession ?? isDirty;
+      if (shouldSaveSession) {
+        saveEventCreationSession(draft, currentStep);
+      } else {
+        clearEventCreationSession();
+      }
+
       if (action) {
         allowNavigationRef.current = true;
         navigation.dispatch(action);
@@ -124,8 +142,28 @@ export function CreateEventScreen({ navigation }: Props) {
       allowNavigationRef.current = true;
       navigation.goBack();
     },
-    [navigation],
+    [currentStep, draft, isDirty, navigation],
   );
+
+  const showSubmittingBlockAlert = useCallback(() => {
+    if (isExitAlertVisibleRef.current) {
+      return;
+    }
+
+    isExitAlertVisibleRef.current = true;
+    Alert.alert(
+      EVENT_CREATION_SUBMITTING_ALERT.title,
+      EVENT_CREATION_SUBMITTING_ALERT.message,
+      [
+        {
+          text: EVENT_CREATION_SUBMITTING_ALERT.dismissLabel,
+          onPress: () => {
+            isExitAlertVisibleRef.current = false;
+          },
+        },
+      ],
+    );
+  }, []);
 
   const requestExit = useCallback(
     (action?: NavigationAction) => {
@@ -136,6 +174,7 @@ export function CreateEventScreen({ navigation }: Props) {
       }
 
       if (decision === "block") {
+        showSubmittingBlockAlert();
         return;
       }
 
@@ -157,15 +196,68 @@ export function CreateEventScreen({ navigation }: Props) {
           style: "destructive",
           onPress: () => {
             isExitAlertVisibleRef.current = false;
-            completeExit(action);
+            completeExit(action, { saveSession: true });
           },
         },
       ]);
     },
-    [completeExit, getExitDecision],
+    [completeExit, getExitDecision, showSubmittingBlockAlert],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      allowNavigationRef.current = false;
+      isExitAlertVisibleRef.current = false;
+
+      const session = getEventCreationSession();
+      if (session && !resumePromptHandledRef.current) {
+        resumePromptHandledRef.current = true;
+        sessionResolutionRef.current = "pending";
+        Alert.alert(EVENT_CREATION_RESUME_ALERT.title, EVENT_CREATION_RESUME_ALERT.message, [
+          {
+            text: EVENT_CREATION_RESUME_ALERT.discardLabel,
+            style: "destructive",
+            onPress: () => {
+              clearEventCreationSession();
+              resetDraft(initialDraft);
+              setCurrentStep(1);
+              setFieldErrors({});
+              setSubmitError(null);
+              hasEnteredWizardRef.current = false;
+              sessionResolutionRef.current = "discarded";
+            },
+          },
+          {
+            text: EVENT_CREATION_RESUME_ALERT.continueLabel,
+            onPress: () => {
+              resetDraft(deserializeEventCreationDraft(session.draft));
+              setCurrentStep(session.step);
+              setFieldErrors({});
+              setSubmitError(null);
+              hasEnteredWizardRef.current = true;
+              sessionResolutionRef.current = "restored";
+            },
+          },
+        ]);
+      } else if (!session) {
+        sessionResolutionRef.current = "none";
+      }
+
+      return () => {
+        if (allowNavigationRef.current) {
+          hasEnteredWizardRef.current = false;
+          resumePromptHandledRef.current = false;
+          sessionResolutionRef.current = "none";
+        }
+      };
+    }, [initialDraft, resetDraft]),
   );
 
   useEffect(() => {
+    if (sessionResolutionRef.current === "pending") {
+      return;
+    }
+
     if (
       isOrganizerApproved &&
       activeEventCheck.status === "ready" &&
@@ -189,6 +281,7 @@ export function CreateEventScreen({ navigation }: Props) {
       event.preventDefault();
 
       if (decision === "block") {
+        showSubmittingBlockAlert();
         return;
       }
 
@@ -196,7 +289,7 @@ export function CreateEventScreen({ navigation }: Props) {
     });
 
     return unsubscribe;
-  }, [getExitDecision, navigation, requestExit]);
+  }, [getExitDecision, navigation, requestExit, showSubmittingBlockAlert]);
 
   const organizerAge = useMemo(
     () => (user?.privateProfile.birthDate ? calculateAgeFromBirthDate(user.privateProfile.birthDate) : null),
@@ -348,6 +441,7 @@ export function CreateEventScreen({ navigation }: Props) {
         ...(coverImageUrl ? { coverImageUrl } : {}),
       });
 
+      clearEventCreationSession();
       allowNavigationRef.current = true;
 
       Alert.alert("Başarılı", "Etkinliğin incelenmek üzere gönderildi.", [

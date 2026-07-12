@@ -68,6 +68,8 @@ function WheelColumn({ items, selectedIndex, onSelect }: WheelColumnProps) {
 
 const daysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
 
+import { buildHourValues, buildMinuteValues } from "../utils/eventDateTimePickerConstraints";
+
 const clampParts = (
   year: number,
   month: number,
@@ -154,14 +156,29 @@ export function EventDateTimePicker({ value, onChange, minimumDate }: Props) {
   }, [parts.year, parts.month, minDate]);
 
   const days = useMemo(() => dayValues.map(String), [dayValues]);
-  const hours = useMemo(() => Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0")), []);
-  const minutes = useMemo(() => Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0")), []);
+
+  const hourValues = useMemo(
+    () => buildHourValues(parts.year, parts.month, parts.day, minDate),
+    [parts.year, parts.month, parts.day, minDate],
+  );
+
+  const hours = useMemo(() => hourValues.map((hour) => String(hour).padStart(2, "0")), [hourValues]);
+
+  const minuteValues = useMemo(
+    () => buildMinuteValues(parts.year, parts.month, parts.day, parts.hour, minDate),
+    [parts.year, parts.month, parts.day, parts.hour, minDate],
+  );
+
+  const minutes = useMemo(
+    () => minuteValues.map((minute) => String(minute).padStart(2, "0")),
+    [minuteValues],
+  );
 
   const yearIndex = Math.max(0, years.indexOf(String(parts.year)));
   const monthIndex = Math.max(0, monthValues.indexOf(parts.month));
   const dayIndex = Math.max(0, dayValues.indexOf(parts.day));
-  const hourIndex = parts.hour;
-  const minuteIndex = parts.minute;
+  const hourIndex = Math.max(0, hourValues.indexOf(parts.hour));
+  const minuteIndex = Math.max(0, minuteValues.indexOf(parts.minute));
 
   const emitChange = (year: number, month: number, day: number, hour: number, minute: number) => {
     const clamped = clampParts(year, month, day, hour, minute, minDate);
@@ -189,12 +206,16 @@ export function EventDateTimePicker({ value, onChange, minimumDate }: Props) {
         />
         <WheelColumn
           items={hours}
-          onSelect={(index) => emitChange(parts.year, parts.month, parts.day, index, parts.minute)}
+          onSelect={(index) =>
+            emitChange(parts.year, parts.month, parts.day, hourValues[index] ?? parts.hour, parts.minute)
+          }
           selectedIndex={hourIndex}
         />
         <WheelColumn
           items={minutes}
-          onSelect={(index) => emitChange(parts.year, parts.month, parts.day, parts.hour, index)}
+          onSelect={(index) =>
+            emitChange(parts.year, parts.month, parts.day, parts.hour, minuteValues[index] ?? parts.minute)
+          }
           selectedIndex={minuteIndex}
         />
       </View>
