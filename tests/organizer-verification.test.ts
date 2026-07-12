@@ -977,3 +977,35 @@ test("logVerificationUploadDiagnostic emits grep-friendly Metro line with requir
     console.log = originalLog;
   }
 });
+
+test("finalize checklist merge preserves application id for subsequent submit", () => {
+  const previousApplicationId = "app-123";
+  const previous = {
+    application: {
+      id: previousApplicationId,
+      type: "INDIVIDUAL" as const,
+      reviewStatus: "DRAFT" as const,
+      reason: "reason text long enough",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    documentChecklist: [],
+  };
+
+  const next = {
+    ...previous,
+    documentChecklist: [
+      {
+        documentType: "IDENTITY_FRONT" as const,
+        required: true,
+        latestDocumentId: "doc-1",
+        latestStatus: "UPLOADED" as const,
+        latestVersion: 1,
+        satisfied: false,
+      },
+    ],
+  };
+
+  assert.equal(next.application.id, previousApplicationId);
+  assert.equal(next.documentChecklist[0]?.latestStatus, "UPLOADED");
+});
