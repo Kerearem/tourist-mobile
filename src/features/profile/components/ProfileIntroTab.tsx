@@ -15,6 +15,7 @@ import { theme } from "../../../constants/theme";
 import { getMediaGridTileMetrics } from "../../../services/media/mediaContentContracts";
 import { getOrganizerReels } from "../services/reels.service";
 import type { ReelItem } from "../types/reels";
+import { ProfileContentPinBadge } from "./ProfileContentPinBadge";
 import { ProfileReelsFeedViewer } from "./ProfileReelsFeedViewer";
 
 type ProfileIntroTabProps = {
@@ -168,6 +169,7 @@ export function ProfileIntroTab({
                   </AppText>
                 </View>
               ) : null}
+              <ProfileContentPinBadge visible={Boolean(reel.isPinned)} />
             </Pressable>
           );
         })}
@@ -182,6 +184,7 @@ export function ProfileIntroTab({
         onReelDeleted={(reelId) => {
           setReels((current) => current.filter((item) => item.id !== reelId));
         }}
+        onReelsChange={setReels}
         organizerDisplayName={organizerDisplayName}
         reels={reels}
         visible={isFeedOpen}

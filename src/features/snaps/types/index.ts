@@ -6,6 +6,8 @@ export type SnapItem = {
   caption?: string;
   locationText?: string;
   createdAt: string;
+  isPinned?: boolean;
+  pinnedAt?: string;
   author?: {
     id: string;
     username: string;

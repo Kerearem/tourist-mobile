@@ -23,6 +23,7 @@ import { useModalCommentKeyboardLayout } from "../../../hooks/useModalCommentKey
 import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
 import { buildMomentSharePayload } from "../../share/utils/buildSharePayloads";
 import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
+import { useOwnContentManagement } from "../../profile/hooks/useOwnContentManagement";
 import { createContentComplaint, type ComplaintReason } from "../../profile/services/complaints.service";
 import {
   addMomentComment,
@@ -39,6 +40,7 @@ type EventMomentFeedViewerProps = {
   moments: EventAlbumMoment[];
   initialIndex: number;
   onClose: () => void;
+  onMomentsChange?: (moments: EventAlbumMoment[]) => void;
 };
 
 type MomentEngagement = {
@@ -169,6 +171,7 @@ export function EventMomentFeedViewer({
   moments,
   initialIndex,
   onClose,
+  onMomentsChange,
 }: EventMomentFeedViewerProps) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -192,13 +195,36 @@ export function EventMomentFeedViewer({
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [reportMoment, setReportMoment] = useState<EventAlbumMoment | null>(null);
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
+  const [localMoments, setLocalMoments] = useState(moments);
+
+  const { openManagement, managementUi } = useOwnContentManagement({
+    context: "event-album",
+    items: localMoments,
+    setItems: setLocalMoments,
+    onAllDeleted: onClose,
+  });
+
+  const activeMoment = useMemo(
+    () => localMoments.find((moment) => moment.id === activeMomentId) ?? null,
+    [activeMomentId, localMoments],
+  );
+
+  const isOwnActiveMoment = Boolean(activeMoment && user?.id === activeMoment.author.id);
 
   const pageHeight = windowHeight;
 
   const clampedInitialIndex = useMemo(
-    () => Math.min(Math.max(initialIndex, 0), Math.max(moments.length - 1, 0)),
-    [initialIndex, moments.length],
+    () => Math.min(Math.max(initialIndex, 0), Math.max(localMoments.length - 1, 0)),
+    [initialIndex, localMoments.length],
   );
+
+  useEffect(() => {
+    setLocalMoments(moments);
+  }, [moments]);
+
+  useEffect(() => {
+    onMomentsChange?.(localMoments);
+  }, [localMoments, onMomentsChange]);
 
   useEffect(() => {
     if (!visible) {
@@ -210,7 +236,7 @@ export function EventMomentFeedViewer({
       return;
     }
 
-    const moment = moments[clampedInitialIndex];
+    const moment = localMoments[clampedInitialIndex];
     if (moment) {
       setActiveMomentId(moment.id);
     }
@@ -367,7 +393,7 @@ export function EventMomentFeedViewer({
     openShare(buildMomentSharePayload(moment));
   };
 
-  if (!visible || moments.length === 0) {
+  if (!visible || localMoments.length === 0) {
     return null;
   }
 
@@ -376,7 +402,7 @@ export function EventMomentFeedViewer({
       <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <View style={styles.viewer}>
         <FlatList
-          data={moments}
+          data={localMoments}
           decelerationRate="fast"
           disableIntervalMomentum
           getItemLayout={(_, index) => ({
@@ -431,6 +457,23 @@ export function EventMomentFeedViewer({
         >
           <Ionicons color="#FFFFFF" name="chevron-back" size={30} />
         </Pressable>
+        {isOwnActiveMoment && activeMoment ? (
+          <Pressable
+            accessibilityLabel="Gönderi seçenekleri"
+            onPress={() =>
+              openManagement({
+                id: activeMoment.id,
+                type: "MOMENT",
+                caption: activeMoment.caption,
+                isPinned: activeMoment.isPinned,
+                eventId,
+              })
+            }
+            style={[styles.manageButton, { top: Math.max(insets.top, theme.spacing.md) }]}
+          >
+            <Ionicons color="#FFFFFF" name="ellipsis-horizontal" size={28} />
+          </Pressable>
+        ) : null}
       </View>
 
       <Modal
@@ -523,6 +566,7 @@ export function EventMomentFeedViewer({
         visible={reportMoment != null}
       />
       {contentShareSheet}
+      {managementUi}
     </>
   );
 }
@@ -538,6 +582,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     left: theme.spacing.sm,
     position: "absolute",
+    width: 44,
+    zIndex: 10,
+  },
+  manageButton: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    position: "absolute",
+    right: theme.spacing.sm,
     width: 44,
     zIndex: 10,
   },

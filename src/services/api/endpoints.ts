@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
     me: "/snaps/me",
     byUser: "/users/:userId/snaps",
     delete: "/snaps/:snapId",
+    updateCaption: "/snaps/:snapId",
     like: "/snaps/:snapId/like",
     comments: "/snaps/:snapId/comments",
     comment: "/snaps/:snapId/comments/:commentId",
@@ -38,6 +39,7 @@ export const API_ENDPOINTS = {
     album: "/events/:eventId/album",
     rating: "/events/:eventId/rating",
     moments: "/events/:eventId/moments",
+    momentDetail: "/events/:eventId/moments/:momentId",
     momentLike: "/events/:eventId/moments/:momentId/like",
     momentComments: "/events/:eventId/moments/:momentId/comments",
     toggleAttendance: "/events/:eventId/attendance/toggle",
@@ -74,6 +76,8 @@ export const API_ENDPOINTS = {
   profile: {
     updateAvatar: "/profile/avatar",
     deleteAccount: "/profile/delete-account",
+    contentPins: "/profile/content-pins",
+    contentPin: "/profile/content-pins/:targetType/:targetId",
   },
   users: {
     search: "/users/search",
@@ -109,6 +113,7 @@ export const API_ENDPOINTS = {
     myEvents: "/organizer/events",
     reels: "/organizer/reels",
     reel: "/organizer/reels/:reelId",
+    updateReelCaption: "/organizer/reels/:reelId",
     applications: {
       draft: "/organizer/applications/draft",
       current: "/organizer/applications/current",

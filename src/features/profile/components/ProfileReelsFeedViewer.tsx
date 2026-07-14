@@ -28,7 +28,7 @@ import {
 } from "../services/reelEngagement.service";
 import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
 import { buildReelSharePayload } from "../../share/utils/buildSharePayloads";
-import { deleteOrganizerReel } from "../services/reels.service";
+import { useOwnContentManagement } from "../hooks/useOwnContentManagement";
 import {
   pressReelEventNavigationTarget,
   shouldShowReelEventTag,
@@ -46,6 +46,7 @@ type ProfileReelsFeedViewerProps = {
   onEventDetailPress?: (eventId: string) => void;
   onEventAlbumPress?: (eventId: string) => void;
   onReelDeleted?: (reelId: string) => void;
+  onReelsChange?: (reels: ReelItem[]) => void;
 };
 
 type ReelEngagement = {
@@ -79,7 +80,6 @@ type ReelFeedPageProps = {
   onOpenComments: () => void;
   onEventDetailPress?: (eventId: string) => void;
   onEventAlbumPress?: (eventId: string) => void;
-  onDelete: () => void;
   onShare: () => void;
   onReport?: () => void;
   showReport?: boolean;
@@ -100,7 +100,6 @@ function ReelFeedPage({
   onOpenComments,
   onEventDetailPress,
   onEventAlbumPress,
-  onDelete,
   onShare,
   onReport,
   showReport = false,
@@ -174,14 +173,6 @@ function ReelFeedPage({
           </AppText>
         </Pressable>
 
-        {isOwnProfile ? (
-          <Pressable onPress={onDelete} style={styles.actionButton}>
-            <Ionicons color="#FFFFFF" name="trash-outline" size={30} style={styles.actionIconShadow} />
-            <AppText style={styles.actionLabel} variant="caption">
-              Sil
-            </AppText>
-          </Pressable>
-        ) : null}
         <Pressable onPress={onShare} style={styles.actionButton}>
           <Ionicons color="#FFFFFF" name="share-social" size={32} style={styles.actionIconShadow} />
           <AppText style={styles.actionLabel} variant="caption">
@@ -211,6 +202,7 @@ export function ProfileReelsFeedViewer({
   onEventDetailPress,
   onEventAlbumPress,
   onReelDeleted,
+  onReelsChange,
 }: ProfileReelsFeedViewerProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -234,6 +226,19 @@ export function ProfileReelsFeedViewer({
   const [reportReel, setReportReel] = useState<ReelItem | null>(null);
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
 
+  const { openManagement, managementUi } = useOwnContentManagement({
+    context: "profile",
+    items: localReels,
+    setItems: setLocalReels,
+    onAllDeleted: onClose,
+    onItemDeleted: onReelDeleted,
+  });
+
+  const activeReel = useMemo(
+    () => localReels.find((reel) => reel.id === activeReelId) ?? null,
+    [activeReelId, localReels],
+  );
+
   const clampedInitialIndex = useMemo(
     () => Math.min(Math.max(initialIndex, 0), Math.max(localReels.length - 1, 0)),
     [initialIndex, localReels.length],
@@ -252,6 +257,10 @@ export function ProfileReelsFeedViewer({
       }, {}),
     );
   }, [reels]);
+
+  useEffect(() => {
+    onReelsChange?.(localReels);
+  }, [localReels, onReelsChange]);
 
   useEffect(() => {
     if (!visible) {
@@ -391,34 +400,17 @@ export function ProfileReelsFeedViewer({
     }
   };
 
-  const confirmDelete = (reel: ReelItem) => {
-    Alert.alert("Tanıtımı sil", "Bu tanıtım içeriğini silmek istediğine emin misin?", [
-      { text: "İptal", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            try {
-              await deleteOrganizerReel(reel.id);
-              setLocalReels((current) => {
-                const next = current.filter((item) => item.id !== reel.id);
-                if (next.length === 0) {
-                  onClose();
-                }
-                return next;
-              });
-              onReelDeleted?.(reel.id);
-            } catch (error) {
-              Alert.alert(
-                "Silinemedi",
-                error instanceof Error ? error.message : "Tanıtım içeriği silinemedi.",
-              );
-            }
-          })();
-        },
-      },
-    ]);
+  const openActiveReelManagement = () => {
+    if (!activeReel) {
+      return;
+    }
+
+    openManagement({
+      id: activeReel.id,
+      type: "REEL",
+      caption: activeReel.caption,
+      isPinned: activeReel.isPinned,
+    });
   };
 
   const submitReelReport = async (reason: ComplaintReason) => {
@@ -488,7 +480,6 @@ export function ProfileReelsFeedViewer({
                   isOwnProfile={isOwnProfile}
                   isPageActive={activeReelId === item.id}
                   likeCount={engagement.likeCount}
-                  onDelete={() => confirmDelete(item)}
                   onEventAlbumPress={onEventAlbumPress}
                   onEventDetailPress={onEventDetailPress}
                   onOpenComments={() => void openComments(item)}
@@ -514,6 +505,15 @@ export function ProfileReelsFeedViewer({
           >
             <Ionicons color="#FFFFFF" name="chevron-back" size={30} />
           </Pressable>
+          {isOwnProfile && activeReel ? (
+            <Pressable
+              accessibilityLabel="Gönderi seçenekleri"
+              onPress={openActiveReelManagement}
+              style={[styles.manageButton, { top: Math.max(insets.top, theme.spacing.md) }]}
+            >
+              <Ionicons color="#FFFFFF" name="ellipsis-horizontal" size={28} />
+            </Pressable>
+          ) : null}
         </View>
 
         <Modal
@@ -606,6 +606,7 @@ export function ProfileReelsFeedViewer({
         visible={reportReel != null}
       />
       {contentShareSheet}
+      {managementUi}
     </>
   );
 }
@@ -621,6 +622,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     left: theme.spacing.sm,
     position: "absolute",
+    width: 44,
+    zIndex: 10,
+  },
+  manageButton: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    position: "absolute",
+    right: theme.spacing.sm,
     width: 44,
     zIndex: 10,
   },

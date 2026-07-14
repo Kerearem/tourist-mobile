@@ -5,12 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { cloudinaryVideoPoster } from "../../../components/media/MediaCarousel";
 import { getMediaGridTileMetrics } from "../../../services/media/mediaContentContracts";
 import { theme } from "../../../constants/theme";
+import { ProfileContentPinBadge } from "../../profile/components/ProfileContentPinBadge";
 import type { EventAlbumMoment } from "../types";
 import { EventMomentFeedViewer } from "./EventMomentFeedViewer";
 
 type EventMomentsGridProps = {
   eventId: string;
   moments: EventAlbumMoment[];
+  onMomentsChange?: (moments: EventAlbumMoment[]) => void;
   /** When omitted, grid spans full screen width (ProfileSnapsGrid parity). */
   containerWidth?: number;
 };
@@ -26,7 +28,12 @@ const momentThumbnailUri = (moment: EventAlbumMoment) => {
   return first.url;
 };
 
-export function EventMomentsGrid({ containerWidth, eventId, moments }: EventMomentsGridProps) {
+export function EventMomentsGrid({
+  containerWidth,
+  eventId,
+  moments,
+  onMomentsChange,
+}: EventMomentsGridProps) {
   const { width: windowWidth } = useWindowDimensions();
   const gridWidth = containerWidth ?? windowWidth;
   const [feedInitialIndex, setFeedInitialIndex] = useState(0);
@@ -62,6 +69,7 @@ export function EventMomentsGrid({ containerWidth, eventId, moments }: EventMome
                   <Ionicons color="#FFFFFF" name="copy-outline" size={16} />
                 </View>
               ) : null}
+              <ProfileContentPinBadge visible={Boolean(moment.isPinned)} />
             </Pressable>
           );
         })}
@@ -72,6 +80,7 @@ export function EventMomentsGrid({ containerWidth, eventId, moments }: EventMome
         initialIndex={feedInitialIndex}
         moments={moments}
         onClose={() => setIsFeedOpen(false)}
+        onMomentsChange={onMomentsChange}
         visible={isFeedOpen}
       />
     </>

@@ -20,6 +20,8 @@ export type ReelItem = {
   eventId: string | null;
   event: ReelEventSummary | null;
   createdAt: string;
+  isPinned?: boolean;
+  pinnedAt?: string;
   media: ReelMediaItem[];
   stats: {
     likeCount: number;

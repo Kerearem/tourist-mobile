@@ -8,6 +8,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import { getMySnaps, getSnapsByUser } from "../services/snaps.service";
 import type { SnapItem } from "../types";
 import { getSnapGridTileMetrics } from "../utils/snapGridMetrics";
+import { ProfileContentPinBadge } from "../../profile/components/ProfileContentPinBadge";
 import { ProfileSnapFeedViewer } from "./ProfileSnapFeedViewer";
 
 type ProfileSnapsGridProps = {
@@ -131,6 +132,7 @@ export function ProfileSnapsGrid({ userId, refreshToken = 0 }: ProfileSnapsGridP
             <View style={styles.tileFrontWrap}>
               <Image resizeMode="cover" source={{ uri: snap.frontMediaUrl }} style={styles.tileFront} />
             </View>
+            <ProfileContentPinBadge visible={Boolean(snap.isPinned)} />
           </Pressable>
         ))}
       </View>
@@ -138,7 +140,9 @@ export function ProfileSnapsGrid({ userId, refreshToken = 0 }: ProfileSnapsGridP
       <ProfileSnapFeedViewer
         authorFallback={authorFallback}
         initialIndex={feedInitialIndex}
+        isOwnProfile={isOwnProfile}
         onClose={() => setIsFeedOpen(false)}
+        onSnapsChange={setSnaps}
         snaps={snaps}
         visible={isFeedOpen}
       />

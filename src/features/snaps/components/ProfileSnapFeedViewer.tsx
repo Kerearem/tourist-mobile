@@ -25,6 +25,7 @@ import { ApiRequestError } from "../../../services/api/client";
 import { useContentShareSheet } from "../../share/hooks/useContentShareSheet";
 import { buildSnapSharePayload } from "../../share/utils/buildSharePayloads";
 import { ComplaintReasonSheet } from "../../profile/components/ComplaintReasonSheet";
+import { useOwnContentManagement } from "../../profile/hooks/useOwnContentManagement";
 import { createContentComplaint, type ComplaintReason } from "../../profile/services/complaints.service";
 import {
   addSnapComment,
@@ -44,6 +45,8 @@ type ProfileSnapFeedViewerProps = {
     displayName: string;
     username: string;
   };
+  isOwnProfile?: boolean;
+  onSnapsChange?: (snaps: SnapItem[]) => void;
 };
 
 type SnapEngagement = {
@@ -182,6 +185,8 @@ export function ProfileSnapFeedViewer({
   initialIndex,
   onClose,
   authorFallback,
+  isOwnProfile = false,
+  onSnapsChange,
 }: ProfileSnapFeedViewerProps) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -205,13 +210,34 @@ export function ProfileSnapFeedViewer({
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [reportSnap, setReportSnap] = useState<SnapItem | null>(null);
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
+  const [localSnaps, setLocalSnaps] = useState(snaps);
+
+  const { openManagement, managementUi } = useOwnContentManagement({
+    context: "profile",
+    items: localSnaps,
+    setItems: setLocalSnaps,
+    onAllDeleted: onClose,
+  });
+
+  const activeSnap = useMemo(
+    () => localSnaps.find((snap) => snap.id === activeSnapId) ?? null,
+    [activeSnapId, localSnaps],
+  );
 
   const pageHeight = windowHeight;
 
   const clampedInitialIndex = useMemo(
-    () => Math.min(Math.max(initialIndex, 0), Math.max(snaps.length - 1, 0)),
-    [initialIndex, snaps.length],
+    () => Math.min(Math.max(initialIndex, 0), Math.max(localSnaps.length - 1, 0)),
+    [initialIndex, localSnaps.length],
   );
+
+  useEffect(() => {
+    setLocalSnaps(snaps);
+  }, [snaps]);
+
+  useEffect(() => {
+    onSnapsChange?.(localSnaps);
+  }, [localSnaps, onSnapsChange]);
 
   useEffect(() => {
     if (!visible) {
@@ -223,7 +249,7 @@ export function ProfileSnapFeedViewer({
       return;
     }
 
-    const snap = snaps[clampedInitialIndex];
+    const snap = localSnaps[clampedInitialIndex];
     if (snap) {
       setActiveSnapId(snap.id);
     }
@@ -393,7 +419,7 @@ export function ProfileSnapFeedViewer({
     openShare(buildSnapSharePayload(snap, author));
   };
 
-  if (!visible || snaps.length === 0) {
+  if (!visible || localSnaps.length === 0) {
     return null;
   }
 
@@ -402,7 +428,7 @@ export function ProfileSnapFeedViewer({
       <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <View style={styles.viewer}>
         <FlatList
-          data={snaps}
+          data={localSnaps}
           decelerationRate="fast"
           disableIntervalMomentum
           getItemLayout={(_, index) => ({
@@ -457,6 +483,22 @@ export function ProfileSnapFeedViewer({
         >
           <Ionicons color="#FFFFFF" name="chevron-back" size={30} />
         </Pressable>
+        {isOwnProfile && activeSnap ? (
+          <Pressable
+            accessibilityLabel="Gönderi seçenekleri"
+            onPress={() =>
+              openManagement({
+                id: activeSnap.id,
+                type: "SNAP",
+                caption: activeSnap.caption ?? null,
+                isPinned: activeSnap.isPinned,
+              })
+            }
+            style={[styles.manageButton, { top: Math.max(insets.top, theme.spacing.md) }]}
+          >
+            <Ionicons color="#FFFFFF" name="ellipsis-horizontal" size={28} />
+          </Pressable>
+        ) : null}
       </View>
 
       <Modal
@@ -549,6 +591,7 @@ export function ProfileSnapFeedViewer({
         visible={reportSnap != null}
       />
       {contentShareSheet}
+      {managementUi}
     </>
   );
 }
@@ -564,6 +607,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     left: theme.spacing.sm,
     position: "absolute",
+    width: 44,
+    zIndex: 10,
+  },
+  manageButton: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    position: "absolute",
+    right: theme.spacing.sm,
     width: 44,
     zIndex: 10,
   },

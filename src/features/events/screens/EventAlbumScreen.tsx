@@ -146,7 +146,13 @@ export function EventAlbumScreen({ navigation, route }: Props) {
           </View>
 
           {album.moments.length > 0 ? (
-            <EventMomentsGrid eventId={route.params.eventId} moments={album.moments} />
+            <EventMomentsGrid
+              eventId={route.params.eventId}
+              moments={album.moments}
+              onMomentsChange={(nextMoments) =>
+                setAlbum((current) => (current ? { ...current, moments: nextMoments } : current))
+              }
+            />
           ) : (
             <View style={styles.momentsPlaceholder}>
               <Ionicons color={theme.colors.muted} name="images-outline" size={36} />
