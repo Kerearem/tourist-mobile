@@ -460,6 +460,7 @@ export function EventMomentFeedViewer({
         {isOwnActiveMoment && activeMoment ? (
           <Pressable
             accessibilityLabel="Gönderi seçenekleri"
+            hitSlop={12}
             onPress={() =>
               openManagement({
                 id: activeMoment.id,
@@ -557,6 +558,8 @@ export function EventMomentFeedViewer({
           </View>
         </View>
       </Modal>
+
+      {managementUi}
       </Modal>
 
       <ComplaintReasonSheet
@@ -566,7 +569,6 @@ export function EventMomentFeedViewer({
         visible={reportMoment != null}
       />
       {contentShareSheet}
-      {managementUi}
     </>
   );
 }
@@ -587,6 +589,7 @@ const styles = StyleSheet.create({
   },
   manageButton: {
     alignItems: "center",
+    elevation: 10,
     height: 44,
     justifyContent: "center",
     position: "absolute",

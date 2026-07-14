@@ -486,6 +486,7 @@ export function ProfileSnapFeedViewer({
         {isOwnProfile && activeSnap ? (
           <Pressable
             accessibilityLabel="Gönderi seçenekleri"
+            hitSlop={12}
             onPress={() =>
               openManagement({
                 id: activeSnap.id,
@@ -582,6 +583,8 @@ export function ProfileSnapFeedViewer({
           </View>
         </View>
       </Modal>
+
+      {managementUi}
       </Modal>
 
       <ComplaintReasonSheet
@@ -591,7 +594,6 @@ export function ProfileSnapFeedViewer({
         visible={reportSnap != null}
       />
       {contentShareSheet}
-      {managementUi}
     </>
   );
 }
@@ -612,6 +614,7 @@ const styles = StyleSheet.create({
   },
   manageButton: {
     alignItems: "center",
+    elevation: 10,
     height: 44,
     justifyContent: "center",
     position: "absolute",

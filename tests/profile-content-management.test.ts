@@ -88,6 +88,54 @@ describe("own profile management UI source guards", () => {
   });
 });
 
+describe("management sheet mounts inside the viewer Modal tree", () => {
+  const viewerSources = [
+    {
+      name: "ProfileReelsFeedViewer",
+      path: "../src/features/profile/components/ProfileReelsFeedViewer.tsx",
+    },
+    {
+      name: "ProfileSnapFeedViewer",
+      path: "../src/features/snaps/components/ProfileSnapFeedViewer.tsx",
+    },
+    {
+      name: "EventMomentFeedViewer",
+      path: "../src/features/events/components/EventMomentFeedViewer.tsx",
+    },
+  ];
+
+  for (const viewer of viewerSources) {
+    it(`${viewer.name} renders managementUi before the main Modal closes`, () => {
+      const source = readFileSync(join(__dirname, viewer.path), "utf8");
+
+      const managementIndex = source.indexOf("{managementUi}");
+      assert.ok(managementIndex >= 0, "managementUi must be rendered");
+
+      // The last </Modal> belongs to the main viewer Modal; managementUi must sit before it.
+      const lastModalCloseIndex = source.lastIndexOf("</Modal>");
+      assert.ok(
+        managementIndex < lastModalCloseIndex,
+        "managementUi must be inside the main viewer Modal tree",
+      );
+    });
+
+    it(`${viewer.name} manage button has hitSlop`, () => {
+      const source = readFileSync(join(__dirname, viewer.path), "utf8");
+
+      assert.match(
+        source,
+        /accessibilityLabel="Gönderi seçenekleri"\s+hitSlop=\{12\}/,
+      );
+    });
+
+    it(`${viewer.name} manage button style includes elevation`, () => {
+      const source = readFileSync(join(__dirname, viewer.path), "utf8");
+
+      assert.match(source, /manageButton: \{[\s\S]*?elevation: 10[\s\S]*?zIndex: 10/);
+    });
+  }
+});
+
 describe("Explore more menu remains report-only", () => {
   it("does not add owner management actions to ExplorePostMoreSheet", () => {
     const source = readFileSync(

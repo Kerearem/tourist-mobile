@@ -508,6 +508,7 @@ export function ProfileReelsFeedViewer({
           {isOwnProfile && activeReel ? (
             <Pressable
               accessibilityLabel="Gönderi seçenekleri"
+              hitSlop={12}
               onPress={openActiveReelManagement}
               style={[styles.manageButton, { top: Math.max(insets.top, theme.spacing.md) }]}
             >
@@ -597,6 +598,8 @@ export function ProfileReelsFeedViewer({
             </View>
           </View>
         </Modal>
+
+        {managementUi}
       </Modal>
 
       <ComplaintReasonSheet
@@ -606,7 +609,6 @@ export function ProfileReelsFeedViewer({
         visible={reportReel != null}
       />
       {contentShareSheet}
-      {managementUi}
     </>
   );
 }
@@ -627,6 +629,7 @@ const styles = StyleSheet.create({
   },
   manageButton: {
     alignItems: "center",
+    elevation: 10,
     height: 44,
     justifyContent: "center",
     position: "absolute",
