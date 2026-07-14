@@ -31,6 +31,7 @@ import {
   isConsecutiveSameSender,
   shouldShowIncomingDmAvatar,
 } from "../utils/messageReceipts";
+import { formatMessageDayLabel, shouldShowDaySeparator } from "../utils/messageDaySeparators";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageThreadScreen">;
 
@@ -61,20 +62,6 @@ const otherParticipant = (conversation: ConversationThread | null, viewerId: str
   }
 
   return conversation.participants.find((participant) => participant.id !== viewerId) ?? null;
-};
-
-const formatThreadTime = (messages: ConversationMessage[]) => {
-  const firstMessage = messages.find((message) => message.type !== "system") ?? messages[0];
-  if (!firstMessage) {
-    return "";
-  }
-
-  const date = new Date(firstMessage.createdAt);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 export function MessageThreadScreen({ route, navigation }: Props) {
@@ -247,7 +234,6 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   const isRequestPending = conversation?.metadata?.isRequestPending === "true";
   const participant = useMemo(() => otherParticipant(conversation, viewerId), [conversation, viewerId]);
   const initials = isSystemInbox ? "T" : (participant?.displayName || title).slice(0, 2).toUpperCase();
-  const timeLabel = useMemo(() => formatThreadTime(messages), [messages]);
 
   const hideRequestAndGoBack = () => {
     navigation.navigate(MessagesRoutes.MessageRequestsScreen, { hideThreadId: route.params.threadId });
@@ -418,28 +404,33 @@ export function MessageThreadScreen({ route, navigation }: Props) {
               renderItem={({ item, index }) => {
                 const previousMessage = index > 0 ? messages[index - 1] : null;
                 const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
+                const daySeparatorLabel = shouldShowDaySeparator(item, previousMessage)
+                  ? formatMessageDayLabel(item.createdAt)
+                  : "";
                 return (
-                  <MessageBubble
-                    isClusterContinuation={isConsecutiveSameSender(item, previousMessage)}
-                    isMine={item.sender.id === viewerId}
-                    message={item}
-                    showIncomingAvatar={shouldShowIncomingDmAvatar({
-                      message: item,
-                      nextMessage,
-                      viewerId,
-                    })}
-                  />
+                  <>
+                    {daySeparatorLabel ? (
+                      <View style={styles.daySeparatorPill}>
+                        <AppText style={styles.daySeparatorText} variant="caption">
+                          {daySeparatorLabel}
+                        </AppText>
+                      </View>
+                    ) : null}
+                    <MessageBubble
+                      isClusterContinuation={
+                        isConsecutiveSameSender(item, previousMessage) && !daySeparatorLabel
+                      }
+                      isMine={item.sender.id === viewerId}
+                      message={item}
+                      showIncomingAvatar={shouldShowIncomingDmAvatar({
+                        message: item,
+                        nextMessage,
+                        viewerId,
+                      })}
+                    />
+                  </>
                 );
               }}
-              ListHeaderComponent={
-                timeLabel ? (
-                  <View style={styles.timePill}>
-                    <AppText style={styles.timePillText} variant="caption">
-                      {timeLabel}
-                    </AppText>
-                  </View>
-                ) : null
-              }
               contentContainerStyle={styles.messagesList}
               showsVerticalScrollIndicator={false}
             />
@@ -544,15 +535,16 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.xxl,
   },
-  timePill: {
+  daySeparatorPill: {
     alignSelf: "center",
     backgroundColor: "#E5E7EB",
     borderRadius: 16,
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
-  timePillText: {
+  daySeparatorText: {
     color: theme.colors.textSecondary,
     fontWeight: "600",
   },

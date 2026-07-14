@@ -69,6 +69,8 @@ export function MessageBubble({
   const hasMedia = Boolean(message.mediaUrl);
   const hasText = Boolean(message.text?.trim());
   const receiptTick = isMine ? resolveMessageReceiptTickVisual(message.status) : null;
+  // Light footer only on the solid purple bubble; announcement/media/incoming use subtle gray.
+  const useLightFooter = isMine && !isAnnouncement;
 
   const bubbleStyles = [
     styles.bubble,
@@ -81,6 +83,24 @@ export function MessageBubble({
         ? styles.bubbleMine
         : styles.bubbleOther,
   ];
+
+  // WhatsApp-style footer inside the bubble, bottom-right: time + outgoing ticks.
+  const bubbleFooter =
+    timeLabel || receiptTick ? (
+      <View style={[styles.bubbleFooter, hasMedia && styles.bubbleFooterOnMedia]}>
+        {timeLabel ? (
+          <AppText
+            style={[styles.footerTime, useLightFooter ? styles.footerTimeLight : null]}
+            variant="caption"
+          >
+            {timeLabel}
+          </AppText>
+        ) : null}
+        {receiptTick ? (
+          <Ionicons color={receiptTick.color} name={receiptTick.icon} size={14} />
+        ) : null}
+      </View>
+    ) : null;
 
   const bubbleBody = (
     <View style={bubbleStyles}>
@@ -107,6 +127,7 @@ export function MessageBubble({
           {message.text}
         </AppText>
       ) : null}
+      {bubbleFooter}
     </View>
   );
 
@@ -116,20 +137,6 @@ export function MessageBubble({
       {bubbleBody}
     </Pressable>
   );
-
-  const dmMetaRow =
-    !isGroup && (timeLabel || receiptTick) ? (
-      <View style={[styles.dmMetaRow, isMine ? styles.dmMetaRowMine : styles.dmMetaRowOther]}>
-        {timeLabel ? (
-          <AppText style={styles.timeLabel} variant="caption">
-            {timeLabel}
-          </AppText>
-        ) : null}
-        {receiptTick ? (
-          <Ionicons color={receiptTick.color} name={receiptTick.icon} size={14} />
-        ) : null}
-      </View>
-    ) : null;
 
   if (showSenderMeta) {
     return (
@@ -149,11 +156,6 @@ export function MessageBubble({
             ) : null}
           </View>
           {bubbleContent}
-          {timeLabel ? (
-            <AppText style={styles.timeLabel} variant="caption">
-              {timeLabel}
-            </AppText>
-          ) : null}
         </View>
       </View>
     );
@@ -167,10 +169,7 @@ export function MessageBubble({
             <Avatar initials={initials} size={28} uri={message.sender.avatarUrl} />
           ) : null}
         </View>
-        <View style={styles.dmIncomingContent}>
-          {bubbleContent}
-          {dmMetaRow}
-        </View>
+        <View style={styles.dmIncomingContent}>{bubbleContent}</View>
       </View>
     );
   }
@@ -184,13 +183,6 @@ export function MessageBubble({
       ]}
     >
       {bubbleContent}
-      {isGroup && timeLabel ? (
-        <AppText style={[styles.timeLabel, isMine && styles.timeLabelMine]} variant="caption">
-          {timeLabel}
-        </AppText>
-      ) : (
-        dmMetaRow
-      )}
     </View>
   );
 }
@@ -223,18 +215,6 @@ const styles = StyleSheet.create({
   },
   dmIncomingContent: {
     maxWidth: "78%",
-  },
-  dmMetaRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 4,
-    marginTop: 2,
-  },
-  dmMetaRowMine: {
-    alignSelf: "flex-end",
-  },
-  dmMetaRowOther: {
-    alignSelf: "flex-start",
   },
   groupRow: {
     flexDirection: "row",
@@ -318,6 +298,24 @@ const styles = StyleSheet.create({
     borderColor: "#FCD34D",
     borderWidth: 1,
   },
+  bubbleFooter: {
+    alignItems: "center",
+    alignSelf: "flex-end",
+    flexDirection: "row",
+    gap: 3,
+    marginTop: 2,
+  },
+  bubbleFooterOnMedia: {
+    paddingBottom: 4,
+    paddingRight: theme.spacing.sm,
+  },
+  footerTime: {
+    color: theme.colors.textSecondary,
+    fontSize: 11,
+  },
+  footerTimeLight: {
+    color: "rgba(255, 255, 255, 0.75)",
+  },
   messageImage: {
     borderRadius: 16,
     height: 220,
@@ -329,13 +327,6 @@ const styles = StyleSheet.create({
   },
   textMine: {
     color: "#FFFFFF",
-  },
-  timeLabel: {
-    color: theme.colors.textSecondary,
-    marginTop: 0,
-  },
-  timeLabelMine: {
-    alignSelf: "flex-end",
   },
   systemWrap: {
     alignItems: "center",
