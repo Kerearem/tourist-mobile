@@ -1,15 +1,21 @@
 import React from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
 import type { ConversationMessage } from "../types";
+import { resolveMessageReceiptTickVisual } from "../utils/messageReceiptTicks";
 
 type MessageBubbleProps = {
   message: ConversationMessage;
   isMine: boolean;
   variant?: "dm" | "group";
+  /** DM: show sender avatar for this incoming bubble (cluster tail). */
+  showIncomingAvatar?: boolean;
+  /** Tighter vertical spacing when continuing the same sender cluster. */
+  isClusterContinuation?: boolean;
   onLongPress?: () => void;
   onImagePress?: (imageUrl: string) => void;
 };
@@ -30,7 +36,15 @@ const AnnouncementLabel = () => (
   </View>
 );
 
-export function MessageBubble({ message, isMine, variant = "dm", onLongPress, onImagePress }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isMine,
+  variant = "dm",
+  showIncomingAvatar = false,
+  isClusterContinuation = false,
+  onLongPress,
+  onImagePress,
+}: MessageBubbleProps) {
   if (message.type === "system") {
     return (
       <View style={styles.systemWrap}>
@@ -54,6 +68,7 @@ export function MessageBubble({ message, isMine, variant = "dm", onLongPress, on
   const isAnnouncement = Boolean(message.isAnnouncement);
   const hasMedia = Boolean(message.mediaUrl);
   const hasText = Boolean(message.text?.trim());
+  const receiptTick = isMine ? resolveMessageReceiptTickVisual(message.status) : null;
 
   const bubbleStyles = [
     styles.bubble,
@@ -102,9 +117,23 @@ export function MessageBubble({ message, isMine, variant = "dm", onLongPress, on
     </Pressable>
   );
 
+  const dmMetaRow =
+    !isGroup && (timeLabel || receiptTick) ? (
+      <View style={[styles.dmMetaRow, isMine ? styles.dmMetaRowMine : styles.dmMetaRowOther]}>
+        {timeLabel ? (
+          <AppText style={styles.timeLabel} variant="caption">
+            {timeLabel}
+          </AppText>
+        ) : null}
+        {receiptTick ? (
+          <Ionicons color={receiptTick.color} name={receiptTick.icon} size={14} />
+        ) : null}
+      </View>
+    ) : null;
+
   if (showSenderMeta) {
     return (
-      <View style={styles.groupRow}>
+      <View style={[styles.groupRow, isClusterContinuation && styles.clusterContinuation]}>
         <Avatar initials={initials} size={36} uri={message.sender.avatarUrl} />
         <View style={styles.groupContent}>
           <View style={styles.senderMeta}>
@@ -130,14 +159,38 @@ export function MessageBubble({ message, isMine, variant = "dm", onLongPress, on
     );
   }
 
+  if (!isGroup && !isMine) {
+    return (
+      <View style={[styles.dmIncomingRow, isClusterContinuation && styles.clusterContinuation]}>
+        <View style={styles.dmAvatarSlot}>
+          {showIncomingAvatar ? (
+            <Avatar initials={initials} size={28} uri={message.sender.avatarUrl} />
+          ) : null}
+        </View>
+        <View style={styles.dmIncomingContent}>
+          {bubbleContent}
+          {dmMetaRow}
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.row, isMine ? styles.rowMine : styles.rowOther]}>
+    <View
+      style={[
+        styles.row,
+        isMine ? styles.rowMine : styles.rowOther,
+        isClusterContinuation && styles.clusterContinuation,
+      ]}
+    >
       {bubbleContent}
       {isGroup && timeLabel ? (
         <AppText style={[styles.timeLabel, isMine && styles.timeLabelMine]} variant="caption">
           {timeLabel}
         </AppText>
-      ) : null}
+      ) : (
+        dmMetaRow
+      )}
     </View>
   );
 }
@@ -152,6 +205,36 @@ const styles = StyleSheet.create({
   },
   rowOther: {
     alignItems: "flex-start",
+  },
+  clusterContinuation: {
+    marginBottom: theme.spacing.xs,
+  },
+  dmIncomingRow: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.lg,
+    width: "100%",
+  },
+  dmAvatarSlot: {
+    height: 28,
+    justifyContent: "flex-end",
+    width: 28,
+  },
+  dmIncomingContent: {
+    maxWidth: "78%",
+  },
+  dmMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 2,
+  },
+  dmMetaRowMine: {
+    alignSelf: "flex-end",
+  },
+  dmMetaRowOther: {
+    alignSelf: "flex-start",
   },
   groupRow: {
     flexDirection: "row",
@@ -249,7 +332,7 @@ const styles = StyleSheet.create({
   },
   timeLabel: {
     color: theme.colors.textSecondary,
-    marginTop: 2,
+    marginTop: 0,
   },
   timeLabelMine: {
     alignSelf: "flex-end",

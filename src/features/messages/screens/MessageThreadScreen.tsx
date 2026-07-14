@@ -26,6 +26,11 @@ import { getConversationById, getMessages, markConversationRead, sendMessage } f
 import type { ConversationMessage, ConversationThread } from "../types";
 import { canOpenConversationInfo, resolveConversationInfoNavigation } from "../utils/conversationInfoNavigation";
 import { appendMessageDeduped } from "../utils/threadRealtime";
+import {
+  applyMessageReceiptUpdates,
+  isConsecutiveSameSender,
+  shouldShowIncomingDmAvatar,
+} from "../utils/messageReceipts";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageThreadScreen">;
 
@@ -180,6 +185,13 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       }
 
       setConversation(event.payload.conversation);
+    },
+    onMessageReceipts: (event) => {
+      if (event.payload.conversationId !== activeThreadIdRef.current) {
+        return;
+      }
+
+      setMessages((current) => applyMessageReceiptUpdates(current, event.payload.updates));
     },
     onReconnect: () => {
       void loadThread(activeThreadIdRef.current);
@@ -403,7 +415,22 @@ export function MessageThreadScreen({ route, navigation }: Props) {
                 isNearBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
               }}
               scrollEventThrottle={16}
-              renderItem={({ item }) => <MessageBubble isMine={item.sender.id === viewerId} message={item} />}
+              renderItem={({ item, index }) => {
+                const previousMessage = index > 0 ? messages[index - 1] : null;
+                const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
+                return (
+                  <MessageBubble
+                    isClusterContinuation={isConsecutiveSameSender(item, previousMessage)}
+                    isMine={item.sender.id === viewerId}
+                    message={item}
+                    showIncomingAvatar={shouldShowIncomingDmAvatar({
+                      message: item,
+                      nextMessage,
+                      viewerId,
+                    })}
+                  />
+                );
+              }}
               ListHeaderComponent={
                 timeLabel ? (
                   <View style={styles.timePill}>

@@ -3,7 +3,11 @@ import { io, type Socket } from "socket.io-client";
 
 import { API_BASE_URL, USE_MOCK_BACKEND } from "../../../constants/env";
 import { loadAuthState } from "../../../services/api/authSession";
-import type { ConversationUpdatedEvent, MessageNewEvent } from "./messageRealtimeEvents";
+import type {
+  ConversationUpdatedEvent,
+  MessageNewEvent,
+  MessageReceiptsEvent,
+} from "./messageRealtimeEvents";
 import { MESSAGE_REALTIME_EVENTS } from "./messageRealtimeEvents";
 import {
   clearAppStateSubscription,
@@ -13,6 +17,7 @@ import { resolveSocketOrigin } from "./resolveSocketOrigin";
 
 type MessageNewHandler = (event: MessageNewEvent) => void;
 type ConversationUpdatedHandler = (event: ConversationUpdatedEvent) => void;
+type MessageReceiptsHandler = (event: MessageReceiptsEvent) => void;
 type ReconnectHandler = () => void;
 
 class MessagesRealtimeClient {
@@ -21,6 +26,7 @@ class MessagesRealtimeClient {
   private hasConnectedOnce = false;
   private readonly messageNewHandlers = new Set<MessageNewHandler>();
   private readonly conversationUpdatedHandlers = new Set<ConversationUpdatedHandler>();
+  private readonly messageReceiptsHandlers = new Set<MessageReceiptsHandler>();
   private readonly reconnectHandlers = new Set<ReconnectHandler>();
   private appStateSubscription: { remove: () => void } | null = null;
 
@@ -35,6 +41,13 @@ class MessagesRealtimeClient {
     this.conversationUpdatedHandlers.add(handler);
     return () => {
       this.conversationUpdatedHandlers.delete(handler);
+    };
+  }
+
+  onMessageReceipts(handler: MessageReceiptsHandler): () => void {
+    this.messageReceiptsHandlers.add(handler);
+    return () => {
+      this.messageReceiptsHandlers.delete(handler);
     };
   }
 
@@ -82,6 +95,12 @@ class MessagesRealtimeClient {
 
     this.socket.on(MESSAGE_REALTIME_EVENTS.conversationUpdated, (event: ConversationUpdatedEvent) => {
       for (const handler of this.conversationUpdatedHandlers) {
+        handler(event);
+      }
+    });
+
+    this.socket.on(MESSAGE_REALTIME_EVENTS.messageReceipts, (event: MessageReceiptsEvent) => {
+      for (const handler of this.messageReceiptsHandlers) {
         handler(event);
       }
     });

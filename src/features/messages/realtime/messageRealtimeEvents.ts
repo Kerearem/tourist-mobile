@@ -1,10 +1,11 @@
-import type { ConversationMessage, ConversationThread } from "../types";
+import type { ConversationMessage, ConversationThread, MessageStatus } from "../types";
 
 export const MESSAGE_REALTIME_EVENT_VERSION = 1 as const;
 
 export const MESSAGE_REALTIME_EVENTS = {
   messageNew: "message:new",
   conversationUpdated: "conversation:updated",
+  messageReceipts: "message:receipts",
 } as const;
 
 export type MessageRealtimeEnvelope<TPayload> = {
@@ -21,4 +22,9 @@ export type MessageNewEvent = MessageRealtimeEnvelope<{
 
 export type ConversationUpdatedEvent = MessageRealtimeEnvelope<{
   conversation: ConversationThread;
+}>;
+
+export type MessageReceiptsEvent = MessageRealtimeEnvelope<{
+  conversationId: string;
+  updates: Array<{ messageId: string; status: Extract<MessageStatus, "delivered" | "read"> }>;
 }>;
