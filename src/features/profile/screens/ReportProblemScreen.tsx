@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 
 import { AppButton } from "../../../components/ui/AppButton";
 import { AppInput } from "../../../components/ui/AppInput";
@@ -13,6 +13,7 @@ import {
   submitSupportReport,
   type SupportTopic,
 } from "../services/support.service";
+import { validateReportProblemForm } from "../utils/reportProblemForm";
 
 export function ReportProblemScreen() {
   const [selectedTopic, setSelectedTopic] = useState<SupportTopic | null>(null);
@@ -20,20 +21,15 @@ export function ReportProblemScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const onSubmit = async () => {
-    if (!selectedTopic) {
-      Alert.alert("Konu seçin", "Lütfen bir destek konusu seçin.");
-      return;
-    }
-
-    const trimmed = message.trim();
-    if (!trimmed) {
-      Alert.alert("Açıklama gerekli", "Lütfen sorununuzu kısaca açıklayın.");
+    const validation = validateReportProblemForm({ topic: selectedTopic, message });
+    if (!validation.ok) {
+      Alert.alert(validation.title, validation.description);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await submitSupportReport({ topic: selectedTopic, message: trimmed });
+      await submitSupportReport({ topic: validation.topic, message: validation.message });
       Alert.alert("Bildiriminiz alındı", "Teşekkürler, en kısa sürede inceleyeceğiz.");
       setSelectedTopic(null);
       setMessage("");
@@ -62,18 +58,18 @@ export function ReportProblemScreen() {
           {SUPPORT_TOPIC_OPTIONS.map((topic) => {
             const isSelected = selectedTopic === topic.value;
             return (
-              <Pressable key={topic.value} onPress={() => setSelectedTopic(topic.value)}>
-                <ListItem
-                  right={
-                    isSelected ? (
-                      <AppText style={styles.selectedMark} variant="label">
-                        ✓
-                      </AppText>
-                    ) : null
-                  }
-                  title={topic.label}
-                />
-              </Pressable>
+              <ListItem
+                key={topic.value}
+                onPress={() => setSelectedTopic(topic.value)}
+                right={
+                  isSelected ? (
+                    <AppText style={styles.selectedMark} variant="label">
+                      ✓
+                    </AppText>
+                  ) : null
+                }
+                title={topic.label}
+              />
             );
           })}
         </Card>

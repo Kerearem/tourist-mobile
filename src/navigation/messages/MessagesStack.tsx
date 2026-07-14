@@ -22,7 +22,14 @@ export function MessagesStack() {
       <Stack.Screen component={MessageRequestsScreen} name={MessagesRoutes.MessageRequestsScreen} />
       <Stack.Screen component={MessageThreadScreen} name={MessagesRoutes.MessageThreadScreen} />
       <Stack.Screen component={ConversationInfoScreen} name={MessagesRoutes.ConversationInfoScreen} />
-      <Stack.Screen component={MessageUserProfileScreen} name={MessagesRoutes.MessageUserProfileScreen} />
+      <Stack.Screen
+        component={MessageUserProfileScreen}
+        name={MessagesRoutes.MessageUserProfileScreen}
+        options={{
+          fullScreenGestureEnabled: true,
+          gestureEnabled: true,
+        }}
+      />
       <Stack.Screen component={GroupDetailScreen} name={MessagesRoutes.GroupDetailScreen} />
       <Stack.Screen component={GroupInfoScreen} name={MessagesRoutes.GroupInfoScreen} />
     </Stack.Navigator>

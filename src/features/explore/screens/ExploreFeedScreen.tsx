@@ -6,6 +6,7 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../../components/ui/Avatar";
+import { EdgeSwipeBackView } from "../../../components/ui/EdgeSwipeBackView";
 import { VerifiedNameRow } from "../../../components/ui/VerifiedNameRow";
 import { AppText } from "../../../components/ui/AppText";
 import { EventsRoutes, ExploreRoutes, MessagesRoutes, TabRoutes } from "../../../constants/routes";
@@ -50,6 +51,7 @@ import {
   isExplorePostReportedHidden,
   markExplorePostReported,
 } from "../utils/exploreContentComplaint";
+import { resolveCommentsSheetKeyboardStyle } from "../utils/exploreCommentsKeyboardLayout";
 import { resolveExploreReelEventNavigationTarget } from "../utils/exploreReelEventNavigation";
 import type { ExploreFeedScope, ExplorePost, SnapCommentItem } from "../types";
 
@@ -884,17 +886,19 @@ export function ExploreFeedScreen() {
     <SafeAreaView style={[styles.safeArea, selectedSearchUser ? styles.safeAreaLight : null]}>
       <View style={[styles.container, selectedSearchUser ? styles.containerLight : null]}>
         {selectedSearchUser ? (
-          <PublicUserProfileView
-            onActiveEventPress={openExploreActiveEvent}
-            onBack={() => setSelectedSearchUser(null)}
-            onMemberEventPress={openExplorePastEvent}
-            onOpenMessage={(profile) => void openDirectMessage(profile)}
-            onPastEventPress={openExplorePastEvent}
-            seed={selectedSearchUser}
-            userId={selectedSearchUser.id}
-            viewerId={user?.id}
-            viewerOrganizerStatus={user?.organizerStatus}
-          />
+          <EdgeSwipeBackView onSwipeBack={() => setSelectedSearchUser(null)}>
+            <PublicUserProfileView
+              onActiveEventPress={openExploreActiveEvent}
+              onBack={() => setSelectedSearchUser(null)}
+              onMemberEventPress={openExplorePastEvent}
+              onOpenMessage={(profile) => void openDirectMessage(profile)}
+              onPastEventPress={openExplorePastEvent}
+              seed={selectedSearchUser}
+              userId={selectedSearchUser.id}
+              viewerId={user?.id}
+              viewerOrganizerStatus={user?.organizerStatus}
+            />
+          </EdgeSwipeBackView>
         ) : (
           <>
             <View style={styles.scopeOverlay}>
@@ -1106,6 +1110,11 @@ export function ExploreFeedScreen() {
               style={[
                 styles.commentsSheet,
                 !isKeyboardVisible ? { paddingBottom: sheetBottomPadding } : null,
+                resolveCommentsSheetKeyboardStyle({
+                  isKeyboardVisible,
+                  topInset: insets.top,
+                  windowHeight: height,
+                }),
               ]}
             >
               <View style={styles.commentsSheetBody}>

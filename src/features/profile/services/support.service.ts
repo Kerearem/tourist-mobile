@@ -4,28 +4,13 @@ import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
 import { apiRequest } from "../../../services/api/client";
 
-export type SupportTopic =
-  | "login_access"
-  | "messages"
-  | "events"
-  | "help_requests"
-  | "other";
+import {
+  SUPPORT_TOPIC_LABELS,
+  SUPPORT_TOPIC_OPTIONS,
+  type SupportTopic,
+} from "../constants/supportTopics";
 
-export const SUPPORT_TOPIC_OPTIONS: Array<{ value: SupportTopic; label: string }> = [
-  { value: "login_access", label: "Giriş ve hesap erişimi" },
-  { value: "messages", label: "Mesajlar" },
-  { value: "events", label: "Etkinlik katılımı" },
-  { value: "help_requests", label: "Yardım istekleri" },
-  { value: "other", label: "Diğer" },
-];
-
-const TOPIC_LABELS: Record<SupportTopic, string> = {
-  login_access: "Giriş ve hesap erişimi",
-  messages: "Mesajlar",
-  events: "Etkinlik katılımı",
-  help_requests: "Yardım istekleri",
-  other: "Diğer",
-};
+export { SUPPORT_TOPIC_OPTIONS, type SupportTopic };
 
 const getAccessToken = async () => {
   if (USE_MOCK_BACKEND) {
@@ -66,7 +51,7 @@ export async function submitSupportReport(input: {
     method: "POST",
     token,
     body: {
-      topic: TOPIC_LABELS[input.topic],
+      topic: SUPPORT_TOPIC_LABELS[input.topic],
       message,
     },
   });
