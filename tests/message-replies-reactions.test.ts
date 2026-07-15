@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import type { ConversationMessage } from "../src/features/messages/types";
 import { ALLOWED_MESSAGE_REACTIONS } from "../src/features/messages/types";
 import { MESSAGE_REALTIME_EVENTS } from "../src/features/messages/realtime/messageRealtimeEvents";
-import { applyMessageReactionUpdate } from "../src/features/messages/utils/messageReceipts";
+import { applyMessageReactionUpdate, applyMessageUpdated } from "../src/features/messages/utils/messageReceipts";
 import {
   removeViewerReaction,
   replaceViewerReaction,
@@ -69,6 +69,16 @@ describe("message reaction state", () => {
     assert.equal(MESSAGE_REALTIME_EVENTS.conversationUpdated, "conversation:updated");
     assert.equal(MESSAGE_REALTIME_EVENTS.messageReceipts, "message:receipts");
     assert.equal(MESSAGE_REALTIME_EVENTS.messageReaction, "message:reaction");
+    assert.equal(MESSAGE_REALTIME_EVENTS.messageUpdated, "message:updated");
+  });
+
+  it("patches updated messages without a full refresh", () => {
+    const current = [message];
+    const updated = { ...message, text: "Bu mesaj silindi", isDeleted: true, reactions: [] };
+    const next = applyMessageUpdated(current, updated);
+    assert.notEqual(next, current);
+    assert.equal(next[0]?.isDeleted, true);
+    assert.equal(applyMessageUpdated(current, { ...updated, id: "missing" }), current);
   });
 });
 
@@ -83,9 +93,55 @@ describe("reply and reaction UI wiring", () => {
     assert.match(threadSource, /onLongPress=/);
     assert.match(threadSource, /setActionMessage\(item\)/);
     assert.match(threadSource, /<MessageActionSheet/);
-    assert.match(actionSource, /Yanıtla/);
+    assert.match(actionSource, /Cevapla/);
+    assert.match(actionSource, /Kopyala/);
+    assert.match(actionSource, /Sil/);
+    assert.doesNotMatch(actionSource, /İlet|Yıldız|Daha fazla/);
     assert.match(actionSource, /ALLOWED_MESSAGE_REACTIONS\.map/);
-    assert.match(actionSource, /Vazgeç/);
+  });
+
+  it("keeps the WhatsApp-style overlay light instead of full black", () => {
+    assert.match(actionSource, /backgroundColor: "rgba\(17, 24, 39, 0\.14\)"/);
+    assert.match(actionSource, /backgroundColor: "rgba\(255, 255, 255, 0\.94\)"/);
+    assert.match(actionSource, /backgroundColor: "rgba\(255, 255, 255, 0\.96\)"/);
+    assert.doesNotMatch(actionSource, /rgba\(0, 0, 0, 0\.(3[5-9]|[4-9]\d)\)/);
+    assert.doesNotMatch(actionSource, /backgroundColor: "rgba\(25, 25, 25/);
+    assert.doesNotMatch(actionSource, /backgroundColor: "rgba\(35, 35, 35/);
+  });
+
+  it("aligns preview and menu to the selected message direction", () => {
+    assert.match(actionSource, /isMine && styles\.contentMine/);
+    assert.match(actionSource, /contentMine: \{\s*alignItems: "flex-end",/);
+    assert.match(actionSource, /previewBubbleMine: \{[^}]*backgroundColor: "#5B3CF6"/s);
+    assert.match(actionSource, /previewTextMine: \{[^}]*color: "#FFFFFF"/s);
+  });
+
+  it("shows delete only for own messages and copy only for text messages", () => {
+    assert.match(actionSource, /const canDelete = isMine && !isDeleted;/);
+    assert.match(actionSource, /\{canDelete \? \(/);
+    assert.match(actionSource, /const canCopy = Boolean\(message\.text\?\.trim\(\)\) && !isDeleted;/);
+    assert.match(actionSource, /disabled=\{!canCopy\}/);
+  });
+
+  it("copies message text through expo-clipboard with a Turkish failure alert", () => {
+    assert.match(threadSource, /from "expo-clipboard"/);
+    assert.match(threadSource, /Clipboard\.setStringAsync\(copyValue\)/);
+    assert.match(threadSource, /Kopyalanamadı/);
+  });
+
+  it("hides only the selected original bubble while the action sheet previews it", () => {
+    assert.match(threadSource, /isHiddenForActionSheet=\{actionMessage\?\.id === item\.id\}/);
+    assert.match(bubbleSource, /hiddenForActionSheet: \{\s*opacity: 0,\s*\}/);
+    assert.match(bubbleSource, /isHiddenForActionSheet && styles\.hiddenForActionSheet/);
+    assert.match(bubbleSource, /disabled=\{!onLongPress \|\| isHiddenForActionSheet\}/);
+    // The action sheet keeps rendering its own preview bubble.
+    assert.match(actionSource, /styles\.previewBubble/);
+    assert.match(actionSource, /getPreviewText\(message\)/);
+  });
+
+  it("blocks actions on deleted messages", () => {
+    assert.match(threadSource, /item\.type === "system" \|\| item\.isDeleted/);
+    assert.match(actionSource, /\{!isDeleted \? \(/);
   });
 
   it("shows and cancels a reply preview above the composer", () => {
@@ -110,6 +166,22 @@ describe("reply and reaction UI wiring", () => {
     assert.match(serviceSource, /method: "DELETE"/);
   });
 
+  it("deletes own messages through a real endpoint and applies message:updated", () => {
+    assert.match(threadSource, /deleteMessage/);
+    assert.match(threadSource, /applyMessageUpdated/);
+    assert.match(threadSource, /onMessageUpdated/);
+    assert.match(serviceSource, /API_ENDPOINTS\.messages\.deleteMessage/);
+    assert.match(serviceSource, /method: "DELETE"/);
+  });
+
+  it("renders deleted messages as a plain placeholder without ticks, reply, or reactions", () => {
+    assert.match(bubbleSource, /const isDeleted = Boolean\(message\.isDeleted\);/);
+    assert.match(bubbleSource, /isMine && !isDeleted \? resolveMessageReceiptTickVisual/);
+    assert.match(bubbleSource, /!isDeleted && message\.replyTo/);
+    assert.match(bubbleSource, /!isDeleted && message\.reactions/);
+    assert.match(bubbleSource, /deletedText/);
+  });
+
   it("renders compact highlighted reaction chips for both bubble directions", () => {
     assert.match(bubbleSource, /message\.reactions\.map/);
     assert.match(bubbleSource, /reaction\.count > 1/);
@@ -120,7 +192,9 @@ describe("reply and reaction UI wiring", () => {
     const clientSource = source("src/features/messages/realtime/messagesRealtimeClient.ts");
     const hookSource = source("src/features/messages/hooks/useMessagesRealtime.ts");
     assert.match(clientSource, /MESSAGE_REALTIME_EVENTS\.messageReaction/);
+    assert.match(clientSource, /MESSAGE_REALTIME_EVENTS\.messageUpdated/);
     assert.match(hookSource, /onMessageReaction/);
+    assert.match(hookSource, /onMessageUpdated/);
     assert.match(threadSource, /applyMessageReactionUpdate/);
   });
 });
@@ -128,7 +202,7 @@ describe("reply and reaction UI wiring", () => {
 describe("outgoing receipt tick contrast", () => {
   it("uses light pending ticks and bright light-blue read ticks on purple", () => {
     assert.equal(OUTGOING_TICK_PENDING_COLOR, "rgba(255, 255, 255, 0.78)");
-    assert.equal(OUTGOING_TICK_READ_COLOR, "#BFDBFE");
+    assert.equal(OUTGOING_TICK_READ_COLOR, "#FFFFFF");
     assert.deepEqual(resolveMessageReceiptTickVisual("sent"), {
       icon: "checkmark",
       color: OUTGOING_TICK_PENDING_COLOR,

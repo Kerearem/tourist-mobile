@@ -51,6 +51,18 @@ export function applyMessageReactionUpdate(
   );
 }
 
+export function applyMessageUpdated(
+  messages: ConversationMessage[],
+  updatedMessage: ConversationMessage,
+): ConversationMessage[] {
+  const index = messages.findIndex((message) => message.id === updatedMessage.id);
+  if (index < 0) {
+    return messages;
+  }
+
+  return messages.map((message) => (message.id === updatedMessage.id ? updatedMessage : message));
+}
+
 /**
  * Show the incoming DM avatar only on the last bubble of a consecutive same-sender cluster
  * so stacked replies stay clean.

@@ -8,7 +8,7 @@ export type MessageReceiptTickVisual = {
 
 /** High-contrast palette for receipt ticks rendered on purple outgoing bubbles. */
 export const OUTGOING_TICK_PENDING_COLOR = "rgba(255, 255, 255, 0.78)";
-export const OUTGOING_TICK_READ_COLOR = "#BFDBFE";
+export const OUTGOING_TICK_READ_COLOR = "#FFFFFF";
 
 /**
  * Maps outbound receipt status to WhatsApp-style ticks:

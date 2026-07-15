@@ -422,6 +422,28 @@ export async function removeMessageReaction(
   return response.reactions;
 }
 
+export async function deleteMessage(threadId: string, messageId: string): Promise<ConversationMessage | null> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    const message = (mockMessages[threadId] ?? []).find((item) => item.id === messageId);
+    if (!message) {
+      return null;
+    }
+    message.text = "Bu mesaj silindi";
+    message.mediaUrl = undefined;
+    message.mediaType = undefined;
+    message.reactions = [];
+    message.isDeleted = true;
+    return message;
+  }
+
+  const token = await getAccessToken();
+  const endpoint = withMessageId(
+    withThreadId(API_ENDPOINTS.messages.deleteMessage, threadId),
+    messageId,
+  );
+  return apiRequest<ConversationMessage | null>(endpoint, { method: "DELETE", token });
+}
+
 export async function pinMessage(threadId: string, messageId: string): Promise<void> {
   if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
     return;

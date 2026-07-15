@@ -39,7 +39,7 @@ describe("message receipt tick visuals", () => {
     });
     assert.deepEqual(resolveMessageReceiptTickVisual("read"), {
       icon: "checkmark-done",
-      color: "#BFDBFE",
+      color: "#FFFFFF",
     });
     assert.equal(resolveMessageReceiptTickVisual(undefined), null);
   });

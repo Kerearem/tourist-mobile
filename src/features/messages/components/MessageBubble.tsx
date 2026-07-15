@@ -16,6 +16,11 @@ type MessageBubbleProps = {
   showIncomingAvatar?: boolean;
   /** Tighter vertical spacing when continuing the same sender cluster. */
   isClusterContinuation?: boolean;
+  /**
+   * While the action sheet previews this message, hide the original bubble
+   * (opacity 0 keeps the layout height so the list does not jump).
+   */
+  isHiddenForActionSheet?: boolean;
   onLongPress?: () => void;
   onImagePress?: (imageUrl: string) => void;
 };
@@ -42,6 +47,7 @@ export function MessageBubble({
   variant = "dm",
   showIncomingAvatar = false,
   isClusterContinuation = false,
+  isHiddenForActionSheet = false,
   onLongPress,
   onImagePress,
 }: MessageBubbleProps) {
@@ -66,9 +72,10 @@ export function MessageBubble({
   const initials = message.sender.displayName.slice(0, 2).toUpperCase();
   const isOrganizer = message.sender.role === "ORGANIZER";
   const isAnnouncement = Boolean(message.isAnnouncement);
-  const hasMedia = Boolean(message.mediaUrl);
+  const isDeleted = Boolean(message.isDeleted);
+  const hasMedia = Boolean(message.mediaUrl) && !isDeleted;
   const hasText = Boolean(message.text?.trim());
-  const receiptTick = isMine ? resolveMessageReceiptTickVisual(message.status) : null;
+  const receiptTick = isMine && !isDeleted ? resolveMessageReceiptTickVisual(message.status) : null;
   // Light footer only on the solid purple bubble; announcement/media/incoming use subtle gray.
   const useLightFooter = isMine && !isAnnouncement;
 
@@ -104,7 +111,7 @@ export function MessageBubble({
 
   const bubbleBody = (
     <View style={bubbleStyles}>
-      {message.replyTo ? (
+      {!isDeleted && message.replyTo ? (
         <View
           style={[
             styles.replyPreview,
@@ -148,6 +155,7 @@ export function MessageBubble({
         <AppText
           style={[
             isMine && !isAnnouncement && !hasMedia ? styles.textMine : undefined,
+            isDeleted ? styles.deletedText : undefined,
             hasMedia && hasText ? styles.captionText : undefined,
           ]}
           variant="body"
@@ -160,10 +168,10 @@ export function MessageBubble({
   );
 
   const bubbleContent = (
-    <Pressable disabled={!onLongPress} onLongPress={onLongPress}>
+    <Pressable disabled={!onLongPress || isHiddenForActionSheet} onLongPress={onLongPress}>
       {isAnnouncement ? <AnnouncementLabel /> : null}
       {bubbleBody}
-      {message.reactions && message.reactions.length > 0 ? (
+      {!isDeleted && message.reactions && message.reactions.length > 0 ? (
         <View style={[styles.reactionsRow, isMine && styles.reactionsRowMine]}>
           {message.reactions.map((reaction) => (
             <View
@@ -183,7 +191,13 @@ export function MessageBubble({
 
   if (showSenderMeta) {
     return (
-      <View style={[styles.groupRow, isClusterContinuation && styles.clusterContinuation]}>
+      <View
+        style={[
+          styles.groupRow,
+          isClusterContinuation && styles.clusterContinuation,
+          isHiddenForActionSheet && styles.hiddenForActionSheet,
+        ]}
+      >
         <Avatar initials={initials} size={36} uri={message.sender.avatarUrl} />
         <View style={styles.groupContent}>
           <View style={styles.senderMeta}>
@@ -206,7 +220,13 @@ export function MessageBubble({
 
   if (!isGroup && !isMine) {
     return (
-      <View style={[styles.dmIncomingRow, isClusterContinuation && styles.clusterContinuation]}>
+      <View
+        style={[
+          styles.dmIncomingRow,
+          isClusterContinuation && styles.clusterContinuation,
+          isHiddenForActionSheet && styles.hiddenForActionSheet,
+        ]}
+      >
         <View style={styles.dmAvatarSlot}>
           {showIncomingAvatar ? (
             <Avatar initials={initials} size={28} uri={message.sender.avatarUrl} />
@@ -223,6 +243,7 @@ export function MessageBubble({
         styles.row,
         isMine ? styles.rowMine : styles.rowOther,
         isClusterContinuation && styles.clusterContinuation,
+        isHiddenForActionSheet && styles.hiddenForActionSheet,
       ]}
     >
       {bubbleContent}
@@ -243,6 +264,10 @@ const styles = StyleSheet.create({
   },
   clusterContinuation: {
     marginBottom: theme.spacing.xs,
+  },
+  // Invisible but still occupying its height, so the thread doesn't jump.
+  hiddenForActionSheet: {
+    opacity: 0,
   },
   dmIncomingRow: {
     alignItems: "flex-end",
@@ -419,6 +444,10 @@ const styles = StyleSheet.create({
   },
   textMine: {
     color: "#FFFFFF",
+  },
+  deletedText: {
+    color: "#9CA3AF",
+    fontStyle: "italic",
   },
   systemWrap: {
     alignItems: "center",

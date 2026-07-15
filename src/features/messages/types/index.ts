@@ -54,6 +54,7 @@ export type ConversationMessage = {
   status?: MessageStatus;
   systemKind?: MessageSystemKind;
   isAnnouncement?: boolean;
+  isDeleted?: boolean;
   mediaUrl?: string;
   mediaType?: "image";
   replyTo?: MessageReplyPreview;

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Animated, FlatList, Pressable, StyleSheet, Vibration, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -27,6 +28,7 @@ import {
   getConversationById,
   getMessages,
   markConversationRead,
+  deleteMessage,
   removeMessageReaction,
   sendMessage,
   setMessageReaction,
@@ -41,6 +43,7 @@ import { appendMessageDeduped } from "../utils/threadRealtime";
 import {
   applyMessageReceiptUpdates,
   applyMessageReactionUpdate,
+  applyMessageUpdated,
   isConsecutiveSameSender,
   shouldShowIncomingDmAvatar,
 } from "../utils/messageReceipts";
@@ -210,6 +213,13 @@ export function MessageThreadScreen({ route, navigation }: Props) {
         ),
       );
     },
+    onMessageUpdated: (event) => {
+      if (event.payload.conversationId !== activeThreadIdRef.current) {
+        return;
+      }
+
+      setMessages((current) => applyMessageUpdated(current, event.payload.message));
+    },
     onReconnect: () => {
       void loadThread(activeThreadIdRef.current);
     },
@@ -251,8 +261,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   };
 
   const chooseReply = (message: ConversationMessage) => {
-    setReplyTarget(message);
     setActionMessage(null);
+    if (message.isDeleted) {
+      return;
+    }
+    setReplyTarget(message);
   };
 
   const chooseReaction = async (
@@ -260,6 +273,9 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     emoji: AllowedMessageReaction,
   ) => {
     setActionMessage(null);
+    if (message.isDeleted) {
+      return;
+    }
     try {
       const alreadySelected = message.reactions?.some(
         (reaction) => reaction.emoji === emoji && reaction.reactedByMe,
@@ -275,6 +291,52 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       );
     }
   };
+
+  const copyMessage = async (message: ConversationMessage) => {
+    setActionMessage(null);
+    const copyValue = message.text?.trim() || "";
+    if (!copyValue || message.isDeleted) {
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(copyValue);
+      Vibration.vibrate(10);
+    } catch {
+      Alert.alert("Kopyalanamadı", "Mesaj panoya kopyalanamadı. Lütfen tekrar dene.");
+    }
+  };
+
+  const confirmDeleteMessage = (message: ConversationMessage) => {
+    setActionMessage(null);
+    if (message.sender.id !== viewerId || message.isDeleted) {
+      return;
+    }
+
+    Alert.alert("Mesajı sil", "Bu mesaj sohbetten silinsin mi?", [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Sil",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            try {
+              const updated = await deleteMessage(route.params.threadId, message.id);
+              if (updated) {
+                setMessages((current) => applyMessageUpdated(current, updated));
+              }
+            } catch (deleteError) {
+              Alert.alert(
+                "Mesaj silinemedi",
+                deleteError instanceof Error ? deleteError.message : "Lütfen tekrar dene.",
+              );
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
   const onSendGreeting = async () => {
     if (isSendingGreeting) {
       return;
@@ -478,10 +540,13 @@ export function MessageThreadScreen({ route, navigation }: Props) {
                       isClusterContinuation={
                         isConsecutiveSameSender(item, previousMessage) && !daySeparatorLabel
                       }
+                      isHiddenForActionSheet={actionMessage?.id === item.id}
                       isMine={item.sender.id === viewerId}
                       message={item}
                       onLongPress={
-                        item.type === "system" ? undefined : () => setActionMessage(item)
+                        item.type === "system" || item.isDeleted
+                          ? undefined
+                          : () => setActionMessage(item)
                       }
                       showIncomingAvatar={shouldShowIncomingDmAvatar({
                         message: item,
@@ -514,8 +579,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
         ) : null}
       </View>
       <MessageActionSheet
+        isMine={actionMessage?.sender.id === viewerId}
         message={actionMessage}
         onClose={() => setActionMessage(null)}
+        onCopy={(message) => void copyMessage(message)}
+        onDelete={confirmDeleteMessage}
         onReaction={(message, emoji) => void chooseReaction(message, emoji)}
         onReply={chooseReply}
       />

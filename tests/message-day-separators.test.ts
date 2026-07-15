@@ -84,7 +84,7 @@ describe("receipt ticks still map correctly", () => {
     });
     assert.deepEqual(resolveMessageReceiptTickVisual("read"), {
       icon: "checkmark-done",
-      color: "#BFDBFE",
+      color: "#FFFFFF",
     });
   });
 });
@@ -108,7 +108,7 @@ describe("bubble footer layout regression", () => {
   });
 
   it("outgoing bubbles include the receipt tick in the footer; incoming only time", () => {
-    assert.match(bubbleSource, /const receiptTick = isMine \? resolveMessageReceiptTickVisual\(message\.status\) : null;/);
+    assert.match(bubbleSource, /const receiptTick = isMine && !isDeleted \? resolveMessageReceiptTickVisual\(message\.status\) : null;/);
     assert.match(bubbleSource, /name=\{receiptTick\.icon\}/);
   });
 });

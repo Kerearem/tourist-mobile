@@ -8,6 +8,7 @@ import type {
   MessageNewEvent,
   MessageReactionEvent,
   MessageReceiptsEvent,
+  MessageUpdatedEvent,
 } from "./messageRealtimeEvents";
 import { MESSAGE_REALTIME_EVENTS } from "./messageRealtimeEvents";
 import {
@@ -20,6 +21,7 @@ type MessageNewHandler = (event: MessageNewEvent) => void;
 type ConversationUpdatedHandler = (event: ConversationUpdatedEvent) => void;
 type MessageReceiptsHandler = (event: MessageReceiptsEvent) => void;
 type MessageReactionHandler = (event: MessageReactionEvent) => void;
+type MessageUpdatedHandler = (event: MessageUpdatedEvent) => void;
 type ReconnectHandler = () => void;
 
 class MessagesRealtimeClient {
@@ -30,6 +32,7 @@ class MessagesRealtimeClient {
   private readonly conversationUpdatedHandlers = new Set<ConversationUpdatedHandler>();
   private readonly messageReceiptsHandlers = new Set<MessageReceiptsHandler>();
   private readonly messageReactionHandlers = new Set<MessageReactionHandler>();
+  private readonly messageUpdatedHandlers = new Set<MessageUpdatedHandler>();
   private readonly reconnectHandlers = new Set<ReconnectHandler>();
   private appStateSubscription: { remove: () => void } | null = null;
 
@@ -58,6 +61,13 @@ class MessagesRealtimeClient {
     this.messageReactionHandlers.add(handler);
     return () => {
       this.messageReactionHandlers.delete(handler);
+    };
+  }
+
+  onMessageUpdated(handler: MessageUpdatedHandler): () => void {
+    this.messageUpdatedHandlers.add(handler);
+    return () => {
+      this.messageUpdatedHandlers.delete(handler);
     };
   }
 
@@ -117,6 +127,12 @@ class MessagesRealtimeClient {
 
     this.socket.on(MESSAGE_REALTIME_EVENTS.messageReaction, (event: MessageReactionEvent) => {
       for (const handler of this.messageReactionHandlers) {
+        handler(event);
+      }
+    });
+
+    this.socket.on(MESSAGE_REALTIME_EVENTS.messageUpdated, (event: MessageUpdatedEvent) => {
+      for (const handler of this.messageUpdatedHandlers) {
         handler(event);
       }
     });

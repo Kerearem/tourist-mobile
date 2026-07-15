@@ -12,6 +12,7 @@ export const MESSAGE_REALTIME_EVENTS = {
   conversationUpdated: "conversation:updated",
   messageReceipts: "message:receipts",
   messageReaction: "message:reaction",
+  messageUpdated: "message:updated",
 } as const;
 
 export type MessageRealtimeEnvelope<TPayload> = {
@@ -39,4 +40,9 @@ export type MessageReactionEvent = MessageRealtimeEnvelope<{
   conversationId: string;
   messageId: string;
   reactions: MessageReactionSummary[];
+}>;
+
+export type MessageUpdatedEvent = MessageRealtimeEnvelope<{
+  conversationId: string;
+  message: ConversationMessage;
 }>;
