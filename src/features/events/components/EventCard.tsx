@@ -9,6 +9,7 @@ import { theme } from "../../../constants/theme";
 import { MEDIA_CONTENT_CONTRACTS } from "../../../services/media/mediaContentContracts";
 import { getEventTypeLabel } from "../constants/eventTypes";
 import type { EventItem } from "../types";
+import { formatEventCardAttendance, formatEventCardRating } from "../utils/eventCardPresentation";
 import { formatEventTicketCardLabel } from "../utils/eventTicketPricing";
 import { formatEventDateBadge, formatEventTimeLabel } from "../utils/eventTimezone";
 
@@ -34,12 +35,11 @@ const getCoverUri = (event: EventItem) => {
 
 const typeLabel = (event: EventItem) => getEventTypeLabel(event.type);
 
-const ratingLabel = (_event: EventItem) => "4.8";
-
 export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJoin, onPress }: EventCardProps) {
   const dateBadge = formatEventDateBadge(event.startsAt, event.timezone);
   const timeLabel = formatEventTimeLabel(event.startsAt, event.timezone);
-  const attendeePreview = ["U1", "U2", "U3", `+${Math.max(0, event.attendeeCount - 3)}`];
+  const ratingLabel = formatEventCardRating(event);
+  const attendanceLabel = formatEventCardAttendance(event);
   const ticketLabel = formatEventTicketCardLabel(event);
 
   return (
@@ -78,12 +78,14 @@ export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJ
             <AppText style={styles.locationTitle} variant="sectionTitle">
               {event.city}, {event.countryCode}
             </AppText>
-            <View style={styles.ratingWrap}>
-              <Ionicons color="#111827" name="star" size={16} />
-              <AppText style={styles.ratingText} variant="label">
-                {ratingLabel(event)}
-              </AppText>
-            </View>
+            {ratingLabel ? (
+              <View style={styles.ratingWrap}>
+                <Ionicons color="#111827" name="star" size={16} />
+                <AppText style={styles.ratingText} variant="label">
+                  {ratingLabel}
+                </AppText>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.titleRow}>
@@ -107,16 +109,12 @@ export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJ
             <AppText style={styles.priceText} variant="label">
               {ticketLabel}
             </AppText>
-          </View>
-
-          <View style={styles.attendees}>
-            {attendeePreview.map((item, index) => (
-              <View key={`${item}_${index}`} style={[styles.attendeeCircle, index > 0 && styles.attendeeOverlap]}>
-                <AppText style={styles.attendeeText} variant="caption">
-                  {item}
-                </AppText>
-              </View>
-            ))}
+            <View style={styles.attendancePill}>
+              <Ionicons color="#6B7280" name="people-outline" size={15} />
+              <AppText style={styles.attendanceText} variant="caption">
+                {attendanceLabel}
+              </AppText>
+            </View>
           </View>
         </View>
       </Card>
@@ -254,25 +252,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
   },
-  attendees: {
-    flexDirection: "row",
-    paddingLeft: 0,
-  },
-  attendeeCircle: {
+  attendancePill: {
     alignItems: "center",
+    alignSelf: "flex-start",
     backgroundColor: "#F3F4F6",
-    borderColor: "#FFFFFF",
-    borderRadius: 13,
-    borderWidth: 2,
-    height: 26,
-    justifyContent: "center",
-    minWidth: 26,
-    paddingHorizontal: 6,
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 5,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
   },
-  attendeeOverlap: {
-    marginLeft: -8,
-  },
-  attendeeText: {
+  attendanceText: {
     color: "#6B7280",
     fontWeight: "700",
   },
