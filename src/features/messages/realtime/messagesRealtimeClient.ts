@@ -1,3 +1,4 @@
+import NetInfo from "@react-native-community/netinfo";
 import { AppState, type AppStateStatus } from "react-native";
 import { io, type Socket } from "socket.io-client";
 
@@ -15,6 +16,13 @@ import {
   clearAppStateSubscription,
   resolveSocketConnectNotification,
 } from "./messagesRealtimeConnectLifecycle";
+import {
+  clearNetInfoSubscription,
+  createReconnectScheduler,
+  shouldForceReconnectOnNetChange,
+  type NetSnapshot,
+  type ReconnectScheduler,
+} from "./messagesRealtimeNetRecovery";
 import { resolveSocketOrigin } from "./resolveSocketOrigin";
 
 type MessageNewHandler = (event: MessageNewEvent) => void;
@@ -35,6 +43,11 @@ class MessagesRealtimeClient {
   private readonly messageUpdatedHandlers = new Set<MessageUpdatedHandler>();
   private readonly reconnectHandlers = new Set<ReconnectHandler>();
   private appStateSubscription: { remove: () => void } | null = null;
+  private netInfoUnsubscribe: (() => void) | null = null;
+  private lastNetSnapshot: NetSnapshot | null = null;
+  private readonly reconnectScheduler: ReconnectScheduler = createReconnectScheduler(() => {
+    this.forceReconnect();
+  });
 
   onMessageNew(handler: MessageNewHandler): () => void {
     this.messageNewHandlers.add(handler);
@@ -78,7 +91,7 @@ class MessagesRealtimeClient {
     };
   }
 
-  async connectForCurrentSession(userId: string): Promise<void> {
+  async connectForCurrentSession(userId: string, options?: { force?: boolean }): Promise<void> {
     if (USE_MOCK_BACKEND) {
       this.disconnect();
       return;
@@ -92,13 +105,23 @@ class MessagesRealtimeClient {
     }
 
     const nextConnectionKey = `${userId}:${accessToken}`;
-    if (this.socket?.connected && this.connectionKey === nextConnectionKey) {
+    // A zombie socket can keep `connected === true` after silent network loss,
+    // so forced recoveries (NetInfo / AppState) must bypass this guard.
+    if (!options?.force && this.socket?.connected && this.connectionKey === nextConnectionKey) {
       return;
     }
 
-    this.disconnect();
+    // Keep hasConnectedOnce across same-user reconnects (even after token
+    // refresh) so recovery still notifies onReconnect handlers; reset it only
+    // when a different user connects.
+    const isSameSession = this.connectionKey?.split(":")[0] === userId;
+    this.teardownSocket();
+    if (!isSameSession) {
+      this.hasConnectedOnce = false;
+    }
     this.connectionKey = nextConnectionKey;
     this.ensureAppStateListener();
+    this.ensureNetInfoListener();
 
     this.socket = io(resolveSocketOrigin(API_BASE_URL), {
       path: "/socket.io",
@@ -154,15 +177,38 @@ class MessagesRealtimeClient {
   }
 
   disconnect(): void {
+    this.teardownSocket();
+    this.connectionKey = null;
+    this.hasConnectedOnce = false;
+    this.reconnectScheduler.cancel();
+    this.appStateSubscription = clearAppStateSubscription(this.appStateSubscription);
+    this.netInfoUnsubscribe = clearNetInfoSubscription(this.netInfoUnsubscribe);
+    this.lastNetSnapshot = null;
+  }
+
+  /**
+   * Tear down the current socket (even a zombie one) and reconnect for the
+   * same session, preserving the reconnect notification lifecycle.
+   */
+  forceReconnect(): void {
+    if (USE_MOCK_BACKEND) {
+      return;
+    }
+
+    const userId = this.connectionKey?.split(":")[0];
+    if (!userId) {
+      return;
+    }
+
+    void this.connectForCurrentSession(userId, { force: true });
+  }
+
+  private teardownSocket() {
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
-
-    this.connectionKey = null;
-    this.hasConnectedOnce = false;
-    this.appStateSubscription = clearAppStateSubscription(this.appStateSubscription);
   }
 
   private ensureAppStateListener() {
@@ -175,12 +221,30 @@ class MessagesRealtimeClient {
         return;
       }
 
-      const userId = this.connectionKey?.split(":")[0];
-      if (!userId) {
-        return;
-      }
+      // The socket may be a zombie after backgrounding; schedule a forced
+      // reconnect (debounced together with NetInfo bursts) instead of the
+      // guarded connect that silently no-ops on stale sockets.
+      this.reconnectScheduler.schedule();
+    });
+  }
 
-      void this.connectForCurrentSession(userId);
+  private ensureNetInfoListener() {
+    if (USE_MOCK_BACKEND || this.netInfoUnsubscribe) {
+      return;
+    }
+
+    this.netInfoUnsubscribe = NetInfo.addEventListener((state) => {
+      const snapshot: NetSnapshot = {
+        isConnected: state.isConnected,
+        isInternetReachable: state.isInternetReachable,
+        type: state.type,
+      };
+      const previous = this.lastNetSnapshot;
+      this.lastNetSnapshot = snapshot;
+
+      if (shouldForceReconnectOnNetChange(previous, snapshot)) {
+        this.reconnectScheduler.schedule();
+      }
     });
   }
 }
