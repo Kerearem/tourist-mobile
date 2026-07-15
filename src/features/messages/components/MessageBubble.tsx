@@ -104,6 +104,34 @@ export function MessageBubble({
 
   const bubbleBody = (
     <View style={bubbleStyles}>
+      {message.replyTo ? (
+        <View
+          style={[
+            styles.replyPreview,
+            isMine && !isAnnouncement ? styles.replyPreviewMine : null,
+          ]}
+        >
+          <AppText
+            style={[
+              styles.replySender,
+              isMine && !isAnnouncement ? styles.replyTextMine : null,
+            ]}
+            variant="caption"
+          >
+            {message.replyTo.sender.displayName}
+          </AppText>
+          <AppText
+            numberOfLines={2}
+            style={[
+              styles.replyText,
+              isMine && !isAnnouncement ? styles.replyTextMine : null,
+            ]}
+            variant="caption"
+          >
+            {message.replyTo.text}
+          </AppText>
+        </View>
+      ) : null}
       {hasMedia ? (
         <Pressable
           disabled={!onImagePress}
@@ -135,6 +163,21 @@ export function MessageBubble({
     <Pressable disabled={!onLongPress} onLongPress={onLongPress}>
       {isAnnouncement ? <AnnouncementLabel /> : null}
       {bubbleBody}
+      {message.reactions && message.reactions.length > 0 ? (
+        <View style={[styles.reactionsRow, isMine && styles.reactionsRowMine]}>
+          {message.reactions.map((reaction) => (
+            <View
+              key={reaction.emoji}
+              style={[styles.reactionChip, reaction.reactedByMe && styles.reactionChipMine]}
+            >
+              <AppText style={styles.reactionChipText} variant="caption">
+                {reaction.emoji}
+                {reaction.count > 1 ? ` ${reaction.count}` : ""}
+              </AppText>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </Pressable>
   );
 
@@ -308,6 +351,55 @@ const styles = StyleSheet.create({
   bubbleFooterOnMedia: {
     paddingBottom: 4,
     paddingRight: theme.spacing.sm,
+  },
+  replyPreview: {
+    backgroundColor: "#F3F4F6",
+    borderLeftColor: "#94A3B8",
+    borderLeftWidth: 3,
+    borderRadius: theme.radius.sm,
+    marginBottom: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
+  replyPreviewMine: {
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderLeftColor: "rgba(255, 255, 255, 0.72)",
+  },
+  replySender: {
+    color: "#5B3CF6",
+    fontWeight: "700",
+  },
+  replyText: {
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  replyTextMine: {
+    color: "rgba(255, 255, 255, 0.9)",
+  },
+  reactionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: -4,
+  },
+  reactionsRowMine: {
+    justifyContent: "flex-end",
+  },
+  reactionChip: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E2E8F0",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  reactionChipMine: {
+    backgroundColor: "#EDE9FE",
+    borderColor: "#8B5CF6",
+  },
+  reactionChipText: {
+    color: theme.colors.textPrimary,
+    fontSize: 12,
   },
   footerTime: {
     color: theme.colors.textSecondary,

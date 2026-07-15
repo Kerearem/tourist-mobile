@@ -1,4 +1,4 @@
-import type { ConversationMessage } from "../types";
+import type { ConversationMessage, MessageReactionSummary } from "../types";
 import { mergeMessageReceiptStatus } from "./messageReceiptTicks";
 
 export type MessageReceiptUpdate = {
@@ -34,6 +34,21 @@ export function applyMessageReceiptUpdates(
   });
 
   return changed ? nextMessages : messages;
+}
+
+export function applyMessageReactionUpdate(
+  messages: ConversationMessage[],
+  messageId: string,
+  reactions: MessageReactionSummary[],
+): ConversationMessage[] {
+  const index = messages.findIndex((message) => message.id === messageId);
+  if (index < 0) {
+    return messages;
+  }
+
+  return messages.map((message) =>
+    message.id === messageId ? { ...message, reactions } : message,
+  );
 }
 
 /**

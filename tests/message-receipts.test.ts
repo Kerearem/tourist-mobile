@@ -31,15 +31,15 @@ describe("message receipt tick visuals", () => {
   it("maps sent / delivered / read to single gray, double gray, and double blue", () => {
     assert.deepEqual(resolveMessageReceiptTickVisual("sent"), {
       icon: "checkmark",
-      color: "#94A3B8",
+      color: "rgba(255, 255, 255, 0.78)",
     });
     assert.deepEqual(resolveMessageReceiptTickVisual("delivered"), {
       icon: "checkmark-done",
-      color: "#94A3B8",
+      color: "rgba(255, 255, 255, 0.78)",
     });
     assert.deepEqual(resolveMessageReceiptTickVisual("read"), {
       icon: "checkmark-done",
-      color: "#2563EB",
+      color: "#BFDBFE",
     });
     assert.equal(resolveMessageReceiptTickVisual(undefined), null);
   });

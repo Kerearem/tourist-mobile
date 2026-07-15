@@ -19,15 +19,28 @@ import { useTabMessageKeyboardLayout } from "../../../hooks/useTabMessageKeyboar
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { blockUser } from "../../profile/services/block.service";
 import { MessageBubble } from "../components/MessageBubble";
+import { MessageActionSheet } from "../components/MessageActionSheet";
 import { MessageComposer } from "../components/MessageComposer";
 import { useMessageThreadListScroll } from "../hooks/useMessageThreadListScroll";
 import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
-import { getConversationById, getMessages, markConversationRead, sendMessage } from "../services/messages.service";
-import type { ConversationMessage, ConversationThread } from "../types";
+import {
+  getConversationById,
+  getMessages,
+  markConversationRead,
+  removeMessageReaction,
+  sendMessage,
+  setMessageReaction,
+} from "../services/messages.service";
+import type {
+  AllowedMessageReaction,
+  ConversationMessage,
+  ConversationThread,
+} from "../types";
 import { canOpenConversationInfo, resolveConversationInfoNavigation } from "../utils/conversationInfoNavigation";
 import { appendMessageDeduped } from "../utils/threadRealtime";
 import {
   applyMessageReceiptUpdates,
+  applyMessageReactionUpdate,
   isConsecutiveSameSender,
   shouldShowIncomingDmAvatar,
 } from "../utils/messageReceipts";
@@ -71,6 +84,8 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingGreeting, setIsSendingGreeting] = useState(false);
+  const [actionMessage, setActionMessage] = useState<ConversationMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activeThreadIdRef = useRef(route.params.threadId);
   const isNearBottomRef = useRef(true);
@@ -104,6 +119,8 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     resetForThread();
     setConversation(null);
     setMessages([]);
+    setActionMessage(null);
+    setReplyTarget(null);
     setError(null);
     void loadThread();
   }, [route.params.threadId]);
@@ -180,6 +197,19 @@ export function MessageThreadScreen({ route, navigation }: Props) {
 
       setMessages((current) => applyMessageReceiptUpdates(current, event.payload.updates));
     },
+    onMessageReaction: (event) => {
+      if (event.payload.conversationId !== activeThreadIdRef.current) {
+        return;
+      }
+
+      setMessages((current) =>
+        applyMessageReactionUpdate(
+          current,
+          event.payload.messageId,
+          event.payload.reactions,
+        ),
+      );
+    },
     onReconnect: () => {
       void loadThread(activeThreadIdRef.current);
     },
@@ -197,6 +227,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
         displayName: user.publicProfile.displayName || user.publicProfile.username || "Tourist Member",
       },
       text,
+      replyToMessageId: replyTarget?.id,
     });
 
     if (!sentMessage || activeThreadIdRef.current !== route.params.threadId) {
@@ -204,6 +235,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     }
 
     setMessages((current) => appendMessageDeduped(current, sentMessage));
+    setReplyTarget(null);
     onOwnMessageSent();
     setConversation((current) =>
       current
@@ -216,6 +248,32 @@ export function MessageThreadScreen({ route, navigation }: Props) {
           }
         : current,
     );
+  };
+
+  const chooseReply = (message: ConversationMessage) => {
+    setReplyTarget(message);
+    setActionMessage(null);
+  };
+
+  const chooseReaction = async (
+    message: ConversationMessage,
+    emoji: AllowedMessageReaction,
+  ) => {
+    setActionMessage(null);
+    try {
+      const alreadySelected = message.reactions?.some(
+        (reaction) => reaction.emoji === emoji && reaction.reactedByMe,
+      );
+      const reactions = alreadySelected
+        ? await removeMessageReaction(route.params.threadId, message.id)
+        : await setMessageReaction(route.params.threadId, message.id, emoji);
+      setMessages((current) => applyMessageReactionUpdate(current, message.id, reactions));
+    } catch (reactionError) {
+      Alert.alert(
+        "Tepki eklenemedi",
+        reactionError instanceof Error ? reactionError.message : "Lütfen tekrar deneyin.",
+      );
+    }
   };
   const onSendGreeting = async () => {
     if (isSendingGreeting) {
@@ -422,6 +480,9 @@ export function MessageThreadScreen({ route, navigation }: Props) {
                       }
                       isMine={item.sender.id === viewerId}
                       message={item}
+                      onLongPress={
+                        item.type === "system" ? undefined : () => setActionMessage(item)
+                      }
                       showIncomingAvatar={shouldShowIncomingDmAvatar({
                         message: item,
                         nextMessage,
@@ -441,11 +502,23 @@ export function MessageThreadScreen({ route, navigation }: Props) {
             <View
               style={[styles.composerWrap, !isKeyboardVisible ? { paddingBottom: restingBottomInset } : null]}
             >
-              <MessageComposer disabled={!user} onSend={onSend} textOnly />
+              <MessageComposer
+                textOnly
+                disabled={!user}
+                onCancelReply={() => setReplyTarget(null)}
+                onSend={onSend}
+                replyTarget={replyTarget}
+              />
             </View>
           </Animated.View>
         ) : null}
       </View>
+      <MessageActionSheet
+        message={actionMessage}
+        onClose={() => setActionMessage(null)}
+        onReaction={(message, emoji) => void chooseReaction(message, emoji)}
+        onReply={chooseReply}
+      />
     </SafeAreaView>
   );
 }

@@ -6,6 +6,7 @@ import { loadAuthState } from "../../../services/api/authSession";
 import type {
   ConversationUpdatedEvent,
   MessageNewEvent,
+  MessageReactionEvent,
   MessageReceiptsEvent,
 } from "./messageRealtimeEvents";
 import { MESSAGE_REALTIME_EVENTS } from "./messageRealtimeEvents";
@@ -18,6 +19,7 @@ import { resolveSocketOrigin } from "./resolveSocketOrigin";
 type MessageNewHandler = (event: MessageNewEvent) => void;
 type ConversationUpdatedHandler = (event: ConversationUpdatedEvent) => void;
 type MessageReceiptsHandler = (event: MessageReceiptsEvent) => void;
+type MessageReactionHandler = (event: MessageReactionEvent) => void;
 type ReconnectHandler = () => void;
 
 class MessagesRealtimeClient {
@@ -27,6 +29,7 @@ class MessagesRealtimeClient {
   private readonly messageNewHandlers = new Set<MessageNewHandler>();
   private readonly conversationUpdatedHandlers = new Set<ConversationUpdatedHandler>();
   private readonly messageReceiptsHandlers = new Set<MessageReceiptsHandler>();
+  private readonly messageReactionHandlers = new Set<MessageReactionHandler>();
   private readonly reconnectHandlers = new Set<ReconnectHandler>();
   private appStateSubscription: { remove: () => void } | null = null;
 
@@ -48,6 +51,13 @@ class MessagesRealtimeClient {
     this.messageReceiptsHandlers.add(handler);
     return () => {
       this.messageReceiptsHandlers.delete(handler);
+    };
+  }
+
+  onMessageReaction(handler: MessageReactionHandler): () => void {
+    this.messageReactionHandlers.add(handler);
+    return () => {
+      this.messageReactionHandlers.delete(handler);
     };
   }
 
@@ -101,6 +111,12 @@ class MessagesRealtimeClient {
 
     this.socket.on(MESSAGE_REALTIME_EVENTS.messageReceipts, (event: MessageReceiptsEvent) => {
       for (const handler of this.messageReceiptsHandlers) {
+        handler(event);
+      }
+    });
+
+    this.socket.on(MESSAGE_REALTIME_EVENTS.messageReaction, (event: MessageReactionEvent) => {
+      for (const handler of this.messageReactionHandlers) {
         handler(event);
       }
     });

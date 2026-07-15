@@ -63,6 +63,7 @@ export const API_ENDPOINTS = {
     conversationDetail: "/messages/conversations/:threadId",
     messages: "/messages/conversations/:threadId/messages",
     sendMessage: "/messages/conversations/:threadId/messages",
+    messageReaction: "/messages/conversations/:threadId/messages/:messageId/reaction",
     directConversation: "/messages/conversations/direct",
     markRead: "/messages/conversations/:threadId/read",
     acceptConversation: "/messages/conversations/:threadId/accept",

@@ -6,8 +6,9 @@ export type MessageReceiptTickVisual = {
   color: string;
 };
 
-const TICK_GRAY = "#94A3B8";
-const TICK_BLUE = "#2563EB";
+/** High-contrast palette for receipt ticks rendered on purple outgoing bubbles. */
+export const OUTGOING_TICK_PENDING_COLOR = "rgba(255, 255, 255, 0.78)";
+export const OUTGOING_TICK_READ_COLOR = "#BFDBFE";
 
 /**
  * Maps outbound receipt status to WhatsApp-style ticks:
@@ -23,15 +24,15 @@ export function resolveMessageReceiptTickVisual(
   }
 
   if (status === "sent") {
-    return { icon: "checkmark", color: TICK_GRAY };
+    return { icon: "checkmark", color: OUTGOING_TICK_PENDING_COLOR };
   }
 
   if (status === "delivered") {
-    return { icon: "checkmark-done", color: TICK_GRAY };
+    return { icon: "checkmark-done", color: OUTGOING_TICK_PENDING_COLOR };
   }
 
   if (status === "read") {
-    return { icon: "checkmark-done", color: TICK_BLUE };
+    return { icon: "checkmark-done", color: OUTGOING_TICK_READ_COLOR };
   }
 
   return null;

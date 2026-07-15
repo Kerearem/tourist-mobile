@@ -7,11 +7,17 @@ import type {
   ConversationThread,
   HelpConversationInput,
   SendMessageInput,
+  AllowedMessageReaction,
+  MessageReactionSummary,
 } from "../types";
 import { USE_MOCK_BACKEND } from "../../../constants/env";
 import { API_ENDPOINTS } from "../../../services/api/endpoints";
 import { loadAuthState } from "../../../services/api/authSession";
 import { apiRequest } from "../../../services/api/client";
+import {
+  removeViewerReaction,
+  replaceViewerReaction,
+} from "../utils/messageReactions";
 
 const getAccessToken = async () => {
   const state = await loadAuthState();
@@ -22,6 +28,8 @@ const getAccessToken = async () => {
 };
 
 const withThreadId = (template: string, threadId: string) => template.replace(":threadId", threadId);
+const withMessageId = (template: string, messageId: string) =>
+  template.replace(":messageId", messageId);
 
 const mockHelpThreads = (): ConversationThread[] => {
   const now = new Date();
@@ -298,6 +306,7 @@ export async function sendMessage({
   isAnnouncement,
   mediaUrl,
   mediaType,
+  replyToMessageId,
 }: SendMessageInput): Promise<ConversationMessage | null> {
   void sender;
   const cleanText = (text ?? "").trim();
@@ -315,6 +324,22 @@ export async function sendMessage({
       text: cleanText,
       createdAt: new Date().toISOString(),
       status: "sent",
+      ...(replyToMessageId
+        ? {
+            replyTo: (() => {
+              const target = (mockMessages[threadId] ?? []).find((item) => item.id === replyToMessageId);
+              return target
+                ? {
+                    id: target.id,
+                    sender: { displayName: target.sender.displayName },
+                    text: target.text || (target.mediaUrl ? "📷 Fotoğraf" : "Mesaj"),
+                    type: target.type,
+                  }
+                : undefined;
+            })(),
+          }
+        : {}),
+      reactions: [],
       ...(isAnnouncement ? { isAnnouncement: true } : {}),
       ...(cleanMediaUrl ? { mediaUrl: cleanMediaUrl, mediaType: "image" as const } : {}),
     };
@@ -335,6 +360,7 @@ export async function sendMessage({
     body: {
       ...(cleanText ? { text: cleanText } : {}),
       ...(isAnnouncement ? { isAnnouncement: true } : {}),
+      ...(replyToMessageId ? { replyToMessageId } : {}),
       ...(cleanMediaUrl
         ? {
             mediaUrl: cleanMediaUrl,
@@ -343,6 +369,57 @@ export async function sendMessage({
         : {}),
     },
   });
+}
+
+export async function setMessageReaction(
+  threadId: string,
+  messageId: string,
+  emoji: AllowedMessageReaction,
+): Promise<MessageReactionSummary[]> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    const message = (mockMessages[threadId] ?? []).find((item) => item.id === messageId);
+    if (!message) {
+      return [];
+    }
+    message.reactions = replaceViewerReaction(message.reactions ?? [], emoji);
+    return message.reactions;
+  }
+
+  const token = await getAccessToken();
+  const endpoint = withMessageId(
+    withThreadId(API_ENDPOINTS.messages.messageReaction, threadId),
+    messageId,
+  );
+  const response = await apiRequest<{ messageId: string; reactions: MessageReactionSummary[] }>(
+    endpoint,
+    { method: "POST", token, body: { emoji } },
+  );
+  return response.reactions;
+}
+
+export async function removeMessageReaction(
+  threadId: string,
+  messageId: string,
+): Promise<MessageReactionSummary[]> {
+  if (USE_MOCK_BACKEND || isMockHelpThread(threadId)) {
+    const message = (mockMessages[threadId] ?? []).find((item) => item.id === messageId);
+    if (!message) {
+      return [];
+    }
+    message.reactions = removeViewerReaction(message.reactions ?? []);
+    return message.reactions;
+  }
+
+  const token = await getAccessToken();
+  const endpoint = withMessageId(
+    withThreadId(API_ENDPOINTS.messages.messageReaction, threadId),
+    messageId,
+  );
+  const response = await apiRequest<{ messageId: string; reactions: MessageReactionSummary[] }>(
+    endpoint,
+    { method: "DELETE", token },
+  );
+  return response.reactions;
 }
 
 export async function pinMessage(threadId: string, messageId: string): Promise<void> {

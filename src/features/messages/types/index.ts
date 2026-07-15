@@ -23,6 +23,21 @@ export type ConversationThread = {
 export type MessageType = "text" | "system" | "image";
 export type MessageStatus = "sent" | "delivered" | "read";
 export type MessageSystemKind = "help_conversation_started" | "participant_joined" | "other";
+export const ALLOWED_MESSAGE_REACTIONS = ["❤️", "😂", "👍", "😮", "😢", "🙏"] as const;
+export type AllowedMessageReaction = (typeof ALLOWED_MESSAGE_REACTIONS)[number];
+
+export type MessageReplyPreview = {
+  id: string;
+  sender: { displayName: string };
+  text: string;
+  type: MessageType;
+};
+
+export type MessageReactionSummary = {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+};
 
 export type ConversationMessage = {
   id: string;
@@ -41,6 +56,8 @@ export type ConversationMessage = {
   isAnnouncement?: boolean;
   mediaUrl?: string;
   mediaType?: "image";
+  replyTo?: MessageReplyPreview;
+  reactions?: MessageReactionSummary[];
 };
 
 export type ConversationMessagesPage = {
@@ -89,6 +106,7 @@ export type SendMessageInput = {
   isAnnouncement?: boolean;
   mediaUrl?: string;
   mediaType?: "image";
+  replyToMessageId?: string;
 };
 
 export type HelpConversationInput = {

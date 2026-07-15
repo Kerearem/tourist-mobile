@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
+import type { ConversationMessage } from "../types";
 
 type MessageComposerProps = {
   onSend: (text: string, options?: { isAnnouncement?: boolean }) => Promise<void>;
@@ -14,6 +15,8 @@ type MessageComposerProps = {
   onCameraPress?: (caption: string) => void;
   isPhotoUploading?: boolean;
   resetToken?: number;
+  replyTarget?: ConversationMessage | null;
+  onCancelReply?: () => void;
 };
 
 export function MessageComposer({
@@ -25,6 +28,8 @@ export function MessageComposer({
   onCameraPress,
   isPhotoUploading = false,
   resetToken = 0,
+  replyTarget = null,
+  onCancelReply,
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [announcementMode, setAnnouncementMode] = useState(false);
@@ -49,6 +54,25 @@ export function MessageComposer({
 
   return (
     <View style={styles.wrapper}>
+      {replyTarget ? (
+        <View style={styles.replyPreview}>
+          <View style={styles.replyPreviewText}>
+            <AppText style={styles.replySender} variant="caption">
+              {replyTarget.sender.displayName}
+            </AppText>
+            <AppText numberOfLines={1} style={styles.replyMessage} variant="caption">
+              {replyTarget.text || (replyTarget.mediaUrl ? "📷 Fotoğraf" : "Mesaj")}
+            </AppText>
+          </View>
+          <Pressable
+            accessibilityLabel="Yanıtı iptal et"
+            onPress={onCancelReply}
+            style={styles.replyClose}
+          >
+            <Ionicons color={theme.colors.textSecondary} name="close" size={18} />
+          </Pressable>
+        </View>
+      ) : null}
       {showAnnouncementOption ? (
         <Pressable
           disabled={isBusy}
@@ -130,6 +154,33 @@ export function MessageComposer({
 const styles = StyleSheet.create({
   wrapper: {
     gap: theme.spacing.sm,
+  },
+  replyPreview: {
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderLeftColor: "#5B3CF6",
+    borderLeftWidth: 3,
+    borderRadius: theme.radius.md,
+    flexDirection: "row",
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  replyPreviewText: {
+    flex: 1,
+  },
+  replySender: {
+    color: "#5B3CF6",
+    fontWeight: "700",
+  },
+  replyMessage: {
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  replyClose: {
+    alignItems: "center",
+    height: 32,
+    justifyContent: "center",
+    width: 32,
   },
   announcementButton: {
     alignSelf: "flex-start",

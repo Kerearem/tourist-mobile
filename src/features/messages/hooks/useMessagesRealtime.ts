@@ -6,6 +6,7 @@ import { messagesRealtimeClient } from "../realtime/messagesRealtimeClient";
 import type {
   ConversationUpdatedEvent,
   MessageNewEvent,
+  MessageReactionEvent,
   MessageReceiptsEvent,
 } from "../realtime/messageRealtimeEvents";
 
@@ -14,6 +15,7 @@ type UseMessagesRealtimeOptions = {
   onMessageNew?: (event: MessageNewEvent) => void;
   onConversationUpdated?: (event: ConversationUpdatedEvent) => void;
   onMessageReceipts?: (event: MessageReceiptsEvent) => void;
+  onMessageReaction?: (event: MessageReactionEvent) => void;
   onReconnect?: () => void;
 };
 
@@ -22,6 +24,7 @@ export function useMessagesRealtime({
   onMessageNew,
   onConversationUpdated,
   onMessageReceipts,
+  onMessageReaction,
   onReconnect,
 }: UseMessagesRealtimeOptions) {
   const { user } = useAuth();
@@ -30,11 +33,13 @@ export function useMessagesRealtime({
   const onMessageNewRef = useRef(onMessageNew);
   const onConversationUpdatedRef = useRef(onConversationUpdated);
   const onMessageReceiptsRef = useRef(onMessageReceipts);
+  const onMessageReactionRef = useRef(onMessageReaction);
   const onReconnectRef = useRef(onReconnect);
 
   onMessageNewRef.current = onMessageNew;
   onConversationUpdatedRef.current = onConversationUpdated;
   onMessageReceiptsRef.current = onMessageReceipts;
+  onMessageReactionRef.current = onMessageReaction;
   onReconnectRef.current = onReconnect;
 
   useEffect(() => {
@@ -53,6 +58,9 @@ export function useMessagesRealtime({
     const unsubscribeReceipts = messagesRealtimeClient.onMessageReceipts((event) => {
       onMessageReceiptsRef.current?.(event);
     });
+    const unsubscribeReaction = messagesRealtimeClient.onMessageReaction((event) => {
+      onMessageReactionRef.current?.(event);
+    });
     const unsubscribeReconnect = messagesRealtimeClient.onReconnect(() => {
       onReconnectRef.current?.();
     });
@@ -61,6 +69,7 @@ export function useMessagesRealtime({
       unsubscribeMessage();
       unsubscribeConversation();
       unsubscribeReceipts();
+      unsubscribeReaction();
       unsubscribeReconnect();
     };
   }, [enabled, userId]);

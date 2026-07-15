@@ -74,9 +74,18 @@ describe("shouldShowDaySeparator", () => {
 
 describe("receipt ticks still map correctly", () => {
   it("sent single gray, delivered double gray, read double blue", () => {
-    assert.deepEqual(resolveMessageReceiptTickVisual("sent"), { icon: "checkmark", color: "#94A3B8" });
-    assert.deepEqual(resolveMessageReceiptTickVisual("delivered"), { icon: "checkmark-done", color: "#94A3B8" });
-    assert.deepEqual(resolveMessageReceiptTickVisual("read"), { icon: "checkmark-done", color: "#2563EB" });
+    assert.deepEqual(resolveMessageReceiptTickVisual("sent"), {
+      icon: "checkmark",
+      color: "rgba(255, 255, 255, 0.78)",
+    });
+    assert.deepEqual(resolveMessageReceiptTickVisual("delivered"), {
+      icon: "checkmark-done",
+      color: "rgba(255, 255, 255, 0.78)",
+    });
+    assert.deepEqual(resolveMessageReceiptTickVisual("read"), {
+      icon: "checkmark-done",
+      color: "#BFDBFE",
+    });
   });
 });
 
