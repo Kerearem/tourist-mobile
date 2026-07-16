@@ -8,7 +8,10 @@ import {
   clearNetInfoSubscription,
   createReconnectScheduler,
   isNetOnline,
+  loadNetInfoSafely,
+  resetNetInfoLoadCacheForTests,
   shouldForceReconnectOnNetChange,
+  type NetInfoModule,
   type NetSnapshot,
 } from "../src/features/messages/realtime/messagesRealtimeNetRecovery";
 import { resolveSocketConnectNotification } from "../src/features/messages/realtime/messagesRealtimeConnectLifecycle";
@@ -17,6 +20,9 @@ const clientSource = readFileSync(
   join(process.cwd(), "src/features/messages/realtime/messagesRealtimeClient.ts"),
   "utf8",
 );
+const appJson = JSON.parse(readFileSync(join(process.cwd(), "app.json"), "utf8")) as {
+  expo: { runtimeVersion?: unknown; updates?: unknown };
+};
 
 const online = (type: string | null = "wifi"): NetSnapshot => ({
   isConnected: true,
@@ -123,14 +129,26 @@ describe("reconnect debounce scheduler", () => {
 });
 
 describe("realtime client net recovery wiring", () => {
-  it("subscribes to NetInfo and schedules forced reconnects on recovery transitions", () => {
+  it("does not eagerly import NetInfo at module top-level", () => {
+    assert.equal(
+      /^\s*import\s+NetInfo\s+from\s+["']@react-native-community\/netinfo["']/m.test(clientSource),
+      false,
+    );
+    assert.equal(clientSource.includes('import NetInfo from "@react-native-community/netinfo"'), false);
+  });
+
+  it("loads NetInfo lazily via the safe helper and keeps recovery decisions unchanged", () => {
+    assert.match(clientSource, /loadNetInfoSafely\(\)/);
     assert.match(clientSource, /NetInfo\.addEventListener/);
     assert.match(clientSource, /shouldForceReconnectOnNetChange\(previous, snapshot\)/);
     assert.match(clientSource, /this\.reconnectScheduler\.schedule\(\)/);
   });
 
   it("keeps the NetInfo listener a no-op in mock mode", () => {
-    assert.match(clientSource, /if \(USE_MOCK_BACKEND \|\| this\.netInfoUnsubscribe\) \{\s*return;\s*\}/s);
+    assert.match(
+      clientSource,
+      /if \(USE_MOCK_BACKEND \|\| this\.netInfoUnsubscribe \|\| this\.netInfoAttachInFlight\) \{\s*return;\s*\}/s,
+    );
     assert.match(clientSource, /forceReconnect\(\): void \{\s*if \(USE_MOCK_BACKEND\) \{\s*return;\s*\}/s);
   });
 
@@ -159,5 +177,93 @@ describe("realtime client net recovery wiring", () => {
     assert.match(clientSource, /this\.reconnectScheduler\.cancel\(\)/);
     assert.match(clientSource, /clearNetInfoSubscription\(this\.netInfoUnsubscribe\)/);
     assert.match(clientSource, /this\.lastNetSnapshot = null;/);
+  });
+});
+
+describe("safe NetInfo load when native module is missing", () => {
+  const createFakeNetInfo = (): NetInfoModule => ({
+    addEventListener: () => () => undefined,
+  });
+
+  it("returns null without throwing when the import fails, and warns once", async () => {
+    resetNetInfoLoadCacheForTests();
+    const warnings: unknown[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    try {
+      const first = await loadNetInfoSafely(async () => {
+        throw new Error("NativeModule.RNCNetInfo is null");
+      });
+      const second = await loadNetInfoSafely(async () => {
+        throw new Error("should not be called again");
+      });
+
+      assert.equal(first, null);
+      assert.equal(second, null);
+      assert.equal(warnings.length, 1);
+      const firstWarning = warnings[0] as unknown[];
+      assert.match(String(firstWarning[0]), /NetInfo native module unavailable/);
+    } finally {
+      console.warn = originalWarn;
+      resetNetInfoLoadCacheForTests();
+    }
+  });
+
+  it("caches a successful load and never re-imports", async () => {
+    resetNetInfoLoadCacheForTests();
+    let importCount = 0;
+    const module = createFakeNetInfo();
+
+    const first = await loadNetInfoSafely(async () => {
+      importCount += 1;
+      return { default: module };
+    });
+    const second = await loadNetInfoSafely(async () => {
+      importCount += 1;
+      throw new Error("should not re-import");
+    });
+
+    assert.equal(first, module);
+    assert.equal(second, module);
+    assert.equal(importCount, 1);
+    resetNetInfoLoadCacheForTests();
+  });
+
+  it("treats a failed load as a permanent no-op so AppState/forceReconnect paths stay independent", async () => {
+    resetNetInfoLoadCacheForTests();
+    const originalWarn = console.warn;
+    console.warn = () => undefined;
+
+    try {
+      assert.equal(
+        await loadNetInfoSafely(async () => {
+          throw new Error("missing native module");
+        }),
+        null,
+      );
+
+      // Reconnect decision helpers and AppState/forceReconnect wiring remain intact
+      // even when NetInfo never attaches — recovery still works via AppState.
+      assert.equal(shouldForceReconnectOnNetChange(offline(), online()), true);
+      assert.match(clientSource, /forceReconnect\(\): void/);
+      assert.match(
+        clientSource,
+        /nextState !== "active" \|\| USE_MOCK_BACKEND[\s\S]*?this\.reconnectScheduler\.schedule\(\)/,
+      );
+      assert.match(clientSource, /await loadNetInfoSafely\(\)/);
+      assert.match(clientSource, /if \(!NetInfo \|\| this\.netInfoUnsubscribe \|\| USE_MOCK_BACKEND\)/);
+    } finally {
+      console.warn = originalWarn;
+      resetNetInfoLoadCacheForTests();
+    }
+  });
+});
+
+describe("runtimeVersion update safety", () => {
+  it("pins Expo Updates to a fingerprint runtime so native-incompatible OTA JS is blocked", () => {
+    assert.deepEqual(appJson.expo.runtimeVersion, { policy: "fingerprint" });
   });
 });

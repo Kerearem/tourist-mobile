@@ -1,4 +1,3 @@
-import NetInfo from "@react-native-community/netinfo";
 import { AppState, type AppStateStatus } from "react-native";
 import { io, type Socket } from "socket.io-client";
 
@@ -19,6 +18,7 @@ import {
 import {
   clearNetInfoSubscription,
   createReconnectScheduler,
+  loadNetInfoSafely,
   shouldForceReconnectOnNetChange,
   type NetSnapshot,
   type ReconnectScheduler,
@@ -44,6 +44,7 @@ class MessagesRealtimeClient {
   private readonly reconnectHandlers = new Set<ReconnectHandler>();
   private appStateSubscription: { remove: () => void } | null = null;
   private netInfoUnsubscribe: (() => void) | null = null;
+  private netInfoAttachInFlight = false;
   private lastNetSnapshot: NetSnapshot | null = null;
   private readonly reconnectScheduler: ReconnectScheduler = createReconnectScheduler(() => {
     this.forceReconnect();
@@ -229,7 +230,28 @@ class MessagesRealtimeClient {
   }
 
   private ensureNetInfoListener() {
+    if (USE_MOCK_BACKEND || this.netInfoUnsubscribe || this.netInfoAttachInFlight) {
+      return;
+    }
+
+    this.netInfoAttachInFlight = true;
+    void this.attachNetInfoListener().finally(() => {
+      this.netInfoAttachInFlight = false;
+    });
+  }
+
+  /**
+   * NetInfo is loaded lazily so an old binary without RNCNetInfo never crashes
+   * on module evaluation. If the native module is missing, network recovery is
+   * a silent no-op; AppState forced reconnect still works.
+   */
+  private async attachNetInfoListener() {
     if (USE_MOCK_BACKEND || this.netInfoUnsubscribe) {
+      return;
+    }
+
+    const NetInfo = await loadNetInfoSafely();
+    if (!NetInfo || this.netInfoUnsubscribe || USE_MOCK_BACKEND) {
       return;
     }
 
