@@ -23,6 +23,7 @@ import {
   type NetSnapshot,
   type ReconnectScheduler,
 } from "./messagesRealtimeNetRecovery";
+import { clearMessagesSessionCache } from "../cache/messagesSessionCache";
 import { resolveSocketOrigin } from "./resolveSocketOrigin";
 
 type MessageNewHandler = (event: MessageNewEvent) => void;
@@ -185,6 +186,8 @@ class MessagesRealtimeClient {
     this.appStateSubscription = clearAppStateSubscription(this.appStateSubscription);
     this.netInfoUnsubscribe = clearNetInfoSubscription(this.netInfoUnsubscribe);
     this.lastNetSnapshot = null;
+    // Drop in-memory chat snapshots so a later account never sees prior DMs.
+    clearMessagesSessionCache();
   }
 
   /**

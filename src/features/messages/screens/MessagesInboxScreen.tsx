@@ -34,13 +34,15 @@ import {
   applyRequestConversationRealtimeUpdate,
   isPendingMessageRequest,
 } from "../utils/requestInboxRealtime";
+import { getCachedInbox, setCachedInbox } from "../cache/messagesSessionCache";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessagesInboxScreen">;
 
 export function MessagesInboxScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [items, setItems] = useState<ConversationThread[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const initialInbox = getCachedInbox();
+  const [items, setItems] = useState<ConversationThread[]>(initialInbox ?? []);
+  const [isLoading, setIsLoading] = useState(!initialInbox);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -48,10 +50,10 @@ export function MessagesInboxScreen({ navigation }: Props) {
   const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
   const [requestCount, setRequestCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
-  const hasLoadedOnceRef = useRef(false);
+  const hasLoadedOnceRef = useRef(Boolean(initialInbox));
 
   const viewerId = user?.id ?? "";
-  const hasCachedData = items.length > 0;
+  const hasCachedData = items.length > 0 || Boolean(getCachedInbox()?.length);
 
   const visibleConversations = useMemo(() => {
     if (!viewerId) {
@@ -64,7 +66,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
   }, [hiddenIds, items, viewerId]);
 
   const loadData = async (mode: InboxLoadMode) => {
-    const cachedData = items.length > 0;
+    const cachedData = items.length > 0 || Boolean(getCachedInbox()?.length);
 
     if (shouldSetInboxLoadingState(mode, cachedData)) {
       setIsLoading(true);
@@ -79,6 +81,7 @@ export function MessagesInboxScreen({ navigation }: Props) {
         getUnreadNotificationCount(),
       ]);
       setItems(data);
+      setCachedInbox(data);
       setRequestCount(requests.length);
       setNotificationCount(unreadNotifications);
       setError(null);
@@ -119,7 +122,11 @@ export function MessagesInboxScreen({ navigation }: Props) {
         return;
       }
 
-      setItems((current) => upsertConversationThread(current, conversation));
+      setItems((current) => {
+        const next = upsertConversationThread(current, conversation);
+        setCachedInbox(next);
+        return next;
+      });
       void refreshRequestCount();
     },
     onReconnect: () => {

@@ -34,6 +34,18 @@ import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
 import { PinnedMessageBar } from "../components/PinnedMessageBar";
 import {
+  getCachedThread,
+  getCachedThreadByEventId,
+  setCachedThread,
+} from "../cache/messagesSessionCache";
+import {
+  resolveThreadLoadMode,
+  shouldClearThreadOnLoadError,
+  shouldSetThreadLoadingState,
+  shouldShowThreadFullScreenLoader,
+  type ThreadLoadMode,
+} from "../utils/threadLoadPresentation";
+import {
   getMessages,
   markConversationRead,
   pinMessage,
@@ -293,10 +305,15 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const { isKeyboardVisible, keyboardPadding, restingBottomInset } = useTabMessageKeyboardLayout();
   const listRef = useRef<FlatList<ConversationMessage>>(null);
-  const [group, setGroup] = useState<EventGroupInfo | null>(null);
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [pinnedMessage, setPinnedMessage] = useState<ConversationMessage | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const initialCache =
+    (route.params.conversationId ? getCachedThread(route.params.conversationId) : null) ??
+    getCachedThreadByEventId(route.params.eventId);
+  const [group, setGroup] = useState<EventGroupInfo | null>(initialCache?.group ?? null);
+  const [messages, setMessages] = useState<ConversationMessage[]>(initialCache?.messages ?? []);
+  const [pinnedMessage, setPinnedMessage] = useState<ConversationMessage | null>(
+    initialCache?.pinnedMessage ?? null,
+  );
+  const [isLoading, setIsLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -307,6 +324,13 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   const viewerId = user?.id ?? "";
   const isOrganizer = group?.viewerRole === "ORGANIZER";
+  const hasCachedThread =
+    Boolean(group) ||
+    messages.length > 0 ||
+    Boolean(
+      (route.params.conversationId ? getCachedThread(route.params.conversationId) : null) ??
+        getCachedThreadByEventId(route.params.eventId),
+    );
 
   const messageIndexById = useMemo(
     () => Object.fromEntries(messages.map((message, index) => [message.id, index])),
@@ -348,15 +372,26 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     setActionMenu(null);
   }, []);
 
-  const loadChat = async () => {
-    setIsLoading(true);
+  const loadChat = async (mode?: ThreadLoadMode) => {
+    const cached =
+      (route.params.conversationId ? getCachedThread(route.params.conversationId) : null) ??
+      getCachedThreadByEventId(route.params.eventId);
+    const hasCache = Boolean(cached);
+    const resolvedMode = mode ?? resolveThreadLoadMode(hasCache);
+
+    if (shouldSetThreadLoadingState(resolvedMode, hasCache)) {
+      setIsLoading(true);
+    }
+
     try {
       const groupResult = await getEventGroup(route.params.eventId);
       if (!groupResult) {
-        setGroup(null);
-        setMessages([]);
-        setPinnedMessage(null);
-        setError("Grup bulunamadı.");
+        if (shouldClearThreadOnLoadError(hasCache)) {
+          setGroup(null);
+          setMessages([]);
+          setPinnedMessage(null);
+          setError("Grup bulunamadı.");
+        }
         return;
       }
 
@@ -380,13 +415,21 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       const threadMessages = await getMessages(conversationId);
       setGroup(groupResult);
       applyMessagesPage(threadMessages);
+      setCachedThread(conversationId, {
+        messages: threadMessages.messages,
+        pinnedMessage: threadMessages.pinnedMessage,
+        group: groupResult,
+        eventId: route.params.eventId,
+      });
       setError(null);
       await markConversationRead(conversationId);
     } catch {
-      setGroup(null);
-      setMessages([]);
-      setPinnedMessage(null);
-      setError("Grup sohbeti yüklenemedi.");
+      if (shouldClearThreadOnLoadError(hasCache)) {
+        setGroup(null);
+        setMessages([]);
+        setPinnedMessage(null);
+        setError("Grup sohbeti yüklenemedi.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -394,14 +437,32 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      void loadChat();
-    }, [route.params.eventId]),
+      const cached =
+        (route.params.conversationId ? getCachedThread(route.params.conversationId) : null) ??
+        getCachedThreadByEventId(route.params.eventId);
+      if (cached) {
+        setGroup(cached.group);
+        setMessages(cached.messages);
+        setPinnedMessage(cached.pinnedMessage);
+        setError(null);
+      }
+      void loadChat(resolveThreadLoadMode(Boolean(cached)));
+    }, [route.params.conversationId, route.params.eventId]),
   );
 
-  const refreshMessages = useCallback(async (conversationId: string) => {
-    const threadMessages = await getMessages(conversationId);
-    applyMessagesPage(threadMessages);
-  }, [applyMessagesPage]);
+  const refreshMessages = useCallback(
+    async (conversationId: string) => {
+      const threadMessages = await getMessages(conversationId);
+      applyMessagesPage(threadMessages);
+      setCachedThread(conversationId, {
+        messages: threadMessages.messages,
+        pinnedMessage: threadMessages.pinnedMessage,
+        group,
+        eventId: route.params.eventId,
+      });
+    },
+    [applyMessagesPage, group, route.params.eventId],
+  );
 
   const onSend = async (text: string, options?: { isAnnouncement?: boolean }) => {
     if (!user || !group?.conversationId || group.isArchived) {
@@ -513,7 +574,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   const actionMessage = actionMenu?.message ?? null;
   const isActionMessagePinned = Boolean(actionMessage && pinnedMessage?.id === actionMessage.id);
 
-  if (isLoading) {
+  if (shouldShowThreadFullScreenLoader(isLoading, hasCachedThread)) {
     return (
       <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
         <View style={styles.loadingWrap}>
@@ -523,7 +584,8 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  if (error || !group) {
+  // Access/membership errors clear messages; network errors keep the warm cache visible.
+  if ((error && messages.length === 0) || (!group && !hasCachedThread)) {
     return (
       <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
         <View style={styles.header}>
@@ -534,6 +596,16 @@ export function GroupDetailScreen({ navigation, route }: Props) {
         <Card style={styles.stateCard}>
           <ErrorState onRetry={() => void loadChat()} subtitle={error ?? undefined} title="Grup bulunamadı" />
         </Card>
+      </SafeAreaView>
+    );
+  }
+
+  if (!group) {
+    return (
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+        <View style={styles.loadingWrap}>
+          <Loader label="Grup sohbeti yükleniyor..." />
+        </View>
       </SafeAreaView>
     );
   }

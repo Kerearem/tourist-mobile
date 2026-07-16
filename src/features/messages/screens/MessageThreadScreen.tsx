@@ -48,6 +48,23 @@ import {
   shouldShowIncomingDmAvatar,
 } from "../utils/messageReceipts";
 import { formatMessageDayLabel, shouldShowDaySeparator } from "../utils/messageDaySeparators";
+import {
+  appendCachedThreadMessage,
+  getCachedThread,
+  patchCachedThreadConversation,
+  patchCachedThreadMessageUpdated,
+  patchCachedThreadReaction,
+  patchCachedThreadReceipts,
+  setCachedThread,
+} from "../cache/messagesSessionCache";
+import {
+  resolveThreadLoadMode,
+  shouldClearThreadOnLoadError,
+  shouldSetThreadLoadingState,
+  shouldShowThreadFullScreenError,
+  shouldShowThreadFullScreenLoader,
+  type ThreadLoadMode,
+} from "../utils/threadLoadPresentation";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageThreadScreen">;
 
@@ -83,9 +100,12 @@ const otherParticipant = (conversation: ConversationThread | null, viewerId: str
 export function MessageThreadScreen({ route, navigation }: Props) {
   const { user } = useAuth();
   const { isKeyboardVisible, keyboardPadding, restingBottomInset } = useTabMessageKeyboardLayout();
-  const [conversation, setConversation] = useState<ConversationThread | null>(null);
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const initialCache = getCachedThread(route.params.threadId);
+  const [conversation, setConversation] = useState<ConversationThread | null>(
+    initialCache?.conversation ?? null,
+  );
+  const [messages, setMessages] = useState<ConversationMessage[]>(initialCache?.messages ?? []);
+  const [isLoading, setIsLoading] = useState(!initialCache);
   const [isSendingGreeting, setIsSendingGreeting] = useState(false);
   const [actionMessage, setActionMessage] = useState<ConversationMessage | null>(null);
   const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(null);
@@ -104,6 +124,8 @@ export function MessageThreadScreen({ route, navigation }: Props) {
   } = useMessageThreadListScroll(messages);
 
   const viewerId = user?.id ?? "";
+  const hasCachedThread =
+    Boolean(conversation) || messages.length > 0 || Boolean(getCachedThread(route.params.threadId));
 
   useEffect(() => {
     activeThreadIdRef.current = route.params.threadId;
@@ -120,20 +142,28 @@ export function MessageThreadScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     resetForThread();
-    setConversation(null);
-    setMessages([]);
+    const cached = getCachedThread(route.params.threadId);
+    setConversation(cached?.conversation ?? null);
+    setMessages(cached?.messages ?? []);
     setActionMessage(null);
     setReplyTarget(null);
     setError(null);
-    void loadThread();
+    void loadThread(route.params.threadId, resolveThreadLoadMode(Boolean(cached)));
   }, [route.params.threadId]);
 
   useEffect(() => {
-    onInitialMessagesReady(isLoading);
-  }, [isLoading, messages.length, onInitialMessagesReady]);
+    onInitialMessagesReady(isLoading && !hasCachedThread);
+  }, [hasCachedThread, isLoading, messages.length, onInitialMessagesReady]);
 
-  const loadThread = async (threadId = route.params.threadId) => {
-    setIsLoading(true);
+  const loadThread = async (
+    threadId = route.params.threadId,
+    mode: ThreadLoadMode = resolveThreadLoadMode(Boolean(getCachedThread(threadId))),
+  ) => {
+    const hasCache = Boolean(getCachedThread(threadId));
+    if (shouldSetThreadLoadingState(mode, hasCache)) {
+      setIsLoading(true);
+    }
+
     let loadedThread: ConversationThread | null = null;
 
     try {
@@ -149,15 +179,22 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       loadedThread = thread;
       setConversation(thread);
       setMessages(threadMessages.messages);
+      setCachedThread(threadId, {
+        conversation: thread,
+        messages: threadMessages.messages,
+        pinnedMessage: threadMessages.pinnedMessage,
+      });
       setError(null);
     } catch {
       if (activeThreadIdRef.current !== threadId) {
         return;
       }
 
-      setConversation(null);
-      setMessages([]);
-      setError("Sohbet yüklenemedi.");
+      if (shouldClearThreadOnLoadError(hasCache)) {
+        setConversation(null);
+        setMessages([]);
+        setError("Sohbet yüklenemedi.");
+      }
     } finally {
       if (activeThreadIdRef.current === threadId) {
         setIsLoading(false);
@@ -177,6 +214,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       }
 
       setMessages((current) => appendMessageDeduped(current, message));
+      appendCachedThreadMessage(conversationId, message);
 
       if (message.sender.id !== viewerId) {
         onIncomingMessage(isNearBottomRef.current);
@@ -192,6 +230,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       }
 
       setConversation(event.payload.conversation);
+      patchCachedThreadConversation(event.payload.conversation.id, event.payload.conversation);
     },
     onMessageReceipts: (event) => {
       if (event.payload.conversationId !== activeThreadIdRef.current) {
@@ -199,6 +238,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       }
 
       setMessages((current) => applyMessageReceiptUpdates(current, event.payload.updates));
+      patchCachedThreadReceipts(event.payload.conversationId, event.payload.updates);
     },
     onMessageReaction: (event) => {
       if (event.payload.conversationId !== activeThreadIdRef.current) {
@@ -212,6 +252,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
           event.payload.reactions,
         ),
       );
+      patchCachedThreadReaction(
+        event.payload.conversationId,
+        event.payload.messageId,
+        event.payload.reactions,
+      );
     },
     onMessageUpdated: (event) => {
       if (event.payload.conversationId !== activeThreadIdRef.current) {
@@ -219,9 +264,10 @@ export function MessageThreadScreen({ route, navigation }: Props) {
       }
 
       setMessages((current) => applyMessageUpdated(current, event.payload.message));
+      patchCachedThreadMessageUpdated(event.payload.conversationId, event.payload.message);
     },
     onReconnect: () => {
-      void loadThread(activeThreadIdRef.current);
+      void loadThread(activeThreadIdRef.current, "silent");
     },
   });
 
@@ -245,19 +291,23 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     }
 
     setMessages((current) => appendMessageDeduped(current, sentMessage));
+    appendCachedThreadMessage(route.params.threadId, sentMessage);
     setReplyTarget(null);
     onOwnMessageSent();
-    setConversation((current) =>
-      current
-        ? {
-            ...current,
-            lastMessageAt: sentMessage.createdAt,
-            lastMessagePreview: sentMessage.text || "📷 Fotoğraf",
-            updatedAt: sentMessage.createdAt,
-            unreadCount: 0,
-          }
-        : current,
-    );
+    setConversation((current) => {
+      if (!current) {
+        return current;
+      }
+      const next = {
+        ...current,
+        lastMessageAt: sentMessage.createdAt,
+        lastMessagePreview: sentMessage.text || "📷 Fotoğraf",
+        updatedAt: sentMessage.createdAt,
+        unreadCount: 0,
+      };
+      patchCachedThreadConversation(route.params.threadId, next);
+      return next;
+    });
   };
 
   const chooseReply = (message: ConversationMessage) => {
@@ -284,6 +334,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
         ? await removeMessageReaction(route.params.threadId, message.id)
         : await setMessageReaction(route.params.threadId, message.id, emoji);
       setMessages((current) => applyMessageReactionUpdate(current, message.id, reactions));
+      patchCachedThreadReaction(route.params.threadId, message.id, reactions);
     } catch (reactionError) {
       Alert.alert(
         "Tepki eklenemedi",
@@ -324,6 +375,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
               const updated = await deleteMessage(route.params.threadId, message.id);
               if (updated) {
                 setMessages((current) => applyMessageUpdated(current, updated));
+                patchCachedThreadMessageUpdated(route.params.threadId, updated);
               }
             } catch (deleteError) {
               Alert.alert(
@@ -408,7 +460,7 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     );
   };
 
-  if (isLoading) {
+  if (shouldShowThreadFullScreenLoader(isLoading, hasCachedThread)) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
@@ -418,11 +470,11 @@ export function MessageThreadScreen({ route, navigation }: Props) {
     );
   }
 
-  if (error) {
+  if (shouldShowThreadFullScreenError(error, hasCachedThread)) {
     return (
       <Screen>
         <Card style={styles.stateCard}>
-          <ErrorState onRetry={() => void loadThread()} subtitle={error} title="Sohbet yüklenemedi" />
+          <ErrorState onRetry={() => void loadThread()} subtitle={error ?? undefined} title="Sohbet yüklenemedi" />
         </Card>
       </Screen>
     );
