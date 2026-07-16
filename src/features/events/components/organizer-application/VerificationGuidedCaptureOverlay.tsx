@@ -4,6 +4,7 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { AppText } from "../../../../components/ui/AppText";
 import { theme } from "../../../../constants/theme";
 import type { GuidedCaptureCopy, GuidedCaptureMode } from "../../utils/organizer-verification-capture";
+import { resolveGuidedCaptureFrameRect } from "../../utils/organizer-verification-guided-crop";
 
 type Props = {
   mode: GuidedCaptureMode;
@@ -12,10 +13,8 @@ type Props = {
 
 export function VerificationGuidedCaptureOverlay({ mode, copy }: Props) {
   const { width, height } = useWindowDimensions();
-  const frameWidth = mode === "identity" ? width * 0.88 : width * 0.68;
-  const frameHeight = mode === "identity" ? frameWidth * 0.63 : frameWidth * 1.28;
-  const frameLeft = (width - frameWidth) / 2;
-  const frameTop = height * 0.26;
+  const frame = resolveGuidedCaptureFrameRect(mode, width, height);
+  const { left: frameLeft, top: frameTop, width: frameWidth, height: frameHeight } = frame;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>

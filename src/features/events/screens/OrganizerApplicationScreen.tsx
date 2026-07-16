@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -75,6 +75,10 @@ import {
   type OrganizerWizardStepId,
   validateOrganizerMotivation,
 } from "../utils/organizer-verification-wizard";
+import {
+  planGuidedCaptureUpload,
+  type PendingGuidedCapture,
+} from "../utils/organizer-verification-capture-queue";
 import { meetsOrganizerMinimumAge } from "../utils/viewerAge";
 
 type Props = NativeStackScreenProps<
@@ -112,6 +116,9 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [activeUploadType, setActiveUploadType] = useState<VerificationDocumentType | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Partial<Record<VerificationDocumentType, string>>>({});
+  const activeUploadTypeRef = useRef<VerificationDocumentType | null>(null);
+  const pendingGuidedCaptureRef = useRef<PendingGuidedCapture | null>(null);
+  const drainGuidedCaptureRef = useRef<() => void>(() => undefined);
 
   const organizerStatus = user?.organizerStatus ?? "not_applied";
   const reviewStatus = current?.application?.reviewStatus ?? null;
@@ -289,7 +296,7 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
     documentType: VerificationDocumentType,
     pickFile: () => Promise<VerificationUploadFile | null>,
   ) => {
-    if (!canStartDocumentUpload(activeUploadType)) {
+    if (!canStartDocumentUpload(activeUploadTypeRef.current)) {
       return;
     }
 
@@ -297,6 +304,7 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
       return;
     }
 
+    activeUploadTypeRef.current = documentType;
     setActiveUploadType(documentType);
     setUploadErrors((previous) => ({ ...previous, [documentType]: undefined }));
     setFormError(null);
@@ -314,9 +322,35 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
         [documentType]: mapVerificationUploadStepError(error),
       }));
     } finally {
+      activeUploadTypeRef.current = null;
       setActiveUploadType(null);
+      // Drain any guided capture that arrived while this upload was in flight
+      // (IDENTITY_BACK after FRONT is the classic case).
+      drainGuidedCaptureRef.current();
     }
   };
+
+  const drainGuidedCaptureQueue = useCallback(() => {
+    const plan = planGuidedCaptureUpload({
+      activeUploadType: activeUploadTypeRef.current,
+      pending: pendingGuidedCaptureRef.current,
+      incoming: null,
+    });
+    pendingGuidedCaptureRef.current = plan.nextPending;
+    if (!plan.startUpload) {
+      return;
+    }
+
+    const { documentType, uri } = plan.startUpload;
+    void handleUpload(documentType, async () =>
+      buildVerificationUploadFileFromCapture({
+        uri,
+        documentType,
+      }),
+    );
+  }, [applicationId, showReadOnly]);
+
+  drainGuidedCaptureRef.current = drainGuidedCaptureQueue;
 
   useEffect(() => {
     const captureResult = route.params?.captureResult;
@@ -324,14 +358,30 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
       return;
     }
 
+    // Snapshot immediately, then clear the route param. Never call handleUpload
+    // directly here while another upload may still hold the guard — queue it.
+    const incoming: PendingGuidedCapture = {
+      documentType: captureResult.documentType,
+      uri: captureResult.uri,
+    };
     navigation.setParams({ captureResult: undefined });
 
-    void handleUpload(captureResult.documentType, async () =>
-      buildVerificationUploadFileFromCapture({
-        uri: captureResult.uri,
-        documentType: captureResult.documentType,
-      }),
-    );
+    const plan = planGuidedCaptureUpload({
+      activeUploadType: activeUploadTypeRef.current,
+      pending: pendingGuidedCaptureRef.current,
+      incoming,
+    });
+    pendingGuidedCaptureRef.current = plan.nextPending;
+
+    if (plan.startUpload) {
+      const { documentType, uri } = plan.startUpload;
+      void handleUpload(documentType, async () =>
+        buildVerificationUploadFileFromCapture({
+          uri,
+          documentType,
+        }),
+      );
+    }
   }, [navigation, route.params?.captureResult]);
 
   useEffect(() => {
@@ -525,13 +575,13 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
     if (isDocumentWizardStep(wizardStep) && currentDocumentType) {
       return (
         <OrganizerApplicationDocumentStep
-          disabled={activeUploadType !== null && activeUploadType !== currentDocumentType}
+          disabled={activeUploadType !== null}
           documentType={currentDocumentType}
           isUploading={activeUploadType === currentDocumentType}
           item={currentChecklistItem}
           onOpenGuidedCamera={(documentType) => {
             const mode = resolveGuidedCaptureMode(documentType);
-            if (!mode) {
+            if (!mode || activeUploadTypeRef.current !== null) {
               return;
             }
 

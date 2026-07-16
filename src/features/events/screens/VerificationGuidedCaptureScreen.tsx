@@ -6,6 +6,7 @@ import {
   Linking,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
@@ -24,6 +25,7 @@ import {
   resolveVerificationCameraAvailabilityState,
   SIMULATOR_CAMERA_UNAVAILABLE_MESSAGE,
 } from "../utils/organizer-verification-camera";
+import { cropGuidedCaptureToOverlayFrame } from "../utils/organizer-verification-crop-guided-capture";
 
 type Props = NativeStackScreenProps<
   EventsStackParamList & ProfileStackParamList,
@@ -38,6 +40,7 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
   const { documentType, mode } = route.params;
   const copy = getGuidedCaptureCopy(mode);
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const cameraRef = useRef<CameraView | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [phase, setPhase] = useState<CapturePhase>("camera");
@@ -106,8 +109,15 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
       throw new Error("Fotoğraf kaydedilemedi.");
     }
 
-    return result.uri;
-  }, []);
+    // Crop to the dashed overlay frame so preview/upload match what the user framed.
+    return cropGuidedCaptureToOverlayFrame({
+      uri: result.uri,
+      mode,
+      screenWidth,
+      screenHeight,
+      facing,
+    });
+  }, [facing, mode, screenHeight, screenWidth]);
 
   const onCapture = useCallback(async () => {
     if (phase !== "camera" || availabilityState !== "ready") {
