@@ -175,7 +175,7 @@ export function SettingsScreen({ navigation }: Props) {
               icon="time-outline"
               onPress={() => navigation.navigate(ProfileRoutes.AttendedEventsScreen)}
               subtitle="Katıldığın yaklaşan ve geçmiş etkinlikler"
-              title="Etkinlik Geçmişim"
+              title="Etkinlik Hareketleri"
             />
           </>
         ) : null}

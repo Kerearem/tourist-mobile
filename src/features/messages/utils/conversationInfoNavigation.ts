@@ -40,3 +40,22 @@ export function canOpenMessageUserProfile(
 ): boolean {
   return Boolean(otherParticipant && !isSystemInbox);
 }
+
+/** Group member rows: open public profile for others; own row is a no-op. */
+export function canOpenGroupMemberProfile(memberId: string, viewerId: string): boolean {
+  return Boolean(memberId && viewerId && memberId !== viewerId);
+}
+
+export function buildGroupMemberProfileParams(member: {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  role?: "MEMBER" | "ORGANIZER";
+}): MessageUserProfileScreenParams {
+  return {
+    userId: member.id,
+    displayName: member.displayName,
+    avatarUrl: member.avatarUrl,
+    isOrganizer: member.role === "ORGANIZER",
+  };
+}

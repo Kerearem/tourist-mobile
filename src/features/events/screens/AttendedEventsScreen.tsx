@@ -32,7 +32,7 @@ export function AttendedEventsScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.pagePadding}>
-        <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Geçmişim" />
+        <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Hareketleri" />
         <EventsTabSegmentControl
           activeSection={activeFilter}
           onChange={setActiveFilter}

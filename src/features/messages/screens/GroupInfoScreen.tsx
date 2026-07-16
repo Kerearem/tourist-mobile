@@ -10,7 +10,9 @@ import { Card } from "../../../components/ui/Card";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
+import { MessagesRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
+import { useAuth } from "../../../hooks/useAuth";
 import { getEventById } from "../../events/services/events.service";
 import type { EventItem } from "../../events/types";
 import {
@@ -20,6 +22,10 @@ import {
   type EventGroupMember,
 } from "../../events/services/eventGroup.service";
 import type { MessagesStackParamList } from "../../../navigation/types";
+import {
+  buildGroupMemberProfileParams,
+  canOpenGroupMemberProfile,
+} from "../utils/conversationInfoNavigation";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "GroupInfoScreen">;
 
@@ -38,6 +44,8 @@ const getCoverUri = (event: EventItem | null, title: string) => {
 };
 
 export function GroupInfoScreen({ navigation, route }: Props) {
+  const { user } = useAuth();
+  const viewerId = user?.id ?? "";
   const [group, setGroup] = useState<EventGroupInfo | null>(null);
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +78,17 @@ export function GroupInfoScreen({ navigation, route }: Props) {
   );
 
   const coverUri = useMemo(() => getCoverUri(event, group?.title ?? ""), [event, group?.title]);
+
+  const onOpenMemberProfile = (member: EventGroupMember) => {
+    if (!canOpenGroupMemberProfile(member.id, viewerId)) {
+      return;
+    }
+
+    navigation.navigate(
+      MessagesRoutes.MessageUserProfileScreen,
+      buildGroupMemberProfileParams(member),
+    );
+  };
 
   const onRemoveMember = async (member: EventGroupMember) => {
     if (!group || removingUserId || member.role === "ORGANIZER" || group.isArchived) {
@@ -184,7 +203,12 @@ export function GroupInfoScreen({ navigation, route }: Props) {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={[styles.memberRow, item.hasBlockRelation && styles.memberRowBlocked]}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!canOpenGroupMemberProfile(item.id, viewerId)}
+            onPress={() => onOpenMemberProfile(item)}
+            style={[styles.memberRow, item.hasBlockRelation && styles.memberRowBlocked]}
+          >
             <Avatar initials={item.displayName.slice(0, 2).toUpperCase()} size={48} uri={item.avatarUrl} />
             <View style={styles.memberText}>
               <AppText variant="label">{item.displayName}</AppText>
@@ -225,7 +249,7 @@ export function GroupInfoScreen({ navigation, route }: Props) {
                 </AppText>
               </Pressable>
             ) : null}
-          </View>
+          </Pressable>
         )}
         showsVerticalScrollIndicator={false}
       />

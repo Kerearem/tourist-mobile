@@ -5,7 +5,9 @@ import { describe, it } from "node:test";
 
 import {
   canOpenConversationInfo,
+  canOpenGroupMemberProfile,
   canOpenMessageUserProfile,
+  buildGroupMemberProfileParams,
   buildMessageUserProfileParams,
   resolveConversationInfoNavigation,
   resolveMessageUserProfileNavigation,
@@ -121,6 +123,51 @@ describe("conversation info navigation", () => {
     assert.match(routesSource, /MessageUserProfileScreen/);
     assert.match(stackSource, /MessageUserProfileScreen/);
     assert.match(typesSource, /MessageUserProfileScreen: MessageUserProfileScreenParams/);
+  });
+
+  it("opens group member profiles via MessageUserProfileScreen, skipping the viewer row", () => {
+    assert.equal(canOpenGroupMemberProfile("member_1", "viewer_1"), true);
+    assert.equal(canOpenGroupMemberProfile("viewer_1", "viewer_1"), false);
+
+    const params = buildGroupMemberProfileParams({
+      id: "member_1",
+      displayName: "Ada Lovelace",
+      avatarUrl: "https://example.com/ada.jpg",
+      role: "ORGANIZER",
+    });
+    assert.deepEqual(params, {
+      userId: "member_1",
+      displayName: "Ada Lovelace",
+      avatarUrl: "https://example.com/ada.jpg",
+      isOrganizer: true,
+    });
+
+    const groupInfoSource = readFileSync(
+      join(process.cwd(), "src/features/messages/screens/GroupInfoScreen.tsx"),
+      "utf8",
+    );
+    assert.match(groupInfoSource, /MessagesRoutes\.MessageUserProfileScreen/);
+    assert.match(groupInfoSource, /buildGroupMemberProfileParams/);
+    assert.match(groupInfoSource, /canOpenGroupMemberProfile/);
+  });
+});
+
+describe("attended events display copy", () => {
+  it("uses Etkinlik Hareketleri label on settings and attended screen", () => {
+    const settingsSource = readFileSync(
+      join(process.cwd(), "src/features/profile/screens/SettingsScreen.tsx"),
+      "utf8",
+    );
+    const attendedSource = readFileSync(
+      join(process.cwd(), "src/features/events/screens/AttendedEventsScreen.tsx"),
+      "utf8",
+    );
+    assert.match(settingsSource, /title="Etkinlik Hareketleri"/);
+    assert.match(attendedSource, /title="Etkinlik Hareketleri"/);
+    assert.doesNotMatch(settingsSource, /Etkinlik Geçmişim/);
+    assert.doesNotMatch(attendedSource, /Etkinlik Geçmişim/);
+    assert.match(settingsSource, /AttendedEventsScreen/);
+    assert.match(attendedSource, /AttendedEventsScreen/);
   });
 });
 
