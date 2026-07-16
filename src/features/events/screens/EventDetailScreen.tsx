@@ -11,7 +11,7 @@ import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
 import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
-import { MEDIA_CONTENT_CONTRACTS } from "../../../services/media/mediaContentContracts";
+import { MEDIA_CONTENT_CONTRACTS, getDisplayResizeMode } from "../../../services/media/mediaContentContracts";
 import { useAuth } from "../../../hooks/useAuth";
 import type { EventsStackParamList, MainTabParamList } from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
@@ -225,7 +225,12 @@ export function EventDetailScreen({ route }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Card style={styles.heroCard}>
-          <ImageBackground imageStyle={styles.heroImage} source={{ uri: getCoverUri(event) }} style={styles.heroCover}>
+          <ImageBackground
+            imageStyle={styles.heroImage}
+            resizeMode={getDisplayResizeMode("eventCover")}
+            source={{ uri: getCoverUri(event) }}
+            style={styles.heroCover}
+          >
             <View style={styles.dateBadge}>
               <AppText style={styles.dateWeekday} variant="caption">
                 {dateBadge.weekday}

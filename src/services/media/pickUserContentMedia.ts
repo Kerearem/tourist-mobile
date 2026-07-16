@@ -1,9 +1,11 @@
 import * as ImagePicker from "expo-image-picker";
+import { Platform } from "react-native";
 
 import {
   getImagePickerOptionsForKind,
   type UserContentMediaKind,
 } from "./mediaContentContracts";
+import { normalizeImageToMediaAspect } from "./normalizeImageToMediaAspect";
 import { resolveImagePickerAssetUri } from "./resolveImagePickerAssetUri";
 
 export type PickedUserContentMedia = {
@@ -21,7 +23,7 @@ export async function pickUserContentMedia(
     throw new Error("Galeri erişim izni gerekli.");
   }
 
-  const pickerOptions = getImagePickerOptionsForKind(kind);
+  const pickerOptions = getImagePickerOptionsForKind(kind, Platform.OS);
   const result = await ImagePicker.launchImageLibraryAsync({
     ...pickerOptions,
     allowsMultipleSelection: false,
@@ -35,7 +37,13 @@ export async function pickUserContentMedia(
 
   const asset = result.assets[0];
   const type = asset.type === "video" ? "VIDEO" : "IMAGE";
-  const uri = await resolveImagePickerAssetUri(asset);
+  let uri = await resolveImagePickerAssetUri(asset);
+
+  // Event covers must be stored as true 16:9 pixels so card/detail framing
+  // matches what the user confirmed in preview (iOS cannot native-crop to 16:9).
+  if (kind === "eventCover" && type === "IMAGE") {
+    uri = await normalizeImageToMediaAspect(uri, "eventCover");
+  }
 
   return {
     uri,

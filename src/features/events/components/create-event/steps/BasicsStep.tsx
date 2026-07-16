@@ -120,7 +120,7 @@ export function BasicsStep({ draft, errors, onChange, onClearError }: BasicsStep
 
       <View style={styles.fieldBlock}>
         <AppText variant="label">Kapak Fotoğrafı</AppText>
-        <AppText variant="caption">Opsiyonel · 16:9 kırpma ve önizleme sonrası yüklenir</AppText>
+        <AppText variant="caption">Opsiyonel · 16:9 kadraj (kart ve detayla aynı çerçeve)</AppText>
         {draft.coverUri ? (
           <Image resizeMode={coverResizeMode} source={{ uri: draft.coverUri }} style={styles.coverPreview} />
         ) : (

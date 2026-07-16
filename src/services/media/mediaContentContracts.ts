@@ -68,6 +68,8 @@ export const MEDIA_CONTENT_CONTRACTS: Record<UserContentMediaKind, MediaContentC
     displayResizeMode: "cover",
     videoContentFit: "cover",
     gridCellWidthOverHeight: 16 / 9,
+    // Android honors pickerAspect; iOS ignores it and forces a square crop UI
+    // (see getImagePickerOptionsForKind) — covers must never use that square path.
     pickerAllowsEditingForImages: true,
     pickerAspect: [16, 9],
     previewGuidance: "Bu görsel etkinlik kartında yatay banner olarak görünecek.",
@@ -92,16 +94,24 @@ export function getMediaGridTileMetrics(kind: UserContentMediaKind, containerWid
   return { tileSize, tileHeight };
 }
 
-export function getImagePickerOptionsForKind(kind: UserContentMediaKind): Pick<
-  ImagePickerOptions,
-  "allowsEditing" | "aspect" | "quality" | "mediaTypes" | "videoMaxDuration"
-> {
+export function getImagePickerOptionsForKind(
+  kind: UserContentMediaKind,
+  platformOS: string = "android",
+): Pick<ImagePickerOptions, "allowsEditing" | "aspect" | "quality" | "mediaTypes" | "videoMaxDuration"> {
   const contract = getMediaContentContract(kind);
+  const isEventCover = kind === "eventCover";
+
+  // iOS UIImagePickerController crop UI is always square and ignores `aspect`.
+  // For 16:9 event covers that square editor fights the display contract, so we
+  // skip native editing on iOS and normalize pixels after pick instead.
+  const allowsEditing =
+    isEventCover && platformOS === "ios" ? false : contract.pickerAllowsEditingForImages;
+
   return {
-    mediaTypes: ["images", "videos"],
+    mediaTypes: isEventCover ? ["images"] : ["images", "videos"],
     quality: 0.85,
     videoMaxDuration: 60,
-    allowsEditing: contract.pickerAllowsEditingForImages,
+    allowsEditing,
     aspect: contract.pickerAspect,
   };
 }

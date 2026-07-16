@@ -14,6 +14,10 @@ import {
   requiresMediaPreviewBeforeAdd,
   shouldApplyImageCropOnPick,
 } from "../src/services/media/mediaContentContracts";
+import {
+  isAspectCloseEnough,
+  resolveCenterCropRect,
+} from "../src/services/media/resolveCenterCropRect";
 
 describe("media content contracts", () => {
   it("defines expected aspect ratios per content type", () => {
@@ -27,6 +31,27 @@ describe("media content contracts", () => {
     assert.deepEqual(getImagePickerOptionsForKind("reel").aspect, [9, 16]);
     assert.deepEqual(getImagePickerOptionsForKind("moment").aspect, [1, 1]);
     assert.deepEqual(getImagePickerOptionsForKind("eventCover").aspect, [16, 9]);
+  });
+
+  it("event cover picker is images-only and locked to the 16:9 contract", () => {
+    const androidOptions = getImagePickerOptionsForKind("eventCover", "android");
+    assert.deepEqual(androidOptions.mediaTypes, ["images"]);
+    assert.deepEqual(androidOptions.aspect, [16, 9]);
+    assert.equal(androidOptions.allowsEditing, true);
+    assert.deepEqual(getMediaContentContract("eventCover").pickerAspect, [16, 9]);
+
+    const iosOptions = getImagePickerOptionsForKind("eventCover", "ios");
+    assert.deepEqual(iosOptions.aspect, [16, 9]);
+    // iOS native crop is square-only; disable it so we don't fight the 16:9 card.
+    assert.equal(iosOptions.allowsEditing, false);
+  });
+
+  it("does not change reel/moment/snap picker media types", () => {
+    assert.deepEqual(getImagePickerOptionsForKind("reel").mediaTypes, ["images", "videos"]);
+    assert.deepEqual(getImagePickerOptionsForKind("moment").mediaTypes, ["images", "videos"]);
+    assert.deepEqual(getImagePickerOptionsForKind("snap").mediaTypes, ["images", "videos"]);
+    assert.equal(getImagePickerOptionsForKind("reel", "ios").allowsEditing, true);
+    assert.equal(getImagePickerOptionsForKind("moment", "ios").allowsEditing, true);
   });
 
   it("uses cover resize mode consistently for previews and display", () => {
@@ -70,6 +95,31 @@ describe("media content contracts", () => {
   });
 });
 
+describe("event cover center-crop geometry (matches display cover framing)", () => {
+  it("returns null when the source is already ~16:9", () => {
+    assert.equal(resolveCenterCropRect(1600, 900, 16, 9), null);
+    assert.equal(isAspectCloseEnough(1600, 900, 16, 9), true);
+  });
+
+  it("trims the sides of a landscape-wide image to 16:9", () => {
+    const crop = resolveCenterCropRect(2000, 900, 16, 9);
+    assert.ok(crop);
+    assert.equal(crop.height, 900);
+    assert.equal(crop.width, Math.round(900 * (16 / 9)));
+    assert.equal(crop.originY, 0);
+    assert.equal(crop.originX, Math.round((2000 - crop.width) / 2));
+  });
+
+  it("trims top/bottom of a tall image to 16:9 (iOS square-crop case)", () => {
+    const crop = resolveCenterCropRect(1200, 1200, 16, 9);
+    assert.ok(crop);
+    assert.equal(crop.width, 1200);
+    assert.equal(crop.height, Math.round(1200 / (16 / 9)));
+    assert.equal(crop.originX, 0);
+    assert.equal(crop.originY, Math.round((1200 - crop.height) / 2));
+  });
+});
+
 describe("media preview integration", () => {
   it("wires preview modal into reel and moment create screens", () => {
     const reelSource = readFileSync(
@@ -93,11 +143,31 @@ describe("media preview integration", () => {
     assert.match(basicsSource, /pickEventCoverImage/);
   });
 
-  it("does not add new native media dependencies in package.json", () => {
+  it("event cover pick path normalizes to the 16:9 contract after selection", () => {
+    const pickSource = readFileSync(
+      join(process.cwd(), "src/services/media/pickUserContentMedia.ts"),
+      "utf8",
+    );
+    const contractsSource = readFileSync(
+      join(process.cwd(), "src/services/media/mediaContentContracts.ts"),
+      "utf8",
+    );
+
+    assert.match(pickSource, /normalizeImageToMediaAspect\(uri, "eventCover"\)/);
+    assert.match(pickSource, /kind === "eventCover"/);
+    assert.match(pickSource, /getImagePickerOptionsForKind\(kind, Platform\.OS\)/);
+    assert.match(contractsSource, /pickerAspect: \[16, 9\]/);
+    assert.match(contractsSource, /platformOS === "ios"/);
+    assert.doesNotMatch(pickSource, /normalizeImageToMediaAspect\(uri, "reel"\)/);
+    assert.doesNotMatch(pickSource, /normalizeImageToMediaAspect\(uri, "moment"\)/);
+  });
+
+  it("does not add incompatible native crop packages in package.json", () => {
     const packageJson = readFileSync(join(process.cwd(), "package.json"), "utf8");
     assert.doesNotMatch(packageJson, /react-native-image-crop-picker/);
     assert.doesNotMatch(packageJson, /ffmpeg/);
     assert.match(packageJson, /expo-image-picker/);
+    assert.match(packageJson, /expo-image-manipulator/);
     assert.match(packageJson, /expo-video/);
   });
 });

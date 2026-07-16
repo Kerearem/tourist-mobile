@@ -6,7 +6,7 @@ import { AppText } from "../../../components/ui/AppText";
 import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { theme } from "../../../constants/theme";
-import { MEDIA_CONTENT_CONTRACTS } from "../../../services/media/mediaContentContracts";
+import { MEDIA_CONTENT_CONTRACTS, getDisplayResizeMode } from "../../../services/media/mediaContentContracts";
 import { getEventTypeLabel } from "../constants/eventTypes";
 import type { EventItem } from "../types";
 import { formatEventCardAttendance, formatEventCardRating } from "../utils/eventCardPresentation";
@@ -53,7 +53,12 @@ export function EventCard({
   return (
     <Pressable onPress={onPress}>
       <Card style={styles.card}>
-        <ImageBackground imageStyle={styles.coverImage} source={{ uri: getCoverUri(event) }} style={styles.cover}>
+        <ImageBackground
+          imageStyle={styles.coverImage}
+          resizeMode={getDisplayResizeMode("eventCover")}
+          source={{ uri: getCoverUri(event) }}
+          style={styles.cover}
+        >
           <View style={styles.dateBadge}>
             <AppText style={styles.dateWeekday} variant="caption">
               {dateBadge.weekday}
