@@ -18,6 +18,7 @@ type EventCardProps = {
   isJoined: boolean;
   onToggleJoin: () => void;
   onPress: () => void;
+  viewerUserId?: string | null;
 };
 
 const getCoverUri = (event: EventItem) => {
@@ -35,11 +36,18 @@ const getCoverUri = (event: EventItem) => {
 
 const typeLabel = (event: EventItem) => getEventTypeLabel(event.type);
 
-export function EventCard({ event, isJoined: _isJoined, onToggleJoin: _onToggleJoin, onPress }: EventCardProps) {
+export function EventCard({
+  event,
+  isJoined: _isJoined,
+  onToggleJoin: _onToggleJoin,
+  onPress,
+  viewerUserId,
+}: EventCardProps) {
   const dateBadge = formatEventDateBadge(event.startsAt, event.timezone);
   const timeLabel = formatEventTimeLabel(event.startsAt, event.timezone);
   const ratingLabel = formatEventCardRating(event);
-  const attendanceLabel = formatEventCardAttendance(event);
+  const isOwnEvent = Boolean(viewerUserId && event.host.id === viewerUserId);
+  const attendanceLabel = formatEventCardAttendance(event, { isOwnEvent });
   const ticketLabel = formatEventTicketCardLabel(event);
 
   return (

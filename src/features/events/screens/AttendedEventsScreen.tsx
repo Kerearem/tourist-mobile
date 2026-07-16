@@ -5,21 +5,18 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ScreenBackHeader } from "../../../components/ui/ScreenBackHeader";
 import { theme } from "../../../constants/theme";
 import { useAuth } from "../../../hooks/useAuth";
-import type { EventsStackParamList, ProfileStackParamList } from "../../../navigation/types";
+import type { ProfileStackParamList } from "../../../navigation/types";
 import { EventsTabSegmentControl } from "../components/EventsTabSegmentControl";
 import { PersonalEventsList } from "../components/PersonalEventsList";
 import {
-  CREATED_EVENTS_FILTER_SEGMENTS,
-  normalizeCreatedEventsFilter,
-  type CreatedEventsFilter,
+  ATTENDED_EVENTS_FILTER_SEGMENTS,
+  normalizeAttendedEventsFilter,
+  type AttendedEventsFilter,
 } from "../utils/eventsTabUx";
 
-type Props = NativeStackScreenProps<
-  EventsStackParamList & ProfileStackParamList,
-  "MyOrganizerEventsScreen"
->;
+type Props = NativeStackScreenProps<ProfileStackParamList, "AttendedEventsScreen">;
 
-export function MyOrganizerEventsScreen({ navigation, route }: Props) {
+export function AttendedEventsScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const userContext = useMemo(
     () => ({
@@ -28,25 +25,25 @@ export function MyOrganizerEventsScreen({ navigation, route }: Props) {
     }),
     [user?.accountType, user?.organizerStatus],
   );
-  const [activeFilter, setActiveFilter] = useState<CreatedEventsFilter>(() =>
-    normalizeCreatedEventsFilter(route.params?.filter),
+  const [activeFilter, setActiveFilter] = useState<AttendedEventsFilter>(() =>
+    normalizeAttendedEventsFilter(route.params?.filter),
   );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.pagePadding}>
-        <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinliklerim" />
+        <ScreenBackHeader onBack={() => navigation.goBack()} title="Etkinlik Geçmişim" />
         <EventsTabSegmentControl
           activeSection={activeFilter}
           onChange={setActiveFilter}
-          segments={CREATED_EVENTS_FILTER_SEGMENTS}
+          segments={ATTENDED_EVENTS_FILTER_SEGMENTS}
         />
       </View>
 
       <View style={styles.content}>
         <PersonalEventsList
-          createdFilter={activeFilter}
-          mode="created"
+          attendedFilter={activeFilter}
+          mode="attended"
           navigation={navigation}
           userContext={userContext}
         />

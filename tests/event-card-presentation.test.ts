@@ -32,6 +32,27 @@ describe("event card presentation", () => {
     assert.equal(formatEventCardAttendance({ attendeeCount: 4, capacity: 20 }), "4 / 20 katılımcı");
   });
 
+  it("never nudges the organizer to join their own empty event", () => {
+    assert.equal(
+      formatEventCardAttendance({ attendeeCount: 0 }, { isOwnEvent: true }),
+      "Henüz katılımcı yok",
+    );
+    assert.equal(
+      formatEventCardAttendance({ attendeeCount: 0 }, { isOwnEvent: false }),
+      "İlk katılımcı sen ol",
+    );
+    assert.equal(
+      formatEventCardAttendance({ attendeeCount: 4, capacity: 20 }, { isOwnEvent: true }),
+      "4 / 20 katılımcı",
+    );
+  });
+
+  it("passes viewer identity from the event card to the attendance label", () => {
+    const source = readFileSync("src/features/events/components/EventCard.tsx", "utf8");
+    assert.equal(source.includes("viewerUserId"), true);
+    assert.equal(source.includes("isOwnEvent"), true);
+  });
+
   it("does not render hardcoded fake rating or attendee placeholders", () => {
     const source = readFileSync("src/features/events/components/EventCard.tsx", "utf8");
     assert.equal(source.includes('const ratingLabel = (_event: EventItem) => "4.8"'), false);

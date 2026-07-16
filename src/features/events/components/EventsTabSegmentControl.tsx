@@ -3,19 +3,19 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText } from "../../../components/ui/AppText";
 import { theme } from "../../../constants/theme";
-import type { EventsTabSection, EventsTabSegment } from "../utils/eventsTabUx";
+import type { PersonalEventsSegment } from "../utils/eventsTabUx";
 
-type EventsTabSegmentControlProps = {
-  activeSection: EventsTabSection;
-  onChange: (section: EventsTabSection) => void;
-  segments: EventsTabSegment[];
+type EventsTabSegmentControlProps<K extends string> = {
+  activeSection: K;
+  onChange: (section: K) => void;
+  segments: ReadonlyArray<PersonalEventsSegment<K>>;
 };
 
-export function EventsTabSegmentControl({
+export function EventsTabSegmentControl<K extends string>({
   activeSection,
   onChange,
   segments,
-}: EventsTabSegmentControlProps) {
+}: EventsTabSegmentControlProps<K>) {
   return (
     <ScrollView
       contentContainerStyle={styles.row}

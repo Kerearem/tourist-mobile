@@ -167,6 +167,16 @@ export function SettingsScreen({ navigation }: Props) {
               subtitle="Token bakiyen ve satın alma"
               title="Cüzdanım"
             />
+            <View style={styles.sectionDivider} />
+            <AppText style={styles.sectionTitle} variant="label">
+              Etkinlikler
+            </AppText>
+            <SettingsRow
+              icon="time-outline"
+              onPress={() => navigation.navigate(ProfileRoutes.AttendedEventsScreen)}
+              subtitle="Katıldığın yaklaşan ve geçmiş etkinlikler"
+              title="Etkinlik Geçmişim"
+            />
           </>
         ) : null}
 
@@ -255,8 +265,8 @@ export function SettingsScreen({ navigation }: Props) {
 
             <SettingsRow
               icon="calendar-outline"
-              onPress={() => navigation.navigate(ProfileRoutes.MyOrganizerEventsScreen, { section: "created" })}
-              subtitle="Oluşturduğun ve katıldığın etkinlikler"
+              onPress={() => navigation.navigate(ProfileRoutes.MyOrganizerEventsScreen)}
+              subtitle="Oluşturduğun etkinlikler: aktif, geçmiş ve reddedilenler"
               title="Etkinliklerim"
             />
           </>

@@ -6,6 +6,7 @@ import { CreateEventScreen } from "../../features/events/screens/CreateEventScre
 import { CreateMomentScreen } from "../../features/events/screens/CreateMomentScreen";
 import { CreateReelScreen } from "../../features/profile/screens/CreateReelScreen";
 import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen";
+import { AttendedEventsScreen } from "../../features/events/screens/AttendedEventsScreen";
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
@@ -47,6 +48,7 @@ export function ProfileStack() {
         options={createEventScreenOptions}
       />
       <Stack.Screen component={MyOrganizerEventsScreen} name={ProfileRoutes.MyOrganizerEventsScreen} />
+      <Stack.Screen component={AttendedEventsScreen} name={ProfileRoutes.AttendedEventsScreen} />
       <Stack.Screen
         component={OrganizerEventSubmissionScreen}
         name={ProfileRoutes.OrganizerEventSubmissionScreen}

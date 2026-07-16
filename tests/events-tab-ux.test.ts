@@ -3,16 +3,20 @@ import { describe, it } from "node:test";
 
 import type { EventItem } from "../src/features/events/types";
 import {
+  ATTENDED_EVENTS_FILTER_SEGMENTS,
   attendedEventStatusLabel,
-  EVENTS_TAB_SEGMENT_LABELS,
-  normalizeEventsTabSection,
+  CREATED_EVENTS_FILTER_SEGMENTS,
+  filterAttendedEvents,
+  filterCreatedEvents,
+  normalizeAttendedEventsFilter,
+  normalizeCreatedEventsFilter,
   organizerManagedEventStatusLabel,
   resolveAttendedEventPressTarget,
   resolveAttendedEventsEmptyState,
   resolveCreatedEventsEmptyState,
   resolveCreatedEventPressTarget,
-  resolveEventsTabSegments,
-  shouldShowOrganizerCreatedSection,
+  resolveCreatedEventsFilterBucket,
+  resolveFilteredEventsEmptyState,
 } from "../src/features/events/utils/eventsTabUx";
 import { shouldUsePublicEventDetailForOrganizerEvent } from "../src/features/events/utils/organizerCreatedEventNavigation";
 
@@ -36,36 +40,101 @@ function buildEvent(status: string, overrides: Partial<EventItem> = {}): EventIt
   };
 }
 
-describe("events tab visibility", () => {
-  it("shows created segment only for approved organizers", () => {
-    assert.equal(shouldShowOrganizerCreatedSection({ organizerStatus: "approved" }), true);
-    assert.equal(shouldShowOrganizerCreatedSection({ organizerStatus: "pending" }), false);
-    assert.equal(shouldShowOrganizerCreatedSection({ organizerStatus: "not_applied" }), false);
-  });
+describe("created events filters", () => {
+  const now = new Date("2026-07-15T12:00:00.000Z").getTime();
 
-  it("builds discover and attended segments for all users", () => {
-    const segments = resolveEventsTabSegments({ organizerStatus: "not_applied" });
+  it("offers active, past and rejected segments with Turkish labels", () => {
     assert.deepEqual(
-      segments.map((segment) => segment.key),
-      ["discover", "attended"],
+      CREATED_EVENTS_FILTER_SEGMENTS.map((segment) => segment.key),
+      ["active", "past", "rejected"],
     );
-    assert.equal(segments[1]?.label, EVENTS_TAB_SEGMENT_LABELS.attended);
-  });
-
-  it("adds created segment for approved organizers", () => {
-    const segments = resolveEventsTabSegments({ organizerStatus: "approved" });
     assert.deepEqual(
-      segments.map((segment) => segment.key),
-      ["discover", "attended", "created"],
+      CREATED_EVENTS_FILTER_SEGMENTS.map((segment) => segment.label),
+      ["Aktif", "Geçmiş", "Reddedildi"],
     );
-    assert.equal(segments[2]?.label, EVENTS_TAB_SEGMENT_LABELS.created);
   });
 
-  it("falls back to discover when created section is unavailable", () => {
+  it("buckets created events by review status and end time", () => {
+    assert.equal(resolveCreatedEventsFilterBucket(buildEvent("REJECTED"), now), "rejected");
+    assert.equal(resolveCreatedEventsFilterBucket(buildEvent("COMPLETED"), now), "past");
+    assert.equal(resolveCreatedEventsFilterBucket(buildEvent("CANCELLED"), now), "past");
+    assert.equal(resolveCreatedEventsFilterBucket(buildEvent("PENDING_REVIEW"), now), "active");
+    assert.equal(resolveCreatedEventsFilterBucket(buildEvent("DRAFT"), now), "active");
     assert.equal(
-      normalizeEventsTabSection("created", { organizerStatus: "not_applied" }),
-      "discover",
+      resolveCreatedEventsFilterBucket(
+        buildEvent("APPROVED", { startsAt: "2026-08-01T18:00:00.000Z", endsAt: "2026-08-01T20:00:00.000Z" }),
+        now,
+      ),
+      "active",
     );
+    assert.equal(
+      resolveCreatedEventsFilterBucket(
+        buildEvent("APPROVED", { startsAt: "2026-06-01T18:00:00.000Z", endsAt: "2026-06-01T20:00:00.000Z" }),
+        now,
+      ),
+      "past",
+    );
+  });
+
+  it("keeps unknown statuses visible under the active filter", () => {
+    assert.equal(resolveCreatedEventsFilterBucket(buildEvent("SOMETHING_NEW"), now), "active");
+  });
+
+  it("filters created events into disjoint buckets", () => {
+    const events = [
+      buildEvent("APPROVED", { id: "future", startsAt: "2026-08-01T18:00:00.000Z", endsAt: "2026-08-01T20:00:00.000Z" }),
+      buildEvent("APPROVED", { id: "ended", startsAt: "2026-06-01T18:00:00.000Z", endsAt: "2026-06-01T20:00:00.000Z" }),
+      buildEvent("REJECTED", { id: "rejected" }),
+    ];
+    assert.deepEqual(filterCreatedEvents(events, "active", now).map((event) => event.id), ["future"]);
+    assert.deepEqual(filterCreatedEvents(events, "past", now).map((event) => event.id), ["ended"]);
+    assert.deepEqual(filterCreatedEvents(events, "rejected", now).map((event) => event.id), ["rejected"]);
+  });
+
+  it("normalizes unknown filter params to active", () => {
+    assert.equal(normalizeCreatedEventsFilter(undefined), "active");
+    assert.equal(normalizeCreatedEventsFilter("bogus"), "active");
+    assert.equal(normalizeCreatedEventsFilter("rejected"), "rejected");
+    assert.equal(normalizeCreatedEventsFilter("past"), "past");
+  });
+});
+
+describe("attended events filters", () => {
+  const now = new Date("2026-07-15T12:00:00.000Z").getTime();
+
+  it("offers upcoming and past segments with Turkish labels", () => {
+    assert.deepEqual(
+      ATTENDED_EVENTS_FILTER_SEGMENTS.map((segment) => segment.key),
+      ["upcoming", "past"],
+    );
+    assert.deepEqual(
+      ATTENDED_EVENTS_FILTER_SEGMENTS.map((segment) => segment.label),
+      ["Yaklaşan", "Geçmiş"],
+    );
+  });
+
+  it("splits attended events by end time", () => {
+    const events = [
+      buildEvent("APPROVED", { id: "future", startsAt: "2026-08-01T18:00:00.000Z", endsAt: "2026-08-01T20:00:00.000Z" }),
+      buildEvent("APPROVED", { id: "ended", startsAt: "2026-06-01T18:00:00.000Z", endsAt: "2026-06-01T20:00:00.000Z" }),
+    ];
+    assert.deepEqual(filterAttendedEvents(events, "upcoming", now).map((event) => event.id), ["future"]);
+    assert.deepEqual(filterAttendedEvents(events, "past", now).map((event) => event.id), ["ended"]);
+  });
+
+  it("normalizes unknown filter params to upcoming", () => {
+    assert.equal(normalizeAttendedEventsFilter(undefined), "upcoming");
+    assert.equal(normalizeAttendedEventsFilter("bogus"), "upcoming");
+    assert.equal(normalizeAttendedEventsFilter("past"), "past");
+  });
+});
+
+describe("events tab shell", () => {
+  it("keeps the bottom-nav events screen discover-only", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const source = readFileSync("src/features/events/screens/EventsListScreen.tsx", "utf8");
+    assert.equal(source.includes("EventsTabSegmentControl"), false);
+    assert.equal(source.includes("PersonalEventsList"), false);
   });
 });
 
@@ -83,6 +152,14 @@ describe("events tab empty states", () => {
   it("uses created-events empty copy for approved organizers", () => {
     const empty = resolveCreatedEventsEmptyState({ organizerStatus: "approved" });
     assert.match(empty.title, /Oluşturduğun etkinlik yok/);
+  });
+
+  it("describes filter-specific empty states", () => {
+    assert.match(resolveFilteredEventsEmptyState("created", "rejected").title, /Reddedilen/);
+    assert.match(resolveFilteredEventsEmptyState("created", "past").title, /Geçmiş/);
+    assert.match(resolveFilteredEventsEmptyState("created", "active").title, /Aktif/);
+    assert.match(resolveFilteredEventsEmptyState("attended", "upcoming").title, /Yaklaşan/);
+    assert.match(resolveFilteredEventsEmptyState("attended", "past").title, /Geçmiş/);
   });
 });
 

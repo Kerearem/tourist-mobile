@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useNavigation, type NavigationProp } from "@react-navigation/native";
 
@@ -10,6 +10,7 @@ import { ErrorState } from "../../../components/ui/ErrorState";
 import { Loader } from "../../../components/ui/Loader";
 import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
+import { useAuth } from "../../../hooks/useAuth";
 import type { MainTabParamList } from "../../../navigation/types";
 import { isActiveOrganizerProfileEvent } from "../../profile/utils/organizerProfileEvents";
 import { createEventGroup, getEventGroup } from "../services/eventGroup.service";
@@ -17,11 +18,16 @@ import { getMyAttendedEvents, getMyOrganizerEvents } from "../services/organizer
 import type { EventItem } from "../types";
 import {
   attendedEventStatusLabel,
+  filterAttendedEvents,
+  filterCreatedEvents,
   navigateAttendedEventDetail,
   navigateCreatedEventTarget,
   organizerManagedEventStatusLabel,
   resolveAttendedEventsEmptyState,
   resolveCreatedEventsEmptyState,
+  resolveFilteredEventsEmptyState,
+  type AttendedEventsFilter,
+  type CreatedEventsFilter,
   type EventsTabUserContext,
 } from "../utils/eventsTabUx";
 import { EventCard } from "./EventCard";
@@ -30,10 +36,19 @@ type PersonalEventsListProps = {
   mode: "attended" | "created";
   userContext: EventsTabUserContext;
   navigation: { navigate: (screen: string, params?: object) => void };
+  createdFilter?: CreatedEventsFilter;
+  attendedFilter?: AttendedEventsFilter;
 };
 
-export function PersonalEventsList({ mode, userContext, navigation }: PersonalEventsListProps) {
+export function PersonalEventsList({
+  mode,
+  userContext,
+  navigation,
+  createdFilter,
+  attendedFilter,
+}: PersonalEventsListProps) {
   const tabNavigation = useNavigation<NavigationProp<MainTabParamList>>();
+  const { user } = useAuth();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,10 +96,28 @@ export function PersonalEventsList({ mode, userContext, navigation }: PersonalEv
     navigateCreatedEventTarget(navigation, event);
   };
 
-  const emptyState =
-    mode === "attended"
+  const visibleEvents = useMemo(() => {
+    if (mode === "created" && createdFilter) {
+      return filterCreatedEvents(events, createdFilter);
+    }
+    if (mode === "attended" && attendedFilter) {
+      return filterAttendedEvents(events, attendedFilter);
+    }
+    return events;
+  }, [attendedFilter, createdFilter, events, mode]);
+
+  const emptyState = useMemo(() => {
+    if (events.length > 0) {
+      // The list has events but the active filter matches none of them.
+      const filter = mode === "created" ? createdFilter : attendedFilter;
+      if (filter) {
+        return resolveFilteredEventsEmptyState(mode, filter);
+      }
+    }
+    return mode === "attended"
       ? resolveAttendedEventsEmptyState()
       : resolveCreatedEventsEmptyState(userContext);
+  }, [attendedFilter, createdFilter, events.length, mode, userContext]);
 
   if (isLoading) {
     return (
@@ -102,7 +135,7 @@ export function PersonalEventsList({ mode, userContext, navigation }: PersonalEv
     );
   }
 
-  if (events.length === 0) {
+  if (visibleEvents.length === 0) {
     return (
       <Card style={styles.stateCard}>
         <EmptyState description={emptyState.description} title={emptyState.title} />
@@ -113,7 +146,7 @@ export function PersonalEventsList({ mode, userContext, navigation }: PersonalEv
   return (
     <FlatList
       contentContainerStyle={styles.listContent}
-      data={events}
+      data={visibleEvents}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
         <View style={styles.itemWrap}>
@@ -136,6 +169,7 @@ export function PersonalEventsList({ mode, userContext, navigation }: PersonalEv
           <EventCard
             event={item}
             isJoined={mode === "attended" ? Boolean(item.isUserAttending) : false}
+            viewerUserId={user?.id ?? null}
             onToggleJoin={() => undefined}
             onPress={() => {
               if (mode === "attended") {

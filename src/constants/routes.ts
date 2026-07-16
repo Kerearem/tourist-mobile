@@ -64,6 +64,7 @@ export const ProfileRoutes = {
   ChangePasswordScreen: "ChangePasswordScreen",
   CreateEventScreen: "CreateEventScreen",
   MyOrganizerEventsScreen: "MyOrganizerEventsScreen",
+  AttendedEventsScreen: "AttendedEventsScreen",
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
   VerificationGuidedCaptureScreen: "VerificationGuidedCaptureScreen",
   EventDetailScreen: "EventDetailScreen",

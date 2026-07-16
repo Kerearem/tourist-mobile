@@ -7,50 +7,36 @@ type EventNavigator = {
   navigate: (screen: string, params?: object) => void;
 };
 
-export type EventsTabSection = "discover" | "attended" | "created";
-
 export type EventsTabUserContext = {
   organizerStatus?: AppUser["organizerStatus"] | null;
   accountType?: AppUser["accountType"] | null;
 };
 
-export type EventsTabSegment = {
-  key: EventsTabSection;
+export type PersonalEventsSegment<K extends string = string> = {
+  key: K;
   label: string;
 };
 
-export const EVENTS_TAB_SEGMENT_LABELS = {
-  discover: "Keşfet",
-  attended: "Katıldığım Etkinlikler",
-  created: "Oluşturduğum Etkinlikler",
-} as const;
+export type CreatedEventsFilter = "active" | "past" | "rejected";
+export type AttendedEventsFilter = "upcoming" | "past";
 
-export function shouldShowOrganizerCreatedSection(context: EventsTabUserContext): boolean {
-  return context.organizerStatus === "approved";
+export const CREATED_EVENTS_FILTER_SEGMENTS: ReadonlyArray<PersonalEventsSegment<CreatedEventsFilter>> = [
+  { key: "active", label: "Aktif" },
+  { key: "past", label: "Geçmiş" },
+  { key: "rejected", label: "Reddedildi" },
+];
+
+export const ATTENDED_EVENTS_FILTER_SEGMENTS: ReadonlyArray<PersonalEventsSegment<AttendedEventsFilter>> = [
+  { key: "upcoming", label: "Yaklaşan" },
+  { key: "past", label: "Geçmiş" },
+];
+
+export function normalizeCreatedEventsFilter(value: string | undefined): CreatedEventsFilter {
+  return value === "past" || value === "rejected" ? value : "active";
 }
 
-export function resolveEventsTabSegments(context: EventsTabUserContext): EventsTabSegment[] {
-  const segments: EventsTabSegment[] = [
-    { key: "discover", label: EVENTS_TAB_SEGMENT_LABELS.discover },
-    { key: "attended", label: EVENTS_TAB_SEGMENT_LABELS.attended },
-  ];
-
-  if (shouldShowOrganizerCreatedSection(context)) {
-    segments.push({ key: "created", label: EVENTS_TAB_SEGMENT_LABELS.created });
-  }
-
-  return segments;
-}
-
-export function normalizeEventsTabSection(
-  section: EventsTabSection | undefined,
-  context: EventsTabUserContext,
-): EventsTabSection {
-  const allowed = new Set(resolveEventsTabSegments(context).map((item) => item.key));
-  if (section && allowed.has(section)) {
-    return section;
-  }
-  return "discover";
+export function normalizeAttendedEventsFilter(value: string | undefined): AttendedEventsFilter {
+  return value === "past" ? value : "upcoming";
 }
 
 export type PersonalEventsEmptyState = {
@@ -95,6 +81,73 @@ export function resolveCreatedEventsEmptyState(context: EventsTabUserContext): P
 
 const getEventEndMs = (event: EventItem) =>
   event.endsAt ? new Date(event.endsAt).getTime() : new Date(event.startsAt).getTime();
+
+export function resolveCreatedEventsFilterBucket(event: EventItem, now = Date.now()): CreatedEventsFilter {
+  const status = event.metadata?.status;
+
+  if (status === "REJECTED") {
+    return "rejected";
+  }
+  if (status === "COMPLETED" || status === "CANCELLED") {
+    return "past";
+  }
+  if (status === "APPROVED") {
+    return getEventEndMs(event) < now ? "past" : "active";
+  }
+  // DRAFT, PENDING_REVIEW and unknown statuses stay actionable under "active".
+  return "active";
+}
+
+export function filterCreatedEvents(
+  events: EventItem[],
+  filter: CreatedEventsFilter,
+  now = Date.now(),
+): EventItem[] {
+  return events.filter((event) => resolveCreatedEventsFilterBucket(event, now) === filter);
+}
+
+export function filterAttendedEvents(
+  events: EventItem[],
+  filter: AttendedEventsFilter,
+  now = Date.now(),
+): EventItem[] {
+  return events.filter((event) => (getEventEndMs(event) < now ? "past" : "upcoming") === filter);
+}
+
+export function resolveFilteredEventsEmptyState(
+  mode: "created" | "attended",
+  filter: CreatedEventsFilter | AttendedEventsFilter,
+): PersonalEventsEmptyState {
+  if (mode === "created") {
+    if (filter === "rejected") {
+      return {
+        title: "Reddedilen etkinliğin yok",
+        description: "Reddedilen etkinlik başvuruların burada listelenir.",
+      };
+    }
+    if (filter === "past") {
+      return {
+        title: "Geçmiş etkinliğin yok",
+        description: "Tamamlanan ve iptal edilen etkinliklerin burada listelenir.",
+      };
+    }
+    return {
+      title: "Aktif etkinliğin yok",
+      description: "Yayında, incelemede ve taslak etkinliklerin burada listelenir.",
+    };
+  }
+
+  if (filter === "past") {
+    return {
+      title: "Geçmiş etkinliğin yok",
+      description: "Katıldığın tamamlanmış etkinlikler burada listelenir.",
+    };
+  }
+  return {
+    title: "Yaklaşan etkinliğin yok",
+    description: "Katıldığın yaklaşan etkinlikler burada görünür.",
+  };
+}
 
 export function organizerManagedEventStatusLabel(event: EventItem, now = Date.now()): string {
   const status = event.metadata?.status;
