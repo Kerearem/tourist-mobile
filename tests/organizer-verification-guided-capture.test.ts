@@ -14,6 +14,7 @@ test("guided capture queue starts upload immediately when idle", () => {
     activeUploadType: null,
     pending: null,
     incoming: { documentType: "IDENTITY_BACK", uri: "file://back.jpg" },
+    hasApplication: true,
   });
   assert.deepEqual(plan.startUpload, { documentType: "IDENTITY_BACK", uri: "file://back.jpg" });
   assert.equal(plan.nextPending, null);
@@ -24,6 +25,7 @@ test("guided capture queue holds BACK while FRONT upload is active (regression)"
     activeUploadType: "IDENTITY_FRONT",
     pending: null,
     incoming: { documentType: "IDENTITY_BACK", uri: "file://back.jpg" },
+    hasApplication: true,
   });
   assert.equal(whileBusy.startUpload, null);
   assert.deepEqual(whileBusy.nextPending, { documentType: "IDENTITY_BACK", uri: "file://back.jpg" });
@@ -32,6 +34,7 @@ test("guided capture queue holds BACK while FRONT upload is active (regression)"
     activeUploadType: null,
     pending: whileBusy.nextPending,
     incoming: null,
+    hasApplication: true,
   });
   assert.deepEqual(afterFrontFinishes.startUpload, {
     documentType: "IDENTITY_BACK",
@@ -45,9 +48,42 @@ test("guided capture queue replaces pending with newer incoming capture", () => 
     activeUploadType: "IDENTITY_FRONT",
     pending: { documentType: "IDENTITY_BACK", uri: "file://old-back.jpg" },
     incoming: { documentType: "IDENTITY_BACK", uri: "file://new-back.jpg" },
+    hasApplication: true,
   });
   assert.equal(plan.startUpload, null);
   assert.deepEqual(plan.nextPending, { documentType: "IDENTITY_BACK", uri: "file://new-back.jpg" });
+});
+
+test("guided capture queue holds capture until the draft application is loaded (remount race regression)", () => {
+  // Device-verified bug: returning from the capture screen remounts the
+  // application screen; captureResult arrives before loadCurrent resolves.
+  const beforeLoad = planGuidedCaptureUpload({
+    activeUploadType: null,
+    pending: null,
+    incoming: { documentType: "IDENTITY_BACK", uri: "file://back.jpg" },
+    hasApplication: false,
+  });
+  assert.equal(beforeLoad.startUpload, null);
+  assert.deepEqual(beforeLoad.nextPending, { documentType: "IDENTITY_BACK", uri: "file://back.jpg" });
+
+  const afterLoad = planGuidedCaptureUpload({
+    activeUploadType: null,
+    pending: beforeLoad.nextPending,
+    incoming: null,
+    hasApplication: true,
+  });
+  assert.deepEqual(afterLoad.startUpload, { documentType: "IDENTITY_BACK", uri: "file://back.jpg" });
+  assert.equal(afterLoad.nextPending, null);
+});
+
+test("OrganizerApplicationScreen drains queue when the application id becomes available", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/features/events/screens/OrganizerApplicationScreen.tsx"),
+    "utf8",
+  );
+  assert.match(source, /hasApplication: Boolean\(applicationId\) && !showReadOnly/);
+  // A dedicated effect must drain the queue once applicationId is loaded.
+  assert.match(source, /if \(applicationId\) \{\s*drainGuidedCaptureRef\.current\(\);/);
 });
 
 test("OrganizerApplicationScreen drains queued capture after upload finally", () => {

@@ -335,6 +335,7 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
       activeUploadType: activeUploadTypeRef.current,
       pending: pendingGuidedCaptureRef.current,
       incoming: null,
+      hasApplication: Boolean(applicationId) && !showReadOnly,
     });
     pendingGuidedCaptureRef.current = plan.nextPending;
     if (!plan.startUpload) {
@@ -351,6 +352,15 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
   }, [applicationId, showReadOnly]);
 
   drainGuidedCaptureRef.current = drainGuidedCaptureQueue;
+
+  // The screen can remount while returning from the capture screen; the
+  // captureResult effect then fires before loadCurrent resolves and the queue
+  // holds the capture. Start it as soon as the draft application is known.
+  useEffect(() => {
+    if (applicationId) {
+      drainGuidedCaptureRef.current();
+    }
+  }, [applicationId]);
 
   useEffect(() => {
     const captureResult = route.params?.captureResult;
@@ -370,6 +380,7 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
       activeUploadType: activeUploadTypeRef.current,
       pending: pendingGuidedCaptureRef.current,
       incoming,
+      hasApplication: Boolean(applicationId) && !showReadOnly,
     });
     pendingGuidedCaptureRef.current = plan.nextPending;
 

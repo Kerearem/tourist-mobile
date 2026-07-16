@@ -86,13 +86,15 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
   }, []);
 
   const openGalleryFallback = useCallback(() => {
-    navigation.navigate({
-      name: "OrganizerApplicationScreen",
-      params: {
-        openGalleryForDocumentType: documentType,
-      },
-      merge: true,
-    });
+    // React Navigation 7: navigate() pushes a NEW instance on top instead of
+    // returning to the existing screen; popTo() pops back to it. Using
+    // navigate here remounted the application screen (losing loaded draft
+    // state) and left this capture screen in the back stack.
+    navigation.popTo(
+      "OrganizerApplicationScreen",
+      { openGalleryForDocumentType: documentType },
+      { merge: true },
+    );
   }, [documentType, navigation]);
 
   const takePhoto = useCallback(async () => {
@@ -151,16 +153,18 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
       return;
     }
 
-    navigation.navigate({
-      name: "OrganizerApplicationScreen",
-      params: {
+    // popTo (not navigate): return to the EXISTING application screen so its
+    // loaded draft state survives and this capture screen leaves the stack.
+    navigation.popTo(
+      "OrganizerApplicationScreen",
+      {
         captureResult: {
           documentType,
           uri: previewUri,
         },
       },
-      merge: true,
-    });
+      { merge: true },
+    );
   }, [documentType, navigation, previewUri]);
 
   if (phase === "preview" && previewUri) {
