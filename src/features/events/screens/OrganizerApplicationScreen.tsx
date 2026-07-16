@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Device from "expo-device";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppButton } from "../../../components/ui/AppButton";
@@ -340,6 +341,14 @@ export function OrganizerApplicationScreen({ navigation, route }: Props) {
     }
 
     navigation.setParams({ openGalleryForDocumentType: undefined });
+
+    // SIMULATOR-ONLY path: the guided capture screen only offers the gallery
+    // fallback on simulators (no camera hardware). On real devices identity/
+    // selfie documents must go through the guided camera, so ignore stray
+    // gallery requests for those types here.
+    if (Device.isDevice && resolveGuidedCaptureMode(documentType)) {
+      return;
+    }
 
     void handleUpload(documentType, () => pickVerificationGalleryFile(documentType));
   }, [navigation, route.params?.openGalleryForDocumentType]);

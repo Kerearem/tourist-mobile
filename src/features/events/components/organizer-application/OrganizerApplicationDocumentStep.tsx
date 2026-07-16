@@ -1,5 +1,6 @@
 import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import * as Device from "expo-device";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppButton } from "../../../../components/ui/AppButton";
@@ -39,7 +40,8 @@ export function OrganizerApplicationDocumentStep({
   onPickFile,
 }: Props) {
   const guidance = getDocumentStepGuidance(documentType);
-  const actions = getDocumentCaptureActions(documentType);
+  // Gallery for identity/selfie is offered only on simulators (no camera hardware).
+  const actions = getDocumentCaptureActions(documentType, { isRealDevice: Device.isDevice });
   const checklistItem = item ?? {
     documentType,
     required: true,

@@ -27,15 +27,23 @@ export function resolveVerificationCameraAvailabilityState(input: {
   return "ready";
 }
 
+/**
+ * The camera is considered available on every real device (iOS/Android) and
+ * unavailable only on simulators/emulators. expo-camera's availability check
+ * is a web-oriented API and is unreliable on real iOS hardware (returns false
+ * or throws), which used to strand real users on the simulator message.
+ */
 export async function checkVerificationCameraAvailable(
-  isAvailableAsync: () => Promise<boolean> = async () => {
-    const { CameraView } = await import("expo-camera");
-    return CameraView.isAvailableAsync();
+  isRealDevice: () => boolean | Promise<boolean> = async () => {
+    const Device = await import("expo-device");
+    return Device.isDevice;
   },
 ): Promise<boolean> {
   try {
-    return await isAvailableAsync();
+    return await isRealDevice();
   } catch {
-    return false;
+    // If device detection fails, assume a real device: never drop a real user
+    // to the simulator/gallery path because of a module error.
+    return true;
   }
 }

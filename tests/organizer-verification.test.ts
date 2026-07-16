@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -9,6 +11,7 @@ import {
   resolveGuidedCaptureMode,
 } from "../src/features/events/utils/organizer-verification-capture";
 import {
+  checkVerificationCameraAvailable,
   resolveVerificationCameraAvailabilityState,
   SIMULATOR_CAMERA_UNAVAILABLE_MESSAGE,
 } from "../src/features/events/utils/organizer-verification-camera";
@@ -757,19 +760,25 @@ test("submitted and under review applications stay read-only", () => {
   );
 });
 
-test("identity and selfie document steps expose camera and gallery actions", () => {
-  assert.deepEqual(getDocumentCaptureActions("IDENTITY_FRONT"), [
-    { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
-    { kind: "gallery", label: "Galeriden Seç", primary: false },
-  ]);
-  assert.deepEqual(getDocumentCaptureActions("IDENTITY_BACK"), [
-    { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
-    { kind: "gallery", label: "Galeriden Seç", primary: false },
-  ]);
-  assert.deepEqual(getDocumentCaptureActions("SELFIE"), [
-    { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
-    { kind: "gallery", label: "Galeriden Seç", primary: false },
-  ]);
+test("identity and selfie document steps are camera-only on real devices", () => {
+  for (const documentType of ["IDENTITY_FRONT", "IDENTITY_BACK", "SELFIE"] as const) {
+    assert.deepEqual(getDocumentCaptureActions(documentType, { isRealDevice: true }), [
+      { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
+    ]);
+    // Default (no options) must behave like a real device.
+    assert.deepEqual(getDocumentCaptureActions(documentType), [
+      { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
+    ]);
+  }
+});
+
+test("identity and selfie document steps expose simulator-only gallery fallback", () => {
+  for (const documentType of ["IDENTITY_FRONT", "IDENTITY_BACK", "SELFIE"] as const) {
+    assert.deepEqual(getDocumentCaptureActions(documentType, { isRealDevice: false }), [
+      { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
+      { kind: "gallery", label: "Galeriden Seç", primary: false },
+    ]);
+  }
 });
 
 test("business document steps expose file picker action only", () => {
@@ -818,11 +827,103 @@ test("camera unavailable resolves simulator-friendly fallback state", () => {
   assert.match(SIMULATOR_CAMERA_UNAVAILABLE_MESSAGE, /Galeriden seçerek devam edebilirsin/);
 });
 
-test("identity and selfie still expose gallery actions when camera unavailable", () => {
-  for (const documentType of ["IDENTITY_FRONT", "IDENTITY_BACK", "SELFIE"] as const) {
-    const actions = getDocumentCaptureActions(documentType);
-    assert.equal(actions.some((action) => action.kind === "gallery"), true);
-  }
+test("camera availability is device-based: real device available, simulator unavailable", async () => {
+  assert.equal(await checkVerificationCameraAvailable(() => true), true);
+  assert.equal(await checkVerificationCameraAvailable(async () => true), true);
+  assert.equal(await checkVerificationCameraAvailable(() => false), false);
+});
+
+test("device detection failure must not strand a real device on unavailable", async () => {
+  assert.equal(
+    await checkVerificationCameraAvailable(() => {
+      throw new Error("module error");
+    }),
+    true,
+  );
+  assert.equal(
+    await checkVerificationCameraAvailable(async () => {
+      throw new Error("async module error");
+    }),
+    true,
+  );
+});
+
+test("availability state machine: real device permission flows and simulator fallback", () => {
+  // Real device + permission granted -> ready
+  assert.equal(
+    resolveVerificationCameraAvailabilityState({
+      isChecking: false,
+      cameraAvailable: true,
+      permissionGranted: true,
+    }),
+    "ready",
+  );
+  // Real device + permission denied -> permission_denied (never gallery)
+  assert.equal(
+    resolveVerificationCameraAvailabilityState({
+      isChecking: false,
+      cameraAvailable: true,
+      permissionGranted: false,
+    }),
+    "permission_denied",
+  );
+  // Simulator -> unavailable (gallery fallback allowed there only)
+  assert.equal(
+    resolveVerificationCameraAvailabilityState({
+      isChecking: false,
+      cameraAvailable: false,
+      permissionGranted: null,
+    }),
+    "unavailable",
+  );
+  assert.equal(
+    resolveVerificationCameraAvailabilityState({
+      isChecking: true,
+      cameraAvailable: null,
+      permissionGranted: null,
+    }),
+    "checking",
+  );
+});
+
+test("verification camera util no longer relies on expo-camera isAvailableAsync", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/features/events/utils/organizer-verification-camera.ts"),
+    "utf8",
+  );
+  assert.equal(source.includes("isAvailableAsync"), false);
+  assert.match(source, /expo-device/);
+  assert.match(source, /Device\.isDevice/);
+});
+
+test("guided capture screen directs denied permission to settings, not gallery", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/features/events/screens/VerificationGuidedCaptureScreen.tsx"),
+    "utf8",
+  );
+  assert.match(source, /Linking\.openSettings/);
+  assert.match(source, /Ayarları Aç/);
+  // Capture-error gallery fallback must be gated behind simulator detection.
+  assert.match(source, /Device\.isDevice/);
+});
+
+test("document step derives gallery visibility from device type", () => {
+  const source = readFileSync(
+    join(
+      process.cwd(),
+      "src/features/events/components/organizer-application/OrganizerApplicationDocumentStep.tsx",
+    ),
+    "utf8",
+  );
+  assert.match(source, /getDocumentCaptureActions\(documentType, \{ isRealDevice: Device\.isDevice \}\)/);
+});
+
+test("application screen ignores stray gallery requests for guided types on real devices", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/features/events/screens/OrganizerApplicationScreen.tsx"),
+    "utf8",
+  );
+  assert.match(source, /Device\.isDevice && resolveGuidedCaptureMode\(documentType\)/);
 });
 
 test("mobile required document types match canonical organizer schema", () => {

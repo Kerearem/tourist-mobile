@@ -87,12 +87,26 @@ export function getGuidedCaptureCopy(mode: GuidedCaptureMode): GuidedCaptureCopy
   };
 }
 
-export function getDocumentCaptureActions(documentType: VerificationDocumentType): DocumentCaptureAction[] {
+export function getDocumentCaptureActions(
+  documentType: VerificationDocumentType,
+  options?: { isRealDevice?: boolean },
+): DocumentCaptureAction[] {
+  // Default to real-device behavior: photo-based KYC types are camera-only.
+  const isRealDevice = options?.isRealDevice ?? true;
+
   if (isGuidedCameraDocumentType(documentType)) {
-    return [
+    const actions: DocumentCaptureAction[] = [
       { kind: "guided_camera", label: "Kamera ile Çek", primary: true },
-      { kind: "gallery", label: "Galeriden Seç", primary: false },
     ];
+
+    // SIMULATOR-ONLY fallback: simulators/emulators have no camera hardware,
+    // so gallery selection is the only way to test the flow in development.
+    // Real devices never see this option for identity/selfie documents.
+    if (!isRealDevice) {
+      actions.push({ kind: "gallery", label: "Galeriden Seç", primary: false });
+    }
+
+    return actions;
   }
 
   if (isBusinessFilePickerDocumentType(documentType)) {

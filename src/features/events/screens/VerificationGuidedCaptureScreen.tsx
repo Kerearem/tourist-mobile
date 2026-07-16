@@ -3,11 +3,13 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Pressable,
   StyleSheet,
   View,
 } from "react-native";
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
+import * as Device from "expo-device";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -118,10 +120,18 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
       setPreviewUri(uri);
       setPhase("preview");
     } catch {
-      Alert.alert("Kamera hatası", "Fotoğraf çekilemedi. Galeriden seçerek devam edebilirsin.", [
-        { text: "Galeriden Seç", onPress: openGalleryFallback },
-        { text: "Tekrar Dene", style: "cancel", onPress: resetCapture },
-      ]);
+      // Gallery is a SIMULATOR-ONLY escape hatch; on real devices the guided
+      // camera is the only path for identity/selfie documents.
+      if (Device.isDevice) {
+        Alert.alert("Kamera hatası", "Fotoğraf çekilemedi. Lütfen tekrar dene.", [
+          { text: "Tekrar Dene", style: "cancel", onPress: resetCapture },
+        ]);
+      } else {
+        Alert.alert("Kamera hatası", "Fotoğraf çekilemedi. Galeriden seçerek devam edebilirsin.", [
+          { text: "Galeriden Seç", onPress: openGalleryFallback },
+          { text: "Tekrar Dene", style: "cancel", onPress: resetCapture },
+        ]);
+      }
       resetCapture();
     }
   }, [availabilityState, openGalleryFallback, phase, resetCapture, takePhoto]);
@@ -187,6 +197,9 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
   }
 
   if (availabilityState === "unavailable") {
+    // SIMULATOR-ONLY state: availability is now derived from Device.isDevice,
+    // so real devices never land here. The gallery fallback exists solely for
+    // development/simulator testing where no camera hardware is present.
     return (
       <View style={styles.container}>
         <View style={[styles.topBar, { paddingTop: Math.max(insets.top, theme.spacing.md) }]}>
@@ -244,7 +257,17 @@ export function VerificationGuidedCaptureScreen({ navigation, route }: Props) {
                 İzin ver
               </AppText>
             </Pressable>
-          ) : null}
+          ) : (
+            <Pressable
+              accessibilityLabel="Kamera izni için ayarları aç"
+              onPress={() => void Linking.openSettings()}
+              style={styles.permissionButton}
+            >
+              <AppText style={styles.permissionButtonText} variant="label">
+                Ayarları Aç
+              </AppText>
+            </Pressable>
+          )}
         </View>
       )}
 
