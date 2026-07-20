@@ -30,6 +30,7 @@ import {
   type InboxLoadMode,
 } from "../utils/inboxLoadPresentation";
 import { upsertConversationThread } from "../utils/inboxRealtime";
+import { unhideConversationId } from "../utils/inboxHiddenConversations";
 import {
   applyRequestConversationRealtimeUpdate,
   isPendingMessageRequest,
@@ -122,12 +123,17 @@ export function MessagesInboxScreen({ navigation }: Props) {
         return;
       }
 
+      // Local "Sil" only hides the row; a new message must bring it back immediately.
+      setHiddenIds((prev) => unhideConversationId(prev, conversation.id));
       setItems((current) => {
         const next = upsertConversationThread(current, conversation);
         setCachedInbox(next);
         return next;
       });
       void refreshRequestCount();
+    },
+    onMessageNew: (event) => {
+      setHiddenIds((prev) => unhideConversationId(prev, event.payload.conversationId));
     },
     onReconnect: () => {
       void loadData("silent");

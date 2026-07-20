@@ -75,9 +75,10 @@ export function MessageBubble({
   const isDeleted = Boolean(message.isDeleted);
   const hasMedia = Boolean(message.mediaUrl) && !isDeleted;
   const hasText = Boolean(message.text?.trim());
+  const isMediaOnly = hasMedia && !hasText;
   const receiptTick = isMine && !isDeleted ? resolveMessageReceiptTickVisual(message.status) : null;
   // Light footer only on the solid purple bubble; announcement/media/incoming use subtle gray.
-  const useLightFooter = isMine && !isAnnouncement;
+  const useLightFooter = isMine && !isAnnouncement && !isMediaOnly;
 
   const bubbleStyles = [
     styles.bubble,
@@ -91,25 +92,77 @@ export function MessageBubble({
         : styles.bubbleOther,
   ];
 
-  // WhatsApp-style footer inside the bubble, bottom-right: time + outgoing ticks.
-  const bubbleFooter =
+  // WhatsApp-style footer: in-flow for text/caption bubbles; overlay on media-only images.
+  const footerContent =
     timeLabel || receiptTick ? (
-      <View style={[styles.bubbleFooter, hasMedia && styles.bubbleFooterOnMedia]}>
+      <>
         {timeLabel ? (
           <AppText
-            style={[styles.footerTime, useLightFooter ? styles.footerTimeLight : null]}
+            style={[
+              styles.footerTime,
+              useLightFooter ? styles.footerTimeLight : null,
+              isMediaOnly ? styles.footerTimeOnMedia : null,
+            ]}
             variant="caption"
           >
             {timeLabel}
           </AppText>
         ) : null}
         {receiptTick ? (
-          <Ionicons color={receiptTick.color} name={receiptTick.icon} size={14} />
+          <Ionicons
+            color={isMediaOnly ? "#FFFFFF" : receiptTick.color}
+            name={receiptTick.icon}
+            size={14}
+          />
         ) : null}
-      </View>
+      </>
     ) : null;
 
-  const bubbleBody = (
+  const bubbleFooter = footerContent ? (
+    <View style={[styles.bubbleFooter, hasMedia && !isMediaOnly && styles.bubbleFooterOnMedia]}>
+      {footerContent}
+    </View>
+  ) : null;
+
+  const mediaOverlayFooter = footerContent ? (
+    <View style={styles.mediaOverlayFooter}>{footerContent}</View>
+  ) : null;
+
+  const mediaImage = hasMedia ? (
+    <Pressable
+      disabled={!onImagePress}
+      onPress={() => {
+        if (message.mediaUrl) {
+          onImagePress?.(message.mediaUrl);
+        }
+      }}
+    >
+      <Image
+        resizeMode="cover"
+        source={{ uri: message.mediaUrl }}
+        style={isMediaOnly ? styles.mediaOnlyImage : styles.messageImage}
+      />
+    </Pressable>
+  ) : null;
+
+  const bubbleBody = isMediaOnly ? (
+    <View style={[styles.mediaOnlyWrap, isMine ? styles.mediaOnlyMine : styles.mediaOnlyOther]}>
+      {!isDeleted && message.replyTo ? (
+        <View style={styles.replyPreview}>
+          <AppText style={styles.replySender} variant="caption">
+            {message.replyTo.sender.displayName}
+          </AppText>
+          <AppText numberOfLines={2} style={styles.replyText} variant="caption">
+            {message.replyTo.text}
+          </AppText>
+        </View>
+      ) : null}
+      <View style={styles.mediaOnlyFrame}>
+        {mediaImage}
+        {mediaOverlayFooter}
+      </View>
+    </View>
+  ) : (
     <View style={bubbleStyles}>
       {!isDeleted && message.replyTo ? (
         <View
@@ -139,18 +192,7 @@ export function MessageBubble({
           </AppText>
         </View>
       ) : null}
-      {hasMedia ? (
-        <Pressable
-          disabled={!onImagePress}
-          onPress={() => {
-            if (message.mediaUrl) {
-              onImagePress?.(message.mediaUrl);
-            }
-          }}
-        >
-          <Image resizeMode="cover" source={{ uri: message.mediaUrl }} style={styles.messageImage} />
-        </Pressable>
-      ) : null}
+      {mediaImage}
       {hasText ? (
         <AppText
           style={[
@@ -377,6 +419,40 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     paddingRight: theme.spacing.sm,
   },
+  mediaOnlyWrap: {
+    maxWidth: "82%",
+  },
+  mediaOnlyMine: {
+    alignSelf: "flex-end",
+  },
+  mediaOnlyOther: {
+    alignSelf: "flex-start",
+  },
+  mediaOnlyFrame: {
+    borderRadius: 16,
+    overflow: "hidden",
+    position: "relative",
+  },
+  mediaOnlyImage: {
+    aspectRatio: 4 / 5,
+    borderRadius: 16,
+    maxHeight: 320,
+    maxWidth: 260,
+    minWidth: 180,
+    width: 240,
+  },
+  mediaOverlayFooter: {
+    alignItems: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.45)",
+    borderRadius: 10,
+    bottom: 8,
+    flexDirection: "row",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    position: "absolute",
+    right: 8,
+  },
   replyPreview: {
     backgroundColor: "#F3F4F6",
     borderLeftColor: "#94A3B8",
@@ -432,6 +508,9 @@ const styles = StyleSheet.create({
   },
   footerTimeLight: {
     color: "rgba(255, 255, 255, 0.75)",
+  },
+  footerTimeOnMedia: {
+    color: "#FFFFFF",
   },
   messageImage: {
     borderRadius: 16,

@@ -17,6 +17,7 @@ import { ConversationListItem } from "../components/ConversationListItem";
 import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import { getMessageRequests } from "../services/messages.service";
 import type { ConversationThread } from "../types";
+import { unhideConversationId } from "../utils/inboxHiddenConversations";
 import { applyRequestConversationRealtimeUpdate } from "../utils/requestInboxRealtime";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "MessageRequestsScreen">;
@@ -74,7 +75,12 @@ export function MessageRequestsScreen({ navigation, route }: Props) {
 
   useMessagesRealtime({
     onConversationUpdated: (event) => {
-      setItems((current) => applyRequestConversationRealtimeUpdate(current, event.payload.conversation));
+      const conversation = event.payload.conversation;
+      setHiddenIds((prev) => unhideConversationId(prev, conversation.id));
+      setItems((current) => applyRequestConversationRealtimeUpdate(current, conversation));
+    },
+    onMessageNew: (event) => {
+      setHiddenIds((prev) => unhideConversationId(prev, event.payload.conversationId));
     },
     onReconnect: () => {
       void loadData("refresh");

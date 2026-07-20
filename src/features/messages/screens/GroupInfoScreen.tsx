@@ -55,13 +55,24 @@ export function GroupInfoScreen({ navigation, route }: Props) {
   const loadGroup = async () => {
     setIsLoading(true);
     try {
-      const [groupResult, eventResult] = await Promise.all([
-        getEventGroup(route.params.eventId),
-        getEventById(route.params.eventId),
-      ]);
+      const groupResult = await getEventGroup(route.params.eventId);
+      if (!groupResult) {
+        setGroup(null);
+        setEvent(null);
+        setError("Grup bulunamadı.");
+        return;
+      }
+
       setGroup(groupResult);
-      setEvent(eventResult);
-      setError(groupResult ? null : "Grup bulunamadı.");
+      setError(null);
+
+      // Completed events may 404 on GET /events/:id while the group endpoint still works.
+      try {
+        const eventResult = await getEventById(route.params.eventId);
+        setEvent(eventResult);
+      } catch {
+        setEvent(null);
+      }
     } catch {
       setGroup(null);
       setEvent(null);
@@ -192,7 +203,7 @@ export function GroupInfoScreen({ navigation, route }: Props) {
               <View style={styles.archivedBanner}>
                 <Ionicons color={theme.colors.textSecondary} name="archive-outline" size={18} />
                 <AppText style={styles.archivedBannerText} variant="caption">
-                  Bu grup arşivlendi
+                  Etkinlik tamamlandı · grup arşivlendi
                 </AppText>
               </View>
             ) : null}

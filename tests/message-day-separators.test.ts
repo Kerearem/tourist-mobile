@@ -101,10 +101,11 @@ describe("bubble footer layout regression", () => {
     assert.doesNotMatch(bubbleSource, /timeLabelMine/);
   });
 
-  it("footer is a flex row aligned bottom-right, no absolute positioning", () => {
+  it("footer is a flex row aligned bottom-right; absolute only for media-only overlay", () => {
     assert.match(bubbleSource, /bubbleFooter:\s*\{[^}]*alignSelf:\s*"flex-end"/);
     assert.match(bubbleSource, /bubbleFooter:\s*\{[^}]*flexDirection:\s*"row"/);
-    assert.doesNotMatch(bubbleSource, /position:\s*"absolute"/);
+    assert.match(bubbleSource, /mediaOverlayFooter:\s*\{[^}]*position:\s*"absolute"/);
+    assert.doesNotMatch(bubbleSource, /bubbleFooter:\s*\{[^}]*position:\s*"absolute"/);
   });
 
   it("outgoing bubbles include the receipt tick in the footer; incoming only time", () => {

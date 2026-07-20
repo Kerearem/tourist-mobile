@@ -517,8 +517,19 @@ export function MessageThreadScreen({ route, navigation }: Props) {
           </Pressable>
 
           <View style={styles.headerActions}>
-            <Pressable style={styles.moreButton}>
-              <Ionicons color={theme.colors.muted} name="ellipsis-horizontal" size={24} />
+            <Pressable
+              accessibilityLabel="Sohbet bilgisi"
+              accessibilityRole="button"
+              disabled={!canOpenConversationInfo()}
+              hitSlop={12}
+              onPress={openConversationInfo}
+              style={styles.moreButton}
+            >
+              <Ionicons
+                color={canOpenConversationInfo() ? theme.colors.textPrimary : theme.colors.muted}
+                name="ellipsis-horizontal"
+                size={24}
+              />
             </Pressable>
           </View>
         </View>

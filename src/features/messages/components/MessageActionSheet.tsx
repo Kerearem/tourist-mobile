@@ -18,6 +18,9 @@ type Props = {
   onCopy: (message: ConversationMessage) => void;
   onDelete: (message: ConversationMessage) => void;
   onReaction: (message: ConversationMessage, emoji: AllowedMessageReaction) => void;
+  /** Group organizer pin/unpin — omitted in DM threads. */
+  pinLabel?: string | null;
+  onPinToggle?: (() => void) | null;
 };
 
 const formatPreviewTime = (createdAt?: string) => {
@@ -49,6 +52,8 @@ export function MessageActionSheet({
   onCopy,
   onDelete,
   onReaction,
+  pinLabel = null,
+  onPinToggle = null,
 }: Props) {
   if (!message) {
     return null;
@@ -57,6 +62,7 @@ export function MessageActionSheet({
   const isDeleted = Boolean(message.isDeleted);
   const canCopy = Boolean(message.text?.trim()) && !isDeleted;
   const canDelete = isMine && !isDeleted;
+  const canPin = Boolean(pinLabel && onPinToggle) && !isDeleted;
   const previewTime = formatPreviewTime(message.createdAt);
 
   return (
@@ -136,6 +142,20 @@ export function MessageActionSheet({
                 Kopyala
               </AppText>
             </Pressable>
+
+            {canPin ? (
+              <Pressable
+                onPress={() => {
+                  onPinToggle?.();
+                }}
+                style={({ pressed }) => [styles.optionRow, pressed && styles.optionRowPressed]}
+              >
+                <Ionicons color={theme.colors.textPrimary} name="pin-outline" size={22} />
+                <AppText style={styles.optionText} variant="body">
+                  {pinLabel}
+                </AppText>
+              </Pressable>
+            ) : null}
 
             {canDelete ? (
               <Pressable

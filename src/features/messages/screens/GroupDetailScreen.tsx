@@ -32,12 +32,18 @@ import { getEventGroup, type EventGroupInfo } from "../../events/services/eventG
 import type { MessagesStackParamList } from "../../../navigation/types";
 import { MessageBubble } from "../components/MessageBubble";
 import { MessageComposer } from "../components/MessageComposer";
+import { MessageActionSheet } from "../components/MessageActionSheet";
 import { PinnedMessageBar } from "../components/PinnedMessageBar";
 import {
+  appendCachedThreadMessage,
   getCachedThread,
   getCachedThreadByEventId,
+  patchCachedThreadMessageUpdated,
+  patchCachedThreadReaction,
+  patchCachedThreadReceipts,
   setCachedThread,
 } from "../cache/messagesSessionCache";
+import { useMessagesRealtime } from "../hooks/useMessagesRealtime";
 import {
   resolveThreadLoadMode,
   shouldClearThreadOnLoadError,
@@ -45,20 +51,25 @@ import {
   shouldShowThreadFullScreenLoader,
   type ThreadLoadMode,
 } from "../utils/threadLoadPresentation";
+import { appendMessageDeduped } from "../utils/threadRealtime";
 import {
+  applyMessageReactionUpdate,
+  applyMessageReceiptUpdates,
+  applyMessageUpdated,
+} from "../utils/messageReceipts";
+import {
+  deleteMessage,
   getMessages,
   markConversationRead,
   pinMessage,
+  removeMessageReaction,
   sendMessage,
+  setMessageReaction,
   unpinMessage,
 } from "../services/messages.service";
-import type { ConversationMessage } from "../types";
+import type { AllowedMessageReaction, ConversationMessage } from "../types";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "GroupDetailScreen">;
-
-type ActionMenuState = {
-  message: ConversationMessage;
-};
 
 const ExpoClipboard = requireOptionalNativeModule<{
   setStringAsync: (text: string) => Promise<boolean>;
@@ -88,102 +99,6 @@ const copyMessageText = async (text: string) => {
   await ExpoClipboard.setStringAsync(text);
   return true;
 };
-
-type GroupMessageActionSheetProps = {
-  visible: boolean;
-  message: ConversationMessage | null;
-  isOrganizer: boolean;
-  isArchived: boolean;
-  isPinned: boolean;
-  onClose: () => void;
-  onPin: () => void;
-  onUnpin: () => void;
-  onCopy: () => void;
-};
-
-function GroupMessageActionSheet({
-  visible,
-  message,
-  isOrganizer,
-  isArchived,
-  isPinned,
-  onClose,
-  onPin,
-  onUnpin,
-  onCopy,
-}: GroupMessageActionSheetProps) {
-  if (!message) {
-    return null;
-  }
-
-  const showPinActions = isOrganizer && !isArchived;
-
-  return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-      <View style={actionSheetStyles.overlay}>
-        <Pressable onPress={onClose} style={actionSheetStyles.backdrop} />
-
-        <View style={actionSheetStyles.sheetWrap}>
-          <View style={actionSheetStyles.handle} />
-
-          <View style={actionSheetStyles.previewCard}>
-          <AppText numberOfLines={3} style={actionSheetStyles.previewText} variant="body">
-            {message.isAnnouncement ? "📢 " : message.mediaUrl && !message.text?.trim() ? "📷 " : ""}
-            {message.mediaUrl && !message.text?.trim() ? "Fotoğraf" : message.text}
-          </AppText>
-          </View>
-
-          <View style={actionSheetStyles.optionsCard}>
-            {showPinActions ? (
-              <Pressable
-                onPress={() => {
-                  onClose();
-                  if (isPinned) {
-                    onUnpin();
-                  } else {
-                    onPin();
-                  }
-                }}
-                style={({ pressed }) => [actionSheetStyles.optionRow, pressed && actionSheetStyles.optionRowPressed]}
-              >
-                <View style={[actionSheetStyles.optionIcon, actionSheetStyles.pinIconWrap]}>
-                  <AppText style={actionSheetStyles.optionEmoji}>📌</AppText>
-                </View>
-                <AppText style={actionSheetStyles.optionLabel} variant="label">
-                  {isPinned ? "Sabitlemeyi Kaldır" : "Sabitle"}
-                </AppText>
-              </Pressable>
-            ) : null}
-
-            <Pressable
-              onPress={() => {
-                onClose();
-                onCopy();
-              }}
-              style={({ pressed }) => [actionSheetStyles.optionRow, pressed && actionSheetStyles.optionRowPressed]}
-            >
-              <View style={[actionSheetStyles.optionIcon, actionSheetStyles.copyIconWrap]}>
-                <AppText style={actionSheetStyles.optionEmoji}>📋</AppText>
-              </View>
-              <AppText style={actionSheetStyles.optionLabel} variant="label">
-                Kopyala
-              </AppText>
-            </Pressable>
-          </View>
-
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [actionSheetStyles.cancelButton, pressed && actionSheetStyles.cancelButtonPressed]}
-          >
-            <AppText style={actionSheetStyles.cancelLabel} variant="label">
-              İptal
-            </AppText>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
 
 type GroupPhotoCameraModalProps = {
   visible: boolean;
@@ -315,12 +230,14 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   );
   const [isLoading, setIsLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
-  const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
+  const [actionMessage, setActionMessage] = useState<ConversationMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ConversationMessage | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   const [pendingPhotoCaption, setPendingPhotoCaption] = useState("");
   const [composerResetToken, setComposerResetToken] = useState(0);
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
+  const conversationIdRef = useRef(group?.conversationId || route.params.conversationId || "");
 
   const viewerId = user?.id ?? "";
   const isOrganizer = group?.viewerRole === "ORGANIZER";
@@ -331,6 +248,10 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       (route.params.conversationId ? getCachedThread(route.params.conversationId) : null) ??
         getCachedThreadByEventId(route.params.eventId),
     );
+
+  useEffect(() => {
+    conversationIdRef.current = group?.conversationId || route.params.conversationId || "";
+  }, [group?.conversationId, route.params.conversationId]);
 
   const messageIndexById = useMemo(
     () => Object.fromEntries(messages.map((message, index) => [message.id, index])),
@@ -369,7 +290,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   }, []);
 
   const closeActionMenu = useCallback(() => {
-    setActionMenu(null);
+    setActionMessage(null);
   }, []);
 
   const loadChat = async (mode?: ThreadLoadMode) => {
@@ -450,6 +371,47 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     }, [route.params.conversationId, route.params.eventId]),
   );
 
+  useMessagesRealtime({
+    onMessageNew: (event) => {
+      if (event.payload.conversationId !== conversationIdRef.current) {
+        return;
+      }
+      setMessages((current) => appendMessageDeduped(current, event.payload.message));
+      appendCachedThreadMessage(event.payload.conversationId, event.payload.message);
+      scrollToBottom(false);
+    },
+    onMessageReceipts: (event) => {
+      if (event.payload.conversationId !== conversationIdRef.current) {
+        return;
+      }
+      setMessages((current) => applyMessageReceiptUpdates(current, event.payload.updates));
+      patchCachedThreadReceipts(event.payload.conversationId, event.payload.updates);
+    },
+    onMessageReaction: (event) => {
+      if (event.payload.conversationId !== conversationIdRef.current) {
+        return;
+      }
+      setMessages((current) =>
+        applyMessageReactionUpdate(current, event.payload.messageId, event.payload.reactions),
+      );
+      patchCachedThreadReaction(
+        event.payload.conversationId,
+        event.payload.messageId,
+        event.payload.reactions,
+      );
+    },
+    onMessageUpdated: (event) => {
+      if (event.payload.conversationId !== conversationIdRef.current) {
+        return;
+      }
+      setMessages((current) => applyMessageUpdated(current, event.payload.message));
+      patchCachedThreadMessageUpdated(event.payload.conversationId, event.payload.message);
+    },
+    onReconnect: () => {
+      void loadChat("silent");
+    },
+  });
+
   const refreshMessages = useCallback(
     async (conversationId: string) => {
       const threadMessages = await getMessages(conversationId);
@@ -469,7 +431,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       return;
     }
 
-    await sendMessage({
+    const sentMessage = await sendMessage({
       threadId: group.conversationId,
       sender: {
         id: user.id,
@@ -477,8 +439,16 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       },
       text,
       isAnnouncement: options?.isAnnouncement,
+      replyToMessageId: replyTarget?.id,
     });
 
+    setReplyTarget(null);
+    if (!sentMessage) {
+      return;
+    }
+
+    setMessages((current) => appendMessageDeduped(current, sentMessage));
+    appendCachedThreadMessage(group.conversationId, sentMessage);
     await refreshMessages(group.conversationId);
     scrollToBottom();
   };
@@ -503,12 +473,46 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   const onMessageLongPress = useCallback((message: ConversationMessage) => {
     void triggerMessageHaptic();
-    setActionMenu({ message });
+    setActionMessage(message);
   }, []);
 
+  const chooseReply = (message: ConversationMessage) => {
+    setActionMessage(null);
+    if (message.isDeleted || group?.isArchived) {
+      return;
+    }
+    setReplyTarget(message);
+  };
+
+  const chooseReaction = async (
+    message: ConversationMessage,
+    emoji: AllowedMessageReaction,
+  ) => {
+    setActionMessage(null);
+    if (!group?.conversationId || message.isDeleted) {
+      return;
+    }
+    try {
+      const alreadySelected = message.reactions?.some(
+        (reaction) => reaction.emoji === emoji && reaction.reactedByMe,
+      );
+      const reactions = alreadySelected
+        ? await removeMessageReaction(group.conversationId, message.id)
+        : await setMessageReaction(group.conversationId, message.id, emoji);
+      setMessages((current) => applyMessageReactionUpdate(current, message.id, reactions));
+      patchCachedThreadReaction(group.conversationId, message.id, reactions);
+    } catch (reactionError) {
+      Alert.alert(
+        "Tepki eklenemedi",
+        reactionError instanceof Error ? reactionError.message : "Lütfen tekrar deneyin.",
+      );
+    }
+  };
+
   const onCopyMessage = useCallback(async (message: ConversationMessage) => {
-    const copyValue = message.text?.trim() || message.mediaUrl || "";
-    if (!copyValue) {
+    setActionMessage(null);
+    const copyValue = message.text?.trim() || "";
+    if (!copyValue || message.isDeleted) {
       return;
     }
 
@@ -523,6 +527,50 @@ export function GroupDetailScreen({ navigation, route }: Props) {
       "Panoya kopyalamak için Expo Go'yu güncelleyin veya uygulamayı yeniden derleyin (npx expo run:ios).",
     );
   }, []);
+
+  const confirmDeleteMessage = (message: ConversationMessage) => {
+    setActionMessage(null);
+    if (!group?.conversationId || message.sender.id !== viewerId || message.isDeleted) {
+      return;
+    }
+
+    Alert.alert("Mesajı sil", "Bu mesaj sohbetten silinsin mi?", [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Sil",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            try {
+              const updated = await deleteMessage(group.conversationId, message.id);
+              if (updated) {
+                setMessages((current) => applyMessageUpdated(current, updated));
+                patchCachedThreadMessageUpdated(group.conversationId, updated);
+              }
+            } catch (deleteError) {
+              Alert.alert(
+                "Silinemedi",
+                deleteError instanceof Error ? deleteError.message : "Lütfen tekrar deneyin.",
+              );
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const onPinToggleFromSheet = () => {
+    if (!actionMessage) {
+      return;
+    }
+    const target = actionMessage;
+    setActionMessage(null);
+    if (pinnedMessage?.id === target.id) {
+      void onUnpinMessage();
+      return;
+    }
+    void onPinMessage(target);
+  };
 
   const onOpenCamera = useCallback((caption: string) => {
     if (group?.isArchived) {
@@ -570,8 +618,8 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     navigation.navigate(MessagesRoutes.GroupInfoScreen, { eventId: route.params.eventId });
   };
 
-  const selectedMessageId = actionMenu?.message.id ?? null;
-  const actionMessage = actionMenu?.message ?? null;
+  const selectedMessageId = actionMessage?.id ?? null;
+  const canShowPin = Boolean(isOrganizer && !group?.isArchived && actionMessage && !actionMessage.isDeleted);
   const isActionMessagePinned = Boolean(actionMessage && pinnedMessage?.id === actionMessage.id);
 
   if (shouldShowThreadFullScreenLoader(isLoading, hasCachedThread)) {
@@ -664,20 +712,15 @@ export function GroupDetailScreen({ navigation, route }: Props) {
                 }, 100);
               }}
               renderItem={({ item }) => {
-                const isSelected = selectedMessageId === item.id;
                 return (
-                  <Pressable
-                    delayLongPress={280}
+                  <MessageBubble
+                    isHiddenForActionSheet={selectedMessageId === item.id}
+                    isMine={item.sender.id === viewerId}
+                    message={item}
+                    onImagePress={setFullscreenImageUrl}
                     onLongPress={() => onMessageLongPress(item)}
-                    style={[styles.messagePressable, isSelected && styles.messagePressableSelected]}
-                  >
-                    <MessageBubble
-                      isMine={item.sender.id === viewerId}
-                      message={item}
-                      onImagePress={setFullscreenImageUrl}
-                      variant="group"
-                    />
-                  </Pressable>
+                    variant="group"
+                  />
                 );
               }}
               showsVerticalScrollIndicator={false}
@@ -701,7 +744,9 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               disabled={!user}
               isPhotoUploading={isPhotoUploading}
               onCameraPress={onOpenCamera}
+              onCancelReply={() => setReplyTarget(null)}
               onSend={onSend}
+              replyTarget={replyTarget}
               resetToken={composerResetToken}
               showAnnouncementOption={isOrganizer}
               showLiveCameraButton
@@ -712,24 +757,22 @@ export function GroupDetailScreen({ navigation, route }: Props) {
         </Animated.View>
       </View>
 
-      <GroupMessageActionSheet
-        isArchived={group.isArchived}
-        isOrganizer={Boolean(isOrganizer)}
-        isPinned={isActionMessagePinned}
+      <MessageActionSheet
+        isMine={actionMessage?.sender.id === viewerId}
         message={actionMessage}
         onClose={closeActionMenu}
-        onCopy={() => {
-          if (actionMessage) {
-            void onCopyMessage(actionMessage);
-          }
+        onCopy={(message) => {
+          void onCopyMessage(message);
         }}
-        onPin={() => {
-          if (actionMessage) {
-            void onPinMessage(actionMessage);
-          }
+        onDelete={confirmDeleteMessage}
+        onPinToggle={canShowPin ? onPinToggleFromSheet : null}
+        onReaction={(message, emoji) => {
+          void chooseReaction(message, emoji);
         }}
-        onUnpin={() => void onUnpinMessage()}
-        visible={Boolean(actionMenu)}
+        onReply={chooseReply}
+        pinLabel={
+          canShowPin ? (isActionMessagePinned ? "Sabitlemeyi Kaldır" : "Sabitle") : null
+        }
       />
 
       <GroupPhotoCameraModal
@@ -797,16 +840,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
   },
-  messagePressable: {
-    borderRadius: theme.radius.lg,
-    marginHorizontal: -theme.spacing.xs,
-    paddingHorizontal: theme.spacing.xs,
-    paddingVertical: 2,
-  },
-  messagePressableSelected: {
-    backgroundColor: "rgba(91, 60, 246, 0.08)",
-    transform: [{ scale: 0.985 }],
-  },
   emptyWrap: {
     alignItems: "center",
     flex: 1,
@@ -841,94 +874,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     marginHorizontal: theme.spacing.lg,
-  },
-});
-
-const actionSheetStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
-  },
-  sheetWrap: {
-    gap: theme.spacing.sm,
-    paddingBottom: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
-  },
-  handle: {
-    alignSelf: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-    borderRadius: 999,
-    height: 4,
-    marginBottom: theme.spacing.xs,
-    width: 40,
-  },
-  previewCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: theme.radius.lg,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  previewText: {
-    color: theme.colors.textSecondary,
-    textAlign: "center",
-  },
-  optionsCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: theme.radius.lg,
-    overflow: "hidden",
-  },
-  optionRow: {
-    alignItems: "center",
-    borderBottomColor: theme.colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: theme.spacing.md,
-    minHeight: 56,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  optionRowPressed: {
-    backgroundColor: "#F8FAFC",
-  },
-  optionIcon: {
-    alignItems: "center",
-    borderRadius: 999,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  pinIconWrap: {
-    backgroundColor: "#EFF6FF",
-  },
-  copyIconWrap: {
-    backgroundColor: "#F3F4F6",
-  },
-  optionEmoji: {
-    fontSize: 18,
-  },
-  optionLabel: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-  },
-  cancelButton: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: theme.radius.lg,
-    justifyContent: "center",
-    minHeight: 56,
-    paddingVertical: theme.spacing.md,
-  },
-  cancelButtonPressed: {
-    backgroundColor: "#F8FAFC",
-  },
-  cancelLabel: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: "600",
   },
 });
 
