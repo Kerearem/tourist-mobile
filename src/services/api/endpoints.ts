@@ -47,7 +47,11 @@ export const API_ENDPOINTS = {
     myAttendances: "/events/my-attendances",
     group: "/events/:eventId/group",
     archiveGroup: "/events/:eventId/group/archive",
+    closeGroup: "/events/:eventId/group/close",
     removeGroupMember: "/events/:eventId/group/members/:userId",
+    kickGroupMember: "/events/:eventId/group/members/:userId/kick",
+    banGroupMember: "/events/:eventId/group/members/:userId/ban",
+    muteGroupMember: "/events/:eventId/group/members/:userId/mute",
   },
   help: {
     list: "/help/requests",

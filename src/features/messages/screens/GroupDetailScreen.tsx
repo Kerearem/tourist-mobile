@@ -67,6 +67,11 @@ import {
   setMessageReaction,
   unpinMessage,
 } from "../services/messages.service";
+import {
+  GROUP_CLOSED_COMPOSER_MESSAGE_TR,
+  GROUP_MUTED_COMPOSER_MESSAGE_TR,
+  resolveGroupComposerGate,
+} from "../utils/groupModeration";
 import type { AllowedMessageReaction, ConversationMessage } from "../types";
 
 type Props = NativeStackScreenProps<MessagesStackParamList, "GroupDetailScreen">;
@@ -427,7 +432,10 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   );
 
   const onSend = async (text: string, options?: { isAnnouncement?: boolean }) => {
-    if (!user || !group?.conversationId || group.isArchived) {
+    if (!user || !group?.conversationId || group.isArchived || group.isClosed) {
+      return;
+    }
+    if (resolveGroupComposerGate({ viewerMutedUntil: group.viewerMutedUntil }).kind === "muted") {
       return;
     }
 
@@ -573,16 +581,26 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   };
 
   const onOpenCamera = useCallback((caption: string) => {
-    if (group?.isArchived) {
+    if (
+      group?.isArchived ||
+      group?.isClosed ||
+      resolveGroupComposerGate({ viewerMutedUntil: group?.viewerMutedUntil }).kind === "muted"
+    ) {
       return;
     }
     setPendingPhotoCaption(caption);
     setIsCameraOpen(true);
-  }, [group?.isArchived]);
+  }, [group?.isArchived, group?.isClosed, group?.viewerMutedUntil]);
 
   const onPhotoCaptured = useCallback(
     async (localUri: string) => {
-      if (!user || !group?.conversationId || group.isArchived) {
+      if (
+        !user ||
+        !group?.conversationId ||
+        group.isArchived ||
+        group.isClosed ||
+        resolveGroupComposerGate({ viewerMutedUntil: group.viewerMutedUntil }).kind === "muted"
+      ) {
         return;
       }
 
@@ -619,8 +637,13 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   };
 
   const selectedMessageId = actionMessage?.id ?? null;
-  const canShowPin = Boolean(isOrganizer && !group?.isArchived && actionMessage && !actionMessage.isDeleted);
+  const canShowPin = Boolean(isOrganizer && !group?.isArchived && !group?.isClosed && actionMessage && !actionMessage.isDeleted);
   const isActionMessagePinned = Boolean(actionMessage && pinnedMessage?.id === actionMessage.id);
+  const composerGate = resolveGroupComposerGate({
+    isArchived: group?.isArchived,
+    isClosed: group?.isClosed,
+    viewerMutedUntil: group?.viewerMutedUntil,
+  });
 
   if (shouldShowThreadFullScreenLoader(isLoading, hasCachedThread)) {
     return (
@@ -671,7 +694,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               {group.title}
             </AppText>
             <AppText style={styles.headerSubtitle} variant="caption">
-              {group.isArchived ? "Arşivlendi · " : ""}
+              {group.isClosed ? "Kapatıldı · " : group.isArchived ? "Arşivlendi · " : ""}
               {group.memberCount} üye
             </AppText>
           </Pressable>
@@ -732,7 +755,28 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           <View
             style={[styles.composerWrap, !isKeyboardVisible ? { paddingBottom: restingBottomInset } : null]}
           >
-          {group.isArchived ? (
+          {composerGate.kind === "closed" ? (
+            <View style={styles.archivedBanner}>
+              <Ionicons color="#7C2D12" name="lock-closed-outline" size={18} />
+              <AppText style={styles.closedText} variant="caption">
+                {GROUP_CLOSED_COMPOSER_MESSAGE_TR}
+              </AppText>
+            </View>
+          ) : composerGate.kind === "muted" ? (
+            <View style={styles.mutedBanner}>
+              <Ionicons color="#6D28D9" name="volume-mute-outline" size={18} />
+              <View style={styles.mutedTextWrap}>
+                <AppText style={styles.mutedText} variant="caption">
+                  {GROUP_MUTED_COMPOSER_MESSAGE_TR}
+                </AppText>
+                {composerGate.remainingLabel ? (
+                  <AppText style={styles.mutedRemaining} variant="caption">
+                    {composerGate.remainingLabel}
+                  </AppText>
+                ) : null}
+              </View>
+            </View>
+          ) : composerGate.kind === "archived" ? (
             <View style={styles.archivedBanner}>
               <Ionicons color={theme.colors.textSecondary} name="archive-outline" size={18} />
               <AppText style={styles.archivedText} variant="caption">
@@ -868,6 +912,33 @@ const styles = StyleSheet.create({
   },
   archivedText: {
     color: theme.colors.textSecondary,
+    fontWeight: "600",
+  },
+  closedText: {
+    color: "#7C2D12",
+    fontWeight: "700",
+  },
+  mutedBanner: {
+    alignItems: "center",
+    backgroundColor: "#EDE9FE",
+    borderRadius: theme.radius.lg,
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "center",
+    minHeight: 56,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  mutedTextWrap: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  mutedText: {
+    color: "#5B21B6",
+    fontWeight: "700",
+  },
+  mutedRemaining: {
+    color: "#6D28D9",
     fontWeight: "600",
   },
   stateCard: {
