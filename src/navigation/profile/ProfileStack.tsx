@@ -7,7 +7,9 @@ import { CreateMomentScreen } from "../../features/events/screens/CreateMomentSc
 import { CreateReelScreen } from "../../features/profile/screens/CreateReelScreen";
 import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen";
 import { AttendedEventsScreen } from "../../features/events/screens/AttendedEventsScreen";
+import { EventAttendanceQrScreen } from "../../features/events/screens/EventAttendanceQrScreen";
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
+import { EventQrScannerScreen } from "../../features/events/screens/EventQrScannerScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
 import { OrganizerEventSubmissionScreen } from "../../features/events/screens/OrganizerEventSubmissionScreen";
@@ -60,6 +62,12 @@ export function ProfileStack() {
         options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
       />
       <Stack.Screen component={EventDetailScreen} name={ProfileRoutes.EventDetailScreen} />
+      <Stack.Screen component={EventAttendanceQrScreen} name={ProfileRoutes.EventAttendanceQrScreen} />
+      <Stack.Screen
+        component={EventQrScannerScreen}
+        name={ProfileRoutes.EventQrScannerScreen}
+        options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+      />
       <Stack.Screen component={EventAlbumScreen} name={ProfileRoutes.EventAlbumScreen} />
       <Stack.Screen component={CreateMomentScreen} name={ProfileRoutes.CreateMomentScreen} />
       <Stack.Screen component={CreateReelScreen} name={ProfileRoutes.CreateReelScreen} />

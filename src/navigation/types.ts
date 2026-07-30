@@ -94,6 +94,16 @@ export type OrganizerApplicationScreenParams = {
 export type EventsStackParamList = {
   EventsListScreen: undefined;
   EventDetailScreen: { eventId: string };
+  EventAttendanceQrScreen: {
+    eventId: string;
+    eventTitle: string;
+    timezone?: string;
+  };
+  EventQrScannerScreen: {
+    eventId: string;
+    eventTitle: string;
+    timezone?: string;
+  };
   EventAlbumScreen: { eventId: string };
   CreateMomentScreen: { eventId: string };
   CreateEventScreen: undefined;
@@ -126,6 +136,16 @@ export type ProfileStackParamList = {
     mode: "identity" | "selfie";
   };
   EventDetailScreen: { eventId: string };
+  EventAttendanceQrScreen: {
+    eventId: string;
+    eventTitle: string;
+    timezone?: string;
+  };
+  EventQrScannerScreen: {
+    eventId: string;
+    eventTitle: string;
+    timezone?: string;
+  };
   EventAlbumScreen: { eventId: string };
   CreateMomentScreen: { eventId: string };
   CreateReelScreen: undefined;

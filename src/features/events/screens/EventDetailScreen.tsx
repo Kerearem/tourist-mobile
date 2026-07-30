@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ImageBackground, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { Avatar } from "../../../components/ui/Avatar";
 import { AppText } from "../../../components/ui/AppText";
@@ -13,7 +14,11 @@ import { MessagesRoutes, TabRoutes } from "../../../constants/routes";
 import { theme } from "../../../constants/theme";
 import { MEDIA_CONTENT_CONTRACTS, getDisplayResizeMode } from "../../../services/media/mediaContentContracts";
 import { useAuth } from "../../../hooks/useAuth";
-import type { EventsStackParamList, MainTabParamList } from "../../../navigation/types";
+import type {
+  EventsStackParamList,
+  MainTabParamList,
+  ProfileStackParamList,
+} from "../../../navigation/types";
 import { EventMetaRow } from "../components/EventMetaRow";
 import { EventDetailOfferings } from "../components/EventDetailOfferings";
 import { EVENT_FILTER_APPLY_RED } from "../constants/eventFilterTheme";
@@ -22,10 +27,14 @@ import { createEventGroup, getEventGroup, type EventGroupInfo } from "../service
 import { getEventById, toggleEventAttendance } from "../services/events.service";
 import type { EventAttendanceStatus, EventItem } from "../types";
 import { formatEventJoinCtaLabel, canAttemptEventJoin, resolveEventTokenPrice, resolveEventTicketAvailable } from "../utils/eventTicketPricing";
+import { canShowAttendeeQrEntry, canShowHostQrScanner } from "../utils/eventCheckinUi";
 import { resolveEventAttendanceError } from "../utils/resolveEventAttendanceError";
 import { formatEventDateBadge, formatEventDateTimeRange } from "../utils/eventTimezone";
 
-type Props = NativeStackScreenProps<EventsStackParamList, "EventDetailScreen">;
+type Props = NativeStackScreenProps<
+  EventsStackParamList & ProfileStackParamList,
+  "EventDetailScreen"
+>;
 
 const toAttendanceUiState = (status?: EventAttendanceStatus): AttendanceUiState => {
   if (status === "approved") return "approved";
@@ -48,7 +57,7 @@ const getCoverUri = (event: EventItem) => {
   return "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80";
 };
 
-export function EventDetailScreen({ route }: Props) {
+export function EventDetailScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const tabNavigation = useNavigation<NavigationProp<MainTabParamList>>();
   const [event, setEvent] = useState<EventItem | null>(null);
@@ -216,6 +225,8 @@ export function EventDetailScreen({ route }: Props) {
   const attendanceLabel = formatEventJoinCtaLabel(tokenPrice, attendanceState);
   const isHost = Boolean(user && event.host.id === user.id);
   const isApproved = event.metadata?.status === "APPROVED";
+  const showAttendeeQr = canShowAttendeeQrEntry(isHost, event.attendanceStatus);
+  const showHostScanner = canShowHostQrScanner(isHost, event.metadata?.status);
   const canJoin = event.canJoin !== false;
   const joinBlockReason = event.joinBlockReason ?? "Bu etkinliğe tekrar katılamazsın";
   const isJoinBlocked =
@@ -292,6 +303,48 @@ export function EventDetailScreen({ route }: Props) {
           </AppText>
           <EventDetailOfferings event={event} />
         </Card>
+
+        {showAttendeeQr ? (
+          <Pressable
+            onPress={() =>
+              navigation.navigate("EventAttendanceQrScreen", {
+                eventId: event.id,
+                eventTitle: event.title,
+                timezone: event.timezone,
+              })
+            }
+            style={styles.checkinButton}
+          >
+            <Ionicons color="#1D4ED8" name="qr-code-outline" size={22} />
+            <View style={styles.checkinButtonCopy}>
+              <AppText style={styles.checkinButtonTitle} variant="label">
+                Giriş QR'ım
+              </AppText>
+              <AppText style={styles.checkinButtonSubtitle} variant="caption">
+                Giriş saatini ve QR kodunu görüntüle
+              </AppText>
+            </View>
+            <Ionicons color="#1D4ED8" name="chevron-forward" size={20} />
+          </Pressable>
+        ) : null}
+
+        {showHostScanner ? (
+          <Pressable
+            onPress={() =>
+              navigation.navigate("EventQrScannerScreen", {
+                eventId: event.id,
+                eventTitle: event.title,
+                timezone: event.timezone,
+              })
+            }
+            style={styles.scannerButton}
+          >
+            <Ionicons color="#FFFFFF" name="scan-outline" size={22} />
+            <AppText style={styles.scannerButtonLabel} variant="label">
+              QR Tara
+            </AppText>
+          </Pressable>
+        ) : null}
 
         {isHost && isApproved ? (
           <Pressable
@@ -479,5 +532,39 @@ const styles = StyleSheet.create({
   groupError: {
     color: theme.colors.danger,
     textAlign: "center",
+  },
+  checkinButton: {
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    minHeight: 60,
+    paddingHorizontal: theme.spacing.md,
+  },
+  checkinButtonCopy: {
+    flex: 1,
+  },
+  checkinButtonTitle: {
+    color: "#1D4ED8",
+    fontSize: 16,
+  },
+  checkinButtonSubtitle: {
+    color: "#3B82F6",
+  },
+  scannerButton: {
+    alignItems: "center",
+    backgroundColor: "#111827",
+    borderRadius: theme.radius.md,
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  scannerButtonLabel: {
+    color: "#FFFFFF",
+    fontSize: 16,
   },
 });

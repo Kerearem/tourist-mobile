@@ -144,19 +144,30 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       if (retry.response.status === 401) {
         await clearAuthState();
         notifyAuthSessionExpired();
-        throw new ApiRequestError(parseErrorMessage(retry.payload, "Unauthorized"), 401, parseErrorCode(retry.payload));
+        throw new ApiRequestError(
+          parseErrorMessage(retry.payload, "Unauthorized"),
+          401,
+          parseErrorCode(retry.payload),
+          retry.payload,
+        );
       }
 
       throw new ApiRequestError(
         parseErrorMessage(retry.payload, "API request failed."),
         retry.response.status,
         parseErrorCode(retry.payload),
+        retry.payload,
       );
     }
 
     await clearAuthState();
     notifyAuthSessionExpired();
-    throw new ApiRequestError(parseErrorMessage(payload, "Unauthorized"), 401, parseErrorCode(payload));
+    throw new ApiRequestError(
+      parseErrorMessage(payload, "Unauthorized"),
+      401,
+      parseErrorCode(payload),
+      payload,
+    );
   }
 
   if (!response.ok) {
@@ -164,6 +175,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       parseErrorMessage(payload, "API request failed."),
       response.status,
       parseErrorCode(payload),
+      payload,
     );
   }
 

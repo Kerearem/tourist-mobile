@@ -43,6 +43,8 @@ export const API_ENDPOINTS = {
     momentLike: "/events/:eventId/moments/:momentId/like",
     momentComments: "/events/:eventId/moments/:momentId/comments",
     toggleAttendance: "/events/:eventId/attendance/toggle",
+    attendanceQrToken: "/events/:eventId/attendance/qr-token",
+    checkin: "/events/:eventId/checkin",
     create: "/events",
     myAttendances: "/events/my-attendances",
     group: "/events/:eventId/group",

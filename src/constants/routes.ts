@@ -44,6 +44,8 @@ export const MessagesRoutes = {
 export const EventsRoutes = {
   EventsListScreen: "EventsListScreen",
   EventDetailScreen: "EventDetailScreen",
+  EventAttendanceQrScreen: "EventAttendanceQrScreen",
+  EventQrScannerScreen: "EventQrScannerScreen",
   EventAlbumScreen: "EventAlbumScreen",
   CreateMomentScreen: "CreateMomentScreen",
   CreateEventScreen: "CreateEventScreen",
@@ -68,6 +70,8 @@ export const ProfileRoutes = {
   OrganizerApplicationScreen: "OrganizerApplicationScreen",
   VerificationGuidedCaptureScreen: "VerificationGuidedCaptureScreen",
   EventDetailScreen: "EventDetailScreen",
+  EventAttendanceQrScreen: "EventAttendanceQrScreen",
+  EventQrScannerScreen: "EventQrScannerScreen",
   EventAlbumScreen: "EventAlbumScreen",
   CreateMomentScreen: "CreateMomentScreen",
   CreateReelScreen: "CreateReelScreen",

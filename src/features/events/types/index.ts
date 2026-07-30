@@ -44,6 +44,24 @@ export type ToggleEventAttendanceInput = {
   userId: string;
 };
 
+export type EventAttendanceQrToken = {
+  token: string;
+  expiresInSeconds: number;
+  refreshAfterSeconds: number;
+  expiresAt: string;
+  windowStartsAt: string;
+  windowEndsAt: string;
+  alreadyCheckedIn: boolean;
+  checkedInAt?: string;
+};
+
+export type EventCheckinResult = {
+  attendeeName: string;
+  avatarUrl: string | null;
+  checkedInAt: string;
+  alreadyCheckedIn: boolean;
+};
+
 export type CreateEventInput = {
   title: string;
   description: string;

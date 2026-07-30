@@ -5,7 +5,9 @@ import { EventsRoutes } from "../../constants/routes";
 import { CreateEventScreen } from "../../features/events/screens/CreateEventScreen";
 import { CreateMomentScreen } from "../../features/events/screens/CreateMomentScreen";
 import { EventAlbumScreen } from "../../features/events/screens/EventAlbumScreen";
+import { EventAttendanceQrScreen } from "../../features/events/screens/EventAttendanceQrScreen";
 import { EventDetailScreen } from "../../features/events/screens/EventDetailScreen";
+import { EventQrScannerScreen } from "../../features/events/screens/EventQrScannerScreen";
 import { EventsListScreen } from "../../features/events/screens/EventsListScreen";
 import { MyOrganizerEventsScreen } from "../../features/events/screens/MyOrganizerEventsScreen";
 import { OrganizerApplicationScreen } from "../../features/events/screens/OrganizerApplicationScreen";
@@ -27,6 +29,12 @@ export function EventsStack() {
           fullScreenGestureEnabled: true,
           gestureEnabled: true,
         }}
+      />
+      <Stack.Screen component={EventAttendanceQrScreen} name={EventsRoutes.EventAttendanceQrScreen} />
+      <Stack.Screen
+        component={EventQrScannerScreen}
+        name={EventsRoutes.EventQrScannerScreen}
+        options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
       />
       <Stack.Screen component={EventAlbumScreen} name={EventsRoutes.EventAlbumScreen} />
       <Stack.Screen component={CreateMomentScreen} name={EventsRoutes.CreateMomentScreen} />
